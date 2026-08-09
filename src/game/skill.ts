@@ -1,16 +1,31 @@
 // 技能系统: 槽位 (LMB/RMB/Q/W/E/R) → SkillDef
-// 默认: LMB/RMB = melee, Q = fireball
+// Q = fireball (受符文影响), W = 多重火球, E = buff, R = 大招; LMB/RMB = melee
 
 import type { GameState } from './state';
+import type { RuneId } from './rune';
+import { getActiveRune } from './rune';
 
 export type SkillSlot = 'LMB' | 'RMB' | 'Q' | 'W' | 'E' | 'R';
 
 export interface SkillDef {
   name: string;
-  cooldown: number;        // 秒
+  cooldown: number;
   mpCost: number;
   /** 状态变更: 火球/挥击/buff 都在这里 */
   cast: (state: GameState, dir: { x: number; y: number }) => void;
+}
+
+/** 根据激活符文增强 fireball cast */
+function castFireball(state: GameState, dir: { x: number; y: number }): void {
+  const rune = getActiveRune();
+  // 分裂: 3 发
+  if (rune === 'split') {
+    spawnFireball(state, dir, -0.15);
+    spawnFireball(state, dir, 0);
+    spawnFireball(state, dir, 0.15);
+  } else {
+    spawnFireball(state, dir, 0);
+  }
 }
 
 /** 默认技能 */
@@ -25,17 +40,44 @@ export const defaultSkills: Record<SkillSlot, SkillDef> = {
     name: 'melee',
     cooldown: 0.3,
     mpCost: 0,
-    cast: (state, dir) => castMelee(state, dir, true), // RMB = thrust 变体 (M1 同效果, 留扩展位)
+    cast: (state, dir) => castMelee(state, dir, true),
   },
   Q: {
     name: 'fireball',
     cooldown: 0.3,
     mpCost: 10,
-    cast: (state, dir) => castFireballSkill(state, dir),
+    cast: (state, dir) => castFireball(state, dir),
   },
-  W: { name: 'empty', cooldown: 0, mpCost: 0, cast: () => {} },
-  E: { name: 'empty', cooldown: 0, mpCost: 0, cast: () => {} },
-  R: { name: 'empty', cooldown: 0, mpCost: 0, cast: () => {} },
+  W: {
+    name: 'multi_fireball',
+    cooldown: 0.8,
+    mpCost: 25,
+    cast: (state, dir) => {
+      // 5 发扇形
+      for (let i = -2; i <= 2; i++) spawnFireball(state, dir, i * 0.2);
+    },
+  },
+  E: {
+    name: 'heal',
+    cooldown: 5.0,
+    mpCost: 30,
+    cast: (state) => {
+      state.player.hp = Math.min(100, state.player.hp + 40);
+    },
+  },
+  R: {
+    name: 'ultimate',
+    cooldown: 8.0,
+    mpCost: 60,
+    cast: (state) => {
+      // 玩家周围 200px 内所有怪物扣 80 HP
+      for (const m of state.monsters) {
+        const dx = m.pos.x - state.player.pos.x;
+        const dy = m.pos.y - state.player.pos.y;
+        if (dx * dx + dy * dy < 200 * 200) m.hp -= 80;
+      }
+    },
+  },
 };
 
 /** 技能注册表 (slot → SkillDef) - 可被用户改键 */

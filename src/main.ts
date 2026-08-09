@@ -18,6 +18,7 @@ import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/skill';
 import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
+import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
@@ -284,6 +285,11 @@ function drawFrame() {
     } else {
       dbg('skill', 'RMB on cd');
     }
+  }
+  // MMB 切换激活符文
+  if (mouse.wasClicked('MMB')) {
+    const next = cycleActiveRune();
+    inf('rune', `activated: ${RUNE_DEFS[next].name} (${RUNE_DEFS[next].desc})`);
   }
 
   // 暂停时: 跳过游戏逻辑 (但仍画当前帧 + pause 遮罩)

@@ -5,6 +5,7 @@ import type { GameState } from '../game/state';
 import { MAX_HP, MAX_MP } from '../game/player';
 import { drawSprite } from './draw';
 import { getLogs, formatLine } from '../util/log';
+import { RUNE_DEFS, getActiveRune } from '../game/rune';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
 let mouseX = 0;

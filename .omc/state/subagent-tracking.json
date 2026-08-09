@@ -8,10 +8,19 @@
       "status": "completed",
       "completed_at": "2026-08-09T03:54:16.685Z",
       "duration_ms": 20111
+    },
+    {
+      "agent_id": "a83f69b413bdb950d",
+      "agent_type": "oh-my-claudecode:architect",
+      "started_at": "2026-08-09T08:13:45.758Z",
+      "parent_mode": "none",
+      "status": "completed",
+      "completed_at": "2026-08-09T08:14:46.262Z",
+      "duration_ms": 60504
     }
   ],
-  "total_spawned": 2,
-  "total_completed": 18,
+  "total_spawned": 4,
+  "total_completed": 36,
   "total_failed": 0,
-  "last_updated": "2026-08-09T03:54:16.791Z"
+  "last_updated": "2026-08-09T08:14:46.375Z"
 }

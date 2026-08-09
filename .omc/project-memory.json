@@ -46,9 +46,21 @@
   },
   "hotPaths": [
     {
+      "path": "",
+      "accessCount": 13,
+      "lastAccessed": 1786263089019,
+      "type": "directory"
+    },
+    {
       "path": "docs\\REQUIREMENTS.md",
       "accessCount": 10,
       "lastAccessed": 1786198226253,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\lib.rs",
+      "accessCount": 10,
+      "lastAccessed": 1786263093415,
       "type": "file"
     },
     {
@@ -58,18 +70,6 @@
       "type": "file"
     },
     {
-      "path": "src-tauri\\src\\lib.rs",
-      "accessCount": 9,
-      "lastAccessed": 1786262539966,
-      "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 8,
-      "lastAccessed": 1786245654514,
-      "type": "directory"
-    },
-    {
       "path": "README.md",
       "accessCount": 7,
       "lastAccessed": 1786206885202,
@@ -77,8 +77,8 @@
     },
     {
       "path": "src-tauri\\Cargo.toml",
-      "accessCount": 6,
-      "lastAccessed": 1786262534917,
+      "accessCount": 7,
+      "lastAccessed": 1786263093325,
       "type": "file"
     },
     {
@@ -136,6 +136,12 @@
       "type": "file"
     },
     {
+      "path": "src-tauri\\src\\save.rs",
+      "accessCount": 3,
+      "lastAccessed": 1786263034737,
+      "type": "file"
+    },
+    {
       "path": "assets\\ai-gen\\scripts\\batch_generate.py",
       "accessCount": 2,
       "lastAccessed": 1786199284983,
@@ -181,12 +187,6 @@
       "path": "assets\\ai-gen\\downloads\\lpc-base-assets\\LPC Base Assets\\sprites\\people\\male_walkcycle.png",
       "accessCount": 2,
       "lastAccessed": 1786255845920,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri\\src\\save.rs",
-      "accessCount": 2,
-      "lastAccessed": 1786262537409,
       "type": "file"
     },
     {
