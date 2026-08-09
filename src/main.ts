@@ -86,9 +86,6 @@ inf('atlas', `loaded: ${[characters, particles, ui, icons, world, monsters].map(
 const res = await buildRenderResources(gl, [characters, particles, ui, icons, world, monsters]);
 inf('atlas', 'PNG decoded + textures uploaded');
 
-inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
-playBgmClient(`bgm_${state.theme}`);
-
 const keys = attachKeyboard(window);
 const mouse = attachMouse(canvas) as MouseHandle & { sync: () => void; reset: () => void };
 inf('input', 'mouse attached (LMB/RMB/MMB + position)');
@@ -144,6 +141,8 @@ const state = {
 // 初始 spawn 5 只怪物 (当前主题池随机, US-007)
 for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 inf('world', `spawned ${state.monsters.length} monsters (theme=${state.theme} pool, US-007)`);
+inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
+playBgmClient(`bgm_${state.theme}`);
 
 window.addEventListener('keydown', (e) => {
   // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
