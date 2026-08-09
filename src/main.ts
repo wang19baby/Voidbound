@@ -229,18 +229,6 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  // 城镇: E 交互 + 面板按键
-  if (state.mode === 'town') {
-    const k = e.key.toLowerCase();
-    if (state.townPanel) {
-      handleTownPanelKey(state, e, k);
-      return;
-    }
-    if (k === 'e') { interactTown(state); return; }
-    if (k === 'escape') { state.paused = true; inf('gl', 'paused'); return; }
-    if (k === '1' || k === '2' || k === '3' || k === '4') return; // 面板关闭时忽略数字
-    return; // 城镇阻断游戏键 (技能/药水等)
-  }
   // Esc (未暂停): 打开暂停菜单
   if (!state.paused && e.key === 'Escape') {
     state.paused = true;
@@ -299,6 +287,17 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     return; // 暂停时忽略游戏按键
+  }
+  // 城镇: E 交互 + 面板按键
+  if (state.mode === 'town') {
+    const k = e.key.toLowerCase();
+    if (state.townPanel) {
+      handleTownPanelKey(state, e, k);
+      return;
+    }
+    if (k === 'e') { interactTown(state); return; }
+    if (k === '1' || k === '2' || k === '3' || k === '4') return; // 面板关闭时忽略数字
+    return; // 城镇阻断游戏键 (技能/药水等)
   }
   // Ctrl+1..6: 分配技能点 (LMB/RMB/Q/W/E/R)
   if (e.ctrlKey) {
