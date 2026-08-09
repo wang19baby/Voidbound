@@ -8,7 +8,7 @@ import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
-import { getOwned, RARITY_COLORS, describeAffix } from '../game/equipment';
+import { getOwned, getLoot, RARITY_COLORS, describeAffix } from '../game/equipment';
 import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
 import { expNext } from '../game/player';
 import { DAMAGE_TYPES } from '../game/combat';

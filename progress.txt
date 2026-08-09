@@ -90,3 +90,10 @@
 - US-019 升级闪光 0.5s + 大字 + toast
 - US-020 Tab 面板技能列 (6 槽名/Lv/符文 + 被动槽 10 占位)
 - 教训: 之前 gainExp 循环被半替换破坏过一次 (教训: 用 python 替换含 elided 的代码块前必须 read 实文)
+
+## Session: 2026-08-09 (Ralph 6b: 启动崩溃根因——双 dist)
+- 根因: tauri.conf.json frontendDist "dist" 相对 src-tauri 解析 → 应用实际嵌入 src-tauri/dist/main.js (17:02 旧包 61KB, 预修复 TDZ 版本); 根 dist/ (新包) 从未被使用 → 用户一直跑旧 bundle
+- 修复: frontendDist → "../dist" (指向根构建输出) + 删除 stale src-tauri/dist; js_log 桥接 (JS 错误→Rust stdout, warn 级)
+- 第二处: hud.ts 地面标签用 getLoot 未导入 → ReferenceError (运行时第一帧) — 补导入
+- 验证: 重编译后 45s cargo run, 0 条 [js] 错误; 首次真正以"新 bundle"运行
+- 教训: 检查 tauri 资产路径必须看 tauri.conf.json 相对解析; "我这边不崩" 若无 js_log 证据可能是 false green

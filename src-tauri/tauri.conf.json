@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "dev.wang19.voidbound",
   "build": {
-    "frontendDist": "dist",
+    "frontendDist": "../dist",
     "devUrl": null,
     "beforeDevCommand": "npm run build",
     "beforeBuildCommand": "npm run build"
@@ -27,6 +27,8 @@
   "bundle": {
     "active": true,
     "targets": "nsis",
-    "icon": ["icons/icon.ico"]
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
