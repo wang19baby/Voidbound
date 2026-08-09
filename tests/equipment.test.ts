@@ -66,12 +66,6 @@ check('描述: 火抗', describeAffix({ stat: 'res', value: 15, element: 'fire' 
 check('描述: 暴击率', describeAffix({ stat: 'critRate', value: 0.04 }) === '暴击率 +4%');
 check('描述: 减抗', describeAffix({ stat: 'shred', value: 12 }) === '减抗 +12');
 
-if (failures > 0) {
-  console.error(`\n${failures} FAILED`);
-  process.exit(1);
-}
-console.log('\nALL PASS');
-process.exit(0);
 // === US-010 套装加成 ===
 function makeSetItem(setName: 'shadow_set' | 'flame_set'): Equipment {
   return { id: 1, name: setName, rarity: 'set', pos: { x: 0, y: 0 }, size: { w: 24, h: 24 }, affixes: [], pickedUp: true, setName };
@@ -90,3 +84,10 @@ eq('烈焰套 3件 elemPct +12%', f3.elemPct, 0.12);
 // 混合套装独立计数
 const mix = aggregateCombat([makeSetItem('shadow_set'), makeSetItem('shadow_set'), makeSetItem('flame_set')]);
 eq('混搭: 暗影 2件生效, 烈焰 1件不生效', mix.elemPct, 0.15);
+
+if (failures > 0) {
+  console.error(`\n${failures} FAILED`);
+  process.exit(1);
+}
+console.log('\nALL PASS');
+process.exit(0);
