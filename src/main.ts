@@ -694,9 +694,11 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
 /** 城镇绘制: 背景/NPC/玩家/提示/面板 */
 function drawTownFrame() {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  gl.clearColor(0.10, 0.11, 0.16, 1);   // 城镇底色 (GL 层, 勿画进 canvas 否则盖住角色)
   gl.clear(gl.COLOR_BUFFER_BIT);
-  hudCtx.fillStyle = '#1a1d26';
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  // 先画角色 (GL 层, 在 canvas 叠加层之下)
+  const tSprite = pickPlayerSprite(state, mouse.state().pos.x);
+  drawSprite(gl, quad, res, worldToScreen(state, state.player.pos), state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot });
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = '#9aa';
   hudCtx.font = 'bold 26px monospace';
@@ -725,9 +727,6 @@ function drawTownFrame() {
     hudCtx.font = 'bold 14px monospace';
     hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y + 14);
   }
-  // 玩家
-  const sprite = pickPlayerSprite(state, mouse.state().pos.x);
-  drawSprite(gl, quad, res, worldToScreen(state, state.player.pos), state.player.size, 'characters', sprite.name, { flip: { x: sprite.flipX ? -1 : 1, y: 1 }, rot: sprite.rot });
   // HUD (金/技能点)
   hudCtx.textAlign = 'left';
   hudCtx.fillStyle = '#ffd64a';
