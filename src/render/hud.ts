@@ -6,6 +6,9 @@ import { MAX_HP, MAX_MP } from '../game/player';
 import { drawSprite } from './draw';
 import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
+import { getDamageNums } from '../game/damageNum';
+import { getSkillCooldowns } from '../game/skill';
+import { worldToScreen } from '../game/state';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
 let mouseX = 0;
@@ -35,6 +38,11 @@ export function drawHud(
     const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
     const y = HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8;
     drawSprite(gl, q, state.resources, { x, y }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'icons', SKILL_ICONS[i]);
+    // cd 遮罩 (cd > 0 时半透灰)
+    const cds = getSkillCooldowns(nowSec);
+    if ((cds[SKILL_KEYS[i]] ?? 0) > 0) {
+      drawSprite(gl, q, state.resources, { x, y }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'ui', 'slide_horizontal_grey');
+    }
   }
 
   // 鼠标 reticle (瞄准环): 屏幕中心 (玩家身上) → 鼠标位置的视觉提示
@@ -56,6 +64,7 @@ export function drawHudOverlay(
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     ctx2d.fillText(SKILL_KEYS[i], HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 2);
   }
+  const nowSec = performance.now() / 1000;
   ctx2d.fillText(
     `pos ${state.player.pos.x.toFixed(0)},${state.player.pos.y.toFixed(0)}  fireballs:${state.fireballs.length}  facing:${state.player.facing.x.toFixed(1)},${state.player.facing.y.toFixed(1)}`,
     state.viewport.w - 380, HUD_PAD,
@@ -63,6 +72,34 @@ export function drawHudOverlay(
 
   // 日志面板: 右下, 6 行
   drawLogPanel(ctx2d, state.viewport.h);
+
+  // 技能 cd 倒计时数字 (画在槽内)
+  ctx2d.font = 'bold 12px monospace';
+  ctx2d.fillStyle = '#fff';
+  ctx2d.textAlign = 'center';
+  ctx2d.textBaseline = 'middle';
+  const cds = getSkillCooldowns(nowSec);
+  for (let i = 0; i < SKILL_KEYS.length; i++) {
+    const cdLeft = cds[SKILL_KEYS[i]] ?? 0;
+    if (cdLeft > 0.05) {
+      const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2;
+      const y = HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE / 2;
+      ctx2d.fillText(cdLeft.toFixed(1), x, y);
+    }
+  }
+  ctx2d.textAlign = 'left';
+  ctx2d.textBaseline = 'top';
+
+  // 伤害数字 (世界坐标 → 屏幕坐标, 上浮 + 淡出)
+  ctx2d.font = 'bold 14px monospace';
+  ctx2d.textAlign = 'center';
+  for (const d of getDamageNums(state)) {
+    const sp = worldToScreen(state, d.pos);
+    if (sp.x < 0 || sp.x > state.viewport.w || sp.y < 0 || sp.y > state.viewport.h) continue;
+    ctx2d.fillStyle = d.color;
+    ctx2d.fillText(d.text, sp.x, sp.y);
+  }
+  ctx2d.textAlign = 'left';
 }
 
 function drawLogPanel(ctx2d: CanvasRenderingContext2D, viewportH: number) {

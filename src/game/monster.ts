@@ -7,6 +7,7 @@ import { inf, dbg } from '../util/log';
 import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
 import { dropLoot } from './equipment';
+import { spawnDamageNum } from './damageNum';
 
 export type MonsterType = 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking';
 
@@ -265,10 +266,12 @@ export function resolveFireballHits(state: GameState): number {
           spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           playSfxClient('die');
           dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'KILL!', '#ffaa00');
           inf('combat', `${m.type} killed by fireball (+${def.score})`);
           break;
         } else {
           playSfxClient('hit');
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '-25', '#ff5555');
         }
       }
     }
@@ -298,10 +301,12 @@ export function resolveMeleeHits(state: GameState): number {
           spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           playSfxClient('die');
           dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'KILL!', '#ffaa00');
           inf('combat', `${m.type} killed by melee (+${def.score})`);
           break;
         } else {
           playSfxClient('hit');
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '-50', '#ff5555');
         }
       }
     }

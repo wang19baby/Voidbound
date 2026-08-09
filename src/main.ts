@@ -21,6 +21,8 @@ import { saveGame, loadGame } from './ipc/save';
 import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
 import { pickupLoot, getLoot, RARITY_COLORS, describeAffix } from './game/equipment';
 import { playBgmClient } from './ipc/sfx';
+import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
+import { getSkillCooldowns } from './game/cooldown';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
@@ -240,6 +242,7 @@ function loop(now: number) {
   updateMonsters(state, dt);
   updateEnemyProj(state, dt);
   updateDeathFx(state, dt);
+  updateDamageNums(state, dt);
   resolveFireballHits(state);
   resolveMeleeHits(state);
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);

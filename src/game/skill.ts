@@ -95,6 +95,17 @@ export function getSkill(slot: SkillSlot): SkillDef {
 /** 各 slot 的 CD 上次触发时间 */
 const lastTrigger: Record<SkillSlot, number> = { LMB: -Infinity, RMB: -Infinity, Q: -Infinity, W: -Infinity, E: -Infinity, R: -Infinity };
 
+/** 当前各 slot 剩余 cd (秒), 0 表示就绪 */
+export function getSkillCooldowns(nowSec: number): Record<SkillSlot, number> {
+  const out = {} as Record<SkillSlot, number>;
+  for (const slot of ['LMB', 'RMB', 'Q', 'W', 'E', 'R'] as SkillSlot[]) {
+    const sk = registry[slot];
+    const left = sk.cooldown - (nowSec - lastTrigger[slot]);
+    out[slot] = left > 0 ? left : 0;
+  }
+  return out;
+}
+
 /** 主循环每帧开头调用, 检测按键 + cd + mp, 通过则 cast 并记录触发时间 */
 export function tryCastSlot(slot: SkillSlot, state: GameState, dir: { x: number; y: number }, nowSec: number): boolean {
   const sk = registry[slot];
