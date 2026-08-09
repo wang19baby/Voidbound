@@ -212,15 +212,18 @@ window.addEventListener('keydown', (e) => {
     inf('ui', state.equipmentOpen ? 'equipment panel open' : 'equipment panel closed');
     return;
   }
-  // Esc (未暂停, 无面板): 打开暂停菜单
+  // 装备面板开着: 只响应 Tab/Esc 关闭, 阻断游戏键
+  if (state.equipmentOpen) {
+    if (e.key === 'Escape' || e.code === 'Tab') {
+      state.equipmentOpen = false;
+      inf('ui', 'equipment panel closed');
+    }
+    return;
+  }
+  // Esc (未暂停): 打开暂停菜单
   if (!state.paused && e.key === 'Escape') {
     state.paused = true;
     inf('gl', 'paused');
-    return;
-  }
-  // Esc (装备面板打开): 只关面板
-  if (state.equipmentOpen && e.key === 'Escape') {
-    state.equipmentOpen = false;
     return;
   }
   // 暂停/设置菜单: 阻断游戏按键
@@ -657,7 +660,7 @@ function drawFrame() {
   // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
   const aimDir = mouseAimDirection(state, mouse.state());
   // 暂停/装备面板时: 屏蔽技能点击, 但仍渲染 (遮罩与面板画在 drawFrameToScreen)
-  if (!state.paused) {
+  if (!state.paused && !state.equipmentOpen) {
     if (mouse.wasClicked('LMB')) {
       if (tryCastSlot('LMB', state, aimDir, nowSec)) {
         invoke('play_sfx', { name: 'swing' }).catch(() => {});
