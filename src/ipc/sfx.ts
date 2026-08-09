@@ -9,3 +9,11 @@ export function playSfxClient(name: string): void {
 export function setVolumeClient(vol: number): void {
   invoke('set_volume', { vol }).catch(() => {});
 }
+
+export function playBgmClient(name: string): void {
+  invoke('play_bgm', { name }).catch(() => {});
+}
+
+export function stopBgmClient(): void {
+  invoke('stop_bgm').catch(() => {});
+}

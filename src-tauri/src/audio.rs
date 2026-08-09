@@ -12,9 +12,12 @@ use std::thread;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
 
 const SFX_LIST: &[&str] = &["fireball", "hit", "swing", "die"];
+const BGM_LIST: &[&str] = &["bgm_forest", "bgm_desert", "bgm_ruin", "bgm_void"];
 
 pub enum AudioMsg {
     Play(String),
+    PlayBGM(String),
+    StopBGM,
     SetVolume(f32),
 }
 
@@ -48,7 +51,7 @@ fn spawn_audio_thread() -> Sender<AudioMsg> {
 
         // 预加载
         let mut cache: HashMap<String, Vec<u8>> = HashMap::new();
-        for name in SFX_LIST {
+        for name in SFX_LIST.iter().chain(BGM_LIST.iter()) {
             let p = sfx_path(name);
             if p.exists() {
                 if let Ok(bytes) = std::fs::read(&p) {
@@ -59,6 +62,7 @@ fn spawn_audio_thread() -> Sender<AudioMsg> {
         let mut volume = 0.5f32;
         log::info!("audio thread: {} SFX loaded", cache.len());
 
+        let mut bgm_sink: Option<Sink> = None;
         for msg in rx {
             match msg {
                 AudioMsg::Play(name) => {
@@ -73,7 +77,25 @@ fn spawn_audio_thread() -> Sender<AudioMsg> {
                         }
                     }
                 }
-                AudioMsg::SetVolume(v) => { volume = v.clamp(0.0, 1.0); }
+                AudioMsg::PlayBGM(name) => {
+                    if let Some(bytes) = cache.get(&name) {
+                        if let Ok(source) = Decoder::new(Cursor::new(bytes.clone())) {
+                            if let Ok(sink) = Sink::try_new(&handle) {
+                                sink.set_volume(volume * 0.5);
+                                if let Some(prev) = bgm_sink.take() { prev.stop(); }
+                                sink.append(source);
+                                bgm_sink = Some(sink);
+                            }
+                        }
+                    }
+                }
+                AudioMsg::StopBGM => {
+                    if let Some(prev) = bgm_sink.take() { prev.stop(); }
+                }
+                AudioMsg::SetVolume(v) => {
+                    volume = v.clamp(0.0, 1.0);
+                    if let Some(ref s) = bgm_sink { s.set_volume(volume * 0.5); }
+                }
             }
         }
     });
@@ -90,6 +112,20 @@ fn ensure_audio() -> Sender<AudioMsg> {
 pub fn play_sfx(name: String) -> Result<(), String> {
     let tx = ensure_audio();
     tx.send(AudioMsg::Play(name)).map_err(|e| format!("audio: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn play_bgm(name: String) -> Result<(), String> {
+    let tx = ensure_audio();
+    tx.send(AudioMsg::PlayBGM(name)).map_err(|e| format!("audio: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_bgm() -> Result<(), String> {
+    let tx = ensure_audio();
+    tx.send(AudioMsg::StopBGM).map_err(|e| format!("audio: {e}"))?;
     Ok(())
 }
 

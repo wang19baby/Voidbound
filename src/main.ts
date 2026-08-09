@@ -20,6 +20,7 @@ import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, ty
 import { saveGame, loadGame } from './ipc/save';
 import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
 import { pickupLoot, getLoot, RARITY_COLORS, describeAffix } from './game/equipment';
+import { playBgmClient } from './ipc/sfx';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
@@ -68,7 +69,8 @@ inf('atlas', `loaded: ${[characters, particles, ui, icons, world, monsters].map(
 const res = await buildRenderResources(gl, [characters, particles, ui, icons, world, monsters]);
 inf('atlas', 'PNG decoded + textures uploaded');
 
-inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural`);
+inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
+playBgmClient(`bgm_${state.theme}`);
 
 const keys = attachKeyboard(window);
 const mouse = attachMouse(canvas) as MouseHandle & { sync: () => void; reset: () => void };
@@ -168,6 +170,7 @@ window.addEventListener('keydown', (e) => {
     const i = themes.indexOf(state.theme);
     state.theme = themes[(i + 1) % themes.length];
     inf('world', `theme → ${state.theme}`);
+    playBgmClient(`bgm_${state.theme}`);
   }
 });
 

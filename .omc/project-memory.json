@@ -52,15 +52,15 @@
       "type": "directory"
     },
     {
-      "path": "docs\\REQUIREMENTS.md",
-      "accessCount": 10,
-      "lastAccessed": 1786198226253,
+      "path": "src-tauri\\src\\lib.rs",
+      "accessCount": 11,
+      "lastAccessed": 1786265071615,
       "type": "file"
     },
     {
-      "path": "src-tauri\\src\\lib.rs",
+      "path": "docs\\REQUIREMENTS.md",
       "accessCount": 10,
-      "lastAccessed": 1786263093415,
+      "lastAccessed": 1786198226253,
       "type": "file"
     },
     {
