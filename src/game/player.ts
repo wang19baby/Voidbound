@@ -3,6 +3,7 @@
 import type { GameState } from './state';
 import { aabbOverlap, findPlayerWallHit } from './world';
 import { dbg } from '../util/log';
+import { isHardcore } from './difficulty';
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;
@@ -35,9 +36,10 @@ export function gainExp(state: GameState, amount: number): number {
   return ups;
 }
 
-/** 喝药 (F-CBT-002): stat='hp'|'mp'; 返回成功 */
+/** 喝药 (F-CBT-002): stat='hp'|'mp'; 返回成功. 硬核 (D-09) 禁用药水 */
 export function usePotion(state: GameState, stat: 'hp' | 'mp'): boolean {
   const p = state.player;
+  if (isHardcore(state.difficulty)) return false;
   if (p.potionCd > 0) return false;
   if (p.potions[stat] <= 0) return false;
   p.potions[stat]--;

@@ -97,6 +97,10 @@ export interface Monster {
   maxHp: number;
   /** Boss 阶段 (1/2, 50% 进入狂暴) */
   phase: 1 | 2;
+  /** 燃烧 DOT (US-016): 剩余秒 / 每秒伤害 / 跳数积累 */
+  burnT: number;
+  burnDps: number;
+  burnAccum: number;
   /** 直接抄自 def, 渲染/碰撞用 */
   size: { w: number; h: number };
   /** wander 状态的目标点 (世界坐标); 到达后重新选 */
@@ -139,6 +143,7 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
       maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
       phase: 1,
+      burnT: 0, burnDps: 0, burnAccum: 0,
       size: { ...def.size },
       wanderTarget: pickWanderTarget(state, x, y, def.aggroRange * 2),
       wanderTimer: 3 + Math.random() * 2,
@@ -158,6 +163,7 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
     maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
     phase: 1,
+    burnT: 0, burnDps: 0, burnAccum: 0,
     size: { w: 32, h: 32 },
     wanderTarget: { x: state.player.pos.x, y: state.player.pos.y - 1000 },
     wanderTimer: 3,
@@ -235,6 +241,23 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.walkT = 0.3;
     }
 
+    // 燃烧 DOT (US-016): 每 0.5s 跳一次
+    if (m.burnT > 0 && m.hp > 0) {
+      m.burnT -= dt;
+      m.burnAccum += dt;
+      if (m.burnAccum >= 0.5) {
+        m.burnAccum -= 0.5;
+        const dmg = Math.max(1, Math.round(m.burnDps * 0.5));
+        m.hp -= dmg;
+        m.hitFlash = 0.1;
+        spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, `-${dmg}`, '#ff7043');
+        if (m.hp <= 0) {
+          killMonster(state, m);
+          continue;
+        }
+      }
+    }
+
     // Boss 二阶段: 50% 血 → 狂暴 (提速 1.6x + 双发投射物)
     if (def.boss && m.phase === 1 && m.hp <= m.maxHp * 0.5) {
       m.phase = 2;
@@ -285,10 +308,34 @@ export function updateMonsters(state: GameState, dt: number): void {
 }
 
 /** 对怪物结算一次 D-04 伤害; 返回是否击杀 (死亡/掉落/分数/特效统一在此) */
+/** 击杀统一出口: 分数/技能点/经验/药水/Boss 触发/掉落/特效 */
+export function killMonster(state: GameState, m: Monster): void {
+  const def = MONSTER_DEFS[m.type];
+  const cx = m.pos.x + m.size.w / 2;
+  const cy = m.pos.y + m.size.h / 2;
+  state.score += def.score;
+  state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
+  state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
+  const ups = gainExp(state, def.score * 2);
+  if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
+  if (Math.random() < 0.12) {
+    const kind: 'hp' | 'mp' = Math.random() < 0.6 ? 'hp' : 'mp';
+    const alt: 'hp' | 'mp' = kind === 'hp' ? 'mp' : 'hp';
+    if (state.player.potions[kind] < 3) state.player.potions[kind]++;
+    else if (state.player.potions[alt] < 3) state.player.potions[alt]++;
+  }
+  spawnDeathFx(state, cx, cy);
+  playSfxClient('die');
+  dropLoot(state, cx, cy);
+  spawnDamageNum(state, cx, m.pos.y, 'KILL!', '#ffaa00');
+  inf('combat', `${m.type} killed (+${def.score})`);
+}
+
+/** 对怪物结算一次 D-04 伤害; 支持击退 (F-CBT-005, US-016) */
 export function damageMonster(
   state: GameState,
   m: Monster,
-  spec: { base: number; type: DamageType },
+  spec: { base: number; type: DamageType; knockback?: number },
 ): { killed: boolean; damage: number; isCrit: boolean } {
   const def = MONSTER_DEFS[m.type];
   const targetRes = def.res?.[spec.type] ?? 0;
@@ -305,25 +352,17 @@ export function damageMonster(
   spawnDamageNum(state, cx, m.pos.y - 6, `-${damage}`, isCrit ? CRIT_COLOR : DAMAGE_TYPE_COLORS[spec.type]);
   playSfxClient('hit');
   dbg('combat', `${spec.type} hit ${m.type} for ${damage} (hp=${m.hp.toFixed(0)})${isCrit ? ' CRIT' : ''}`);
+  // 击退: 从玩家推离 (US-016)
+  if (spec.knockback) {
+    const dx = m.pos.x - state.player.pos.x;
+    const dy = m.pos.y - state.player.pos.y;
+    const len = Math.hypot(dx, dy) || 1;
+    m.pos.x = Math.max(0, Math.min(state.world.w - m.size.w, m.pos.x + (dx / len) * spec.knockback));
+    m.pos.y = Math.max(0, Math.min(state.world.h - m.size.h, m.pos.y + (dy / len) * spec.knockback));
+    m.hitFlash = 0.3;
+  }
   if (m.hp <= 0) {
-    state.score += def.score;
-    state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
-    state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
-    // 经验 (F-RPG-002, D-05): 击杀 score×2, 升级 +5 技能点 +5 attr
-    const ups = gainExp(state, def.score * 2);
-    if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
-    // 药水掉落 (F-CBT-002): 12%, 优先补满上限 3 的类型中没满的一瓶
-    if (Math.random() < 0.12) {
-      const kind: 'hp' | 'mp' = Math.random() < 0.6 ? 'hp' : 'mp';
-      const alt: 'hp' | 'mp' = kind === 'hp' ? 'mp' : 'hp';
-      if (state.player.potions[kind] < 3) state.player.potions[kind]++;
-      else if (state.player.potions[alt] < 3) state.player.potions[alt]++;
-    }
-    spawnDeathFx(state, cx, cy);
-    playSfxClient('die');
-    dropLoot(state, cx, cy);
-    spawnDamageNum(state, cx, m.pos.y, 'KILL!', '#ffaa00');
-    inf('combat', `${m.type} killed (+${def.score})`);
+    killMonster(state, m);
     return { killed: true, damage, isCrit };
   }
   return { killed: false, damage, isCrit };
@@ -342,7 +381,9 @@ export function resolveFireballHits(state: GameState): number {
           const idx = fireballs.indexOf(f);
           if (idx >= 0) fireballs.splice(idx, 1);
         }
-        const r = damageMonster(state, m, { base: f.dmg, type: 'fire' });
+        const r = damageMonster(state, m, { base: f.dmg, type: 'fire', knockback: 60 });
+        // 燃烧 DOT (US-016): 3s × 3dps
+        if (r.damage > 0) { m.burnT = 3; m.burnDps = 3; }
         // 嗜血: 命中回 5 HP
         if (f.rune === 'vampire' && r.damage > 0) {
           state.player.hp = Math.min(100, state.player.hp + 5);
@@ -367,7 +408,7 @@ export function resolveMeleeHits(state: GameState): number {
     for (const s of swings) {
       if (aabbOverlap(s.pos.x, s.pos.y, s.size.w, s.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
         const base = Math.round(MELEE_DAMAGE * skillDamageScale(s.level));
-        const r = damageMonster(state, m, { base, type: 'physical' });
+        const r = damageMonster(state, m, { base, type: 'physical', knockback: 40 });
         if (r.killed) { kills++; return false; }
         // 一次挥击只结算一次
       }

@@ -80,6 +80,8 @@ export interface GameState {
   difficulty: Difficulty;
   /** 连杀计数 (每 10 击杀召当前主题 Boss) */
   bossKillTrigger: number;
+  /** 装备面板开关 (Tab, US-014) */
+  equipmentOpen: boolean;
   /** 活跃的符文三选一 (10 级触发) */
   runeChoice: RuneChoice | null;
   /** 已拒绝变异的槽 (本局不再触发) */

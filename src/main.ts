@@ -134,6 +134,7 @@ const state = {
   settingsOpen: false,
   difficulty: 'normal' as Difficulty,
   bossKillTrigger: 0,
+  equipmentOpen: false,
   volume: 0.8,
   resources: res,
 };
@@ -155,11 +156,24 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  // 装备面板 (US-014): Tab 切换, 优先于暂停逻辑
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    state.equipmentOpen = !state.equipmentOpen;
+    state.paused = state.equipmentOpen;  // 面板打开 = 暂停世界 (保留 pause 分支 UI)
+    inf('ui', state.equipmentOpen ? 'equipment panel open' : 'equipment panel closed');
+    return;
+  }
   // 暂停/设置菜单: 阻断游戏按键
   if (state.paused) {
     const k = e.key.toLowerCase();
     if (k === '1') { state.paused = false; inf('gl', 'resumed'); return; }
     if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
+    // 装备面板打开: 只响应关闭 (Escape/Tab)
+    if (state.equipmentOpen) {
+      if (k === 'escape') { state.equipmentOpen = false; state.paused = false; inf('gl', 'resumed'); }
+      return;
+    }
     if (state.settingsOpen) {
       if (k === '+' || k === '=') {
         state.volume = Math.min(1, state.volume + 0.05);
@@ -185,6 +199,7 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (k === 'escape') {
+      if (state.equipmentOpen) { state.equipmentOpen = false; state.paused = false; return; }
       if (state.settingsOpen) state.settingsOpen = false;
       else state.paused = false;
       inf('gl', state.paused ? 'paused' : 'resumed');
@@ -407,6 +422,21 @@ function loop(now: number) {
       state.bossKillTrigger = 0;
       state.player.dodgeT = 0;
       state.player.dodgeCd = 0;
+      // 硬核 (D-09): 永久死亡 — 清空装备/等级/技能/符文
+      if (state.difficulty === 'hardcore') {
+        getOwned(state).length = 0;
+        recomputeCombat(state);
+        state.player.level = 1;
+        state.player.exp = 0;
+        state.player.skillPoints = 0;
+        for (const slot of SKILL_SLOTS) {
+          const sk = getSkill(slot);
+          sk.level = 1;
+          sk.rune = null;
+        }
+        state.rejectedRunes.length = 0;
+        inf('game', 'HARDCORE: 永久死亡, 进度已清空 (重新开始)');
+      }
       state.monsters.length = 0;
       for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
       import('./game/state').then(({ resetPlayer }) => resetPlayer(state));

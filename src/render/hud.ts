@@ -8,8 +8,10 @@ import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
+import { getOwned, RARITY_COLORS, describeAffix } from '../game/equipment';
 import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
 import { expNext } from '../game/player';
+import { DAMAGE_TYPES } from '../game/combat';
 import { DIFFICULTY_MODS } from '../game/difficulty';
 import { worldToScreen } from '../game/state';
 
@@ -176,6 +178,62 @@ export function drawHudOverlay(
       ctx2d.fillText(r.desc, bx + boxW / 2, y0 + 56);
     }
     ctx2d.textAlign = 'left';
+  }
+
+  // 装备面板 (US-014): Tab 打开, 已装备 + 聚合属性
+  if (state.equipmentOpen) {
+    const owned = getOwned(state);
+    ctx2d.fillStyle = 'rgba(8, 8, 14, 0.93)';
+    ctx2d.fillRect(0, 0, state.viewport.w, state.viewport.h);
+    ctx2d.font = 'bold 20px monospace';
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.textAlign = 'left';
+    ctx2d.fillText(`装备 (${owned.length} 件)  —  [Tab/Esc] 关闭`, 32, 40);
+    ctx2d.font = '13px monospace';
+    let py = 68;
+    const shown = Math.min(owned.length, 20);
+    for (let i = 0; i < shown; i++) {
+      const eq = owned[i];
+      const col = RARITY_COLORS[eq.rarity];
+      ctx2d.fillStyle = `rgb(${col.map(v => Math.round(v * 255)).join(',')})`;
+      ctx2d.fillText(`${i + 1}. ${eq.name}`, 40, py);
+      ctx2d.fillStyle = '#bbb';
+      ctx2d.fillText(eq.affixes.map(describeAffix).join('  '), 320, py);
+      py += 20;
+    }
+    if (owned.length > shown) {
+      ctx2d.fillStyle = '#777';
+      ctx2d.fillText(`…还有 ${owned.length - shown} 件`, 40, py);
+    }
+    // 聚合战斗属性 (右列)
+    const c = state.player.combat;
+    const rx = state.viewport.w - 360;
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.font = 'bold 15px monospace';
+    ctx2d.fillText('战斗属性 (D-04 聚合)', rx, 40);
+    ctx2d.font = '13px monospace';
+    const rows: [string, string][] = [
+      ['等级', `${state.player.level}`],
+      ['技能点', `${state.player.skillPoints ?? 0}`],
+      ['物理加成', `+${Math.round(c.physPct * 100)}%`],
+      ['元素加成', `+${Math.round(c.elemPct * 100)}%`],
+      ['暴击率', `${Math.round(c.critRate * 100)}%`],
+      ['暴击伤害', `+${c.critBonus}%`],
+      ['减抗', `${c.shred}`],
+      ['易伤', `+${Math.round(c.vuln)}%`],
+      ['抗性', DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(' ')],
+    ];
+    let ry = 66;
+    for (const [k, v] of rows) {
+      ctx2d.fillStyle = '#aaa';
+      ctx2d.fillText(k, rx, ry);
+      ctx2d.fillStyle = '#eee';
+      ctx2d.fillText(v, rx + 130, ry);
+      ry += 20;
+    }
+    ctx2d.fillStyle = '#888';
+    ctx2d.font = '12px monospace';
+    ctx2d.fillText('反伤/移动速度 等: 见词条 UI (未展开)', rx, ry + 4);
   }
 }
 
