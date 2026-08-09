@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"npm run build 2>&1 | tail -3 && cp dist/main.js src-tauri/dist/main.js\",\"timeout\":60000,\"description\":\"Rebuild bundle with pause menu\",\"run_in_background\":false,\"dangerouslyDisableSandbox\"...",
+  "error": "Exit code 1\n\r\nDone in 22ms\r\nesbuild build done -> dist/main.js + dist/index.html\r\n\"D:/tools/Scoop/apps/coreutils/current/bin/cp.exe\": cannot create regular file `src-tauri/dist/main.js': No such file or directory",
+  "timestamp": "2026-08-09T07:56:02.527Z",
+  "retry_count": 1
+}

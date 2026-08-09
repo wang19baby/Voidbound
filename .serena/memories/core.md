@@ -1,0 +1,1 @@
+Voidbound 是 Windows 上的个人作品集 2D 俯视 ARPG roguelite；当前处于 Phase 0/ M1 启动准备，文档已先行，代码为 Rust/Tauri 骨架。核心目录：`docs/` 规格与路线，`assets/` 素材/图集流水线，`src-tauri/` Rust 端。资源策略优先 CC0 + 自制，避免授权复杂度。图集相关流程见 `mem:assets_pipeline`；技术栈见 `mem:tech_stack`；验收命令见 `mem:task_completion`.

@@ -9,6 +9,7 @@ export interface QuadResources {
   uTex: WebGLUniformLocation;
   uFlip: WebGLUniformLocation;
   uRot: WebGLUniformLocation;
+  uColor: WebGLUniformLocation;
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string, label: string): WebGLShader {
@@ -84,7 +85,8 @@ export function createQuadBuffer(
   const uTex = gl.getUniformLocation(program, 'u_tex');
   const uFlip = gl.getUniformLocation(program, 'u_flip');
   const uRot = gl.getUniformLocation(program, 'u_rot');
-  if (!uPos || !uSize || !uUv || !uTex || !uFlip || !uRot) throw new Error('uniform 缺失');
+  const uColor = gl.getUniformLocation(program, 'u_color');
+  if (!uPos || !uSize || !uUv || !uTex || !uFlip || !uRot || !uColor) throw new Error('uniform 缺失');
 
-  return { program, vao, uPos, uSize, uUv, uTex, uFlip, uRot };
+  return { program, vao, uPos, uSize, uUv, uTex, uFlip, uRot, uColor };
 }

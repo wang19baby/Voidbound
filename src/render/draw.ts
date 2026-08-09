@@ -1,6 +1,7 @@
 // drawSprite: 跨 atlas 通用
 // flip: (1,1) 正常; (-1,1) 水平翻转; (1,-1) 垂直翻转
 // rot: 绕 sprite 中心旋转弧度 (CW, Y 向下坐标系)
+// color: tint (1,1,1) 不变色, (1,0.3,0.3) 红色 hit flash 等
 // atlas 缺则不画 (M1 不兜底 → throw)
 
 import type { RenderResources } from './resources';
@@ -9,7 +10,8 @@ import type { QuadResources } from './gl/resources';
 
 export interface DrawOpts {
   flip?: { x: 1 | -1; y: 1 | -1 };
-  rot?: number;  // 弧度
+  rot?: number;
+  color?: [number, number, number];
 }
 
 export function drawSprite(
@@ -29,6 +31,7 @@ export function drawSprite(
 
   const flip = opts.flip ?? { x: 1, y: 1 };
   const rot = opts.rot ?? 0;
+  const color = opts.color ?? [1, 1, 1];
 
   gl.useProgram(q.program);
   gl.bindVertexArray(q.vao);
@@ -39,6 +42,7 @@ export function drawSprite(
   gl.uniform2f(q.uSize, size.w, size.h);
   gl.uniform2f(q.uFlip, flip.x, flip.y);
   gl.uniform1f(q.uRot, rot);
+  gl.uniform3f(q.uColor, color[0], color[1], color[2]);
   const [u, v, du, dv] = spriteUv(sprite, bundle.atlas.width, bundle.atlas.height);
   gl.uniform4f(q.uUv, u, v, du, dv);
   gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);

@@ -1,0 +1,1 @@
+Windows shell 环境下可直接运行：`python assets/atlas/scripts/stain_sprites.py` 生成 6 职业 stand/walk PNG；`python assets/atlas/scripts/pack_atlas.py characters --rust-bin` 生成 `assets/atlas/output/characters.{png,json,bin}`；`python assets/atlas/scripts/verify_bin.py` 验证 VATL bin；Rust parser 测试在 `assets/atlas/tests/rust_parser` 用 `cargo test`. 路径含空格时需加双引号。

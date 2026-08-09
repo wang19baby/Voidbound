@@ -45,7 +45,19 @@ export interface GameState {
   fireballSize: number;
   monsters: Monster[];
   score: number;
+  paused: boolean;
+  dying: boolean;        // 死亡屏阶段
+  deathTimer: number;   // 倒计时 (s), 0 时重开
   resources: RenderResources;
+}
+
+/** 重置 player 状态到世界中心 */
+export function resetPlayer(state: GameState): void {
+  state.player.pos = { x: WORLD_W / 2 - 32, y: WORLD_H / 2 - 32 };
+  state.player.hp = 100;
+  state.player.mp = 100;
+  state.player.idleT = 0;
+  state.player.flipDir = 'N';
 }
 
 import type { Wall as WallLike } from './world';

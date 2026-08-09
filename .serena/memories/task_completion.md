@@ -1,0 +1,1 @@
+素材任务完成的最低验收：输入目录存在 12 张角色 PNG（6 stand + 6 walk），图像可被 Pillow 打开且 alpha/RGBA 正常；执行 pack_atlas 生成 PNG/JSON/BIN；执行 verify_bin，要求 magic/version、CRC32、cursor 末尾和非空 PNG 全部 PASS；运行 `cargo test` 验证 Rust parser。代码改动再按 Rust/Python 对应测试与审查流程验证。

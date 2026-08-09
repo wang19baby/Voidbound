@@ -1,0 +1,350 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1786197463564,
+  "projectRoot": "D:\\work_space\\personal_workspace\\Voidbound",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 4,
+      "lastAccessed": 1786197463448,
+      "keyFiles": [
+        "CONTENT.md",
+        "DESIGN.md",
+        "REQUIREMENTS.md",
+        "ROADMAP.md"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "docs\\REQUIREMENTS.md",
+      "accessCount": 10,
+      "lastAccessed": 1786198226253,
+      "type": "file"
+    },
+    {
+      "path": "docs\\DESIGN.md",
+      "accessCount": 9,
+      "lastAccessed": 1786198265197,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\lib.rs",
+      "accessCount": 9,
+      "lastAccessed": 1786262539966,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 8,
+      "lastAccessed": 1786245654514,
+      "type": "directory"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 7,
+      "lastAccessed": 1786206885202,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\Cargo.toml",
+      "accessCount": 6,
+      "lastAccessed": 1786262534917,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\scripts\\pack_atlas.py",
+      "accessCount": 5,
+      "lastAccessed": 1786207202272,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\render\\atlas.rs",
+      "accessCount": 5,
+      "lastAccessed": 1786251457677,
+      "type": "file"
+    },
+    {
+      "path": "docs\\ROADMAP.md",
+      "accessCount": 4,
+      "lastAccessed": 1786198280839,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\tests\\rust_parser\\Cargo.toml",
+      "accessCount": 4,
+      "lastAccessed": 1786245624500,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\tests\\rust_parser\\src\\lib.rs",
+      "accessCount": 4,
+      "lastAccessed": 1786245626869,
+      "type": "file"
+    },
+    {
+      "path": "docs\\CONTENT.md",
+      "accessCount": 3,
+      "lastAccessed": 1786198283177,
+      "type": "file"
+    },
+    {
+      "path": "docs\\ASSETS.md",
+      "accessCount": 3,
+      "lastAccessed": 1786206885274,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\SPRITE_ASSEMBLY_SOP.md",
+      "accessCount": 3,
+      "lastAccessed": 1786207286181,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\scripts\\stain_sprites.py",
+      "accessCount": 3,
+      "lastAccessed": 1786242411452,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\scripts\\batch_generate.py",
+      "accessCount": 2,
+      "lastAccessed": 1786199284983,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\scripts\\verify_bin.py",
+      "accessCount": 2,
+      "lastAccessed": 1786206983401,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\tests\\rust_parser\\tests\\integration.rs",
+      "accessCount": 2,
+      "lastAccessed": 1786207227172,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\output\\characters.png",
+      "accessCount": 2,
+      "lastAccessed": 1786243145614,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\main.rs",
+      "accessCount": 2,
+      "lastAccessed": 1786245369452,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\render\\mod.rs",
+      "accessCount": 2,
+      "lastAccessed": 1786245603355,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\downloads\\lpc-base-assets\\LPC Base Assets\\sprites\\people\\soldier.png",
+      "accessCount": 2,
+      "lastAccessed": 1786253326966,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\downloads\\lpc-base-assets\\LPC Base Assets\\sprites\\people\\male_walkcycle.png",
+      "accessCount": 2,
+      "lastAccessed": 1786255845920,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\save.rs",
+      "accessCount": 2,
+      "lastAccessed": 1786262537409,
+      "type": "file"
+    },
+    {
+      "path": "docs\\CHANGELOG-v1.1.md",
+      "accessCount": 1,
+      "lastAccessed": 1786198127987,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\README.md",
+      "accessCount": 1,
+      "lastAccessed": 1786198805192,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\prompts\\characters.yaml",
+      "accessCount": 1,
+      "lastAccessed": 1786198807157,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\prompts\\palettes.yaml",
+      "accessCount": 1,
+      "lastAccessed": 1786198809443,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\prompts\\monsters.yaml",
+      "accessCount": 1,
+      "lastAccessed": 1786198811628,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\scripts\\post_process.py",
+      "accessCount": 1,
+      "lastAccessed": 1786198816141,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\workflows\\character_gen_reference.md",
+      "accessCount": 1,
+      "lastAccessed": 1786198818192,
+      "type": "file"
+    },
+    {
+      "path": "docs\\GAME_FLOW.md",
+      "accessCount": 1,
+      "lastAccessed": 1786199278458,
+      "type": "file"
+    },
+    {
+      "path": "docs\\PLAYER_UX.md",
+      "accessCount": 1,
+      "lastAccessed": 1786199280618,
+      "type": "file"
+    },
+    {
+      "path": "docs\\M1_CHECKLIST.md",
+      "accessCount": 1,
+      "lastAccessed": 1786199591269,
+      "type": "file"
+    },
+    {
+      "path": "docs\\CODE_REVIEW.md",
+      "accessCount": 1,
+      "lastAccessed": 1786199834995,
+      "type": "file"
+    },
+    {
+      "path": "assets\\ai-gen\\downloads\\tiny-battle\\Tilesheet.txt",
+      "accessCount": 1,
+      "lastAccessed": 1786201861209,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas",
+      "accessCount": 1,
+      "lastAccessed": 1786206983427,
+      "type": "directory"
+    },
+    {
+      "path": "assets\\ai-gen",
+      "accessCount": 1,
+      "lastAccessed": 1786206996536,
+      "type": "directory"
+    },
+    {
+      "path": "docs\\M1_DAY0_README.md",
+      "accessCount": 1,
+      "lastAccessed": 1786207202010,
+      "type": "file"
+    },
+    {
+      "path": "assets\\atlas\\input\\characters",
+      "accessCount": 1,
+      "lastAccessed": 1786207280345,
+      "type": "directory"
+    },
+    {
+      "path": "assets\\atlas\\output",
+      "accessCount": 1,
+      "lastAccessed": 1786207280515,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\wang\\AppData\\Local\\Temp\\claude\\D--work-space-personal-workspace-Voidbound\\ae0e13d6-189e-4a25-ad5a-2939b348da91\\tasks\\b6dgh7msk.output",
+      "accessCount": 1,
+      "lastAccessed": 1786242701118,
+      "type": "file"
+    },
+    {
+      "path": "docs\\RUST_ARCHITECTURE.md",
+      "accessCount": 1,
+      "lastAccessed": 1786245362885,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri",
+      "accessCount": 1,
+      "lastAccessed": 1786245362903,
+      "type": "directory"
+    },
+    {
+      "path": "src-tauri\\src",
+      "accessCount": 1,
+      "lastAccessed": 1786245369877,
+      "type": "directory"
+    },
+    {
+      "path": "assets\\atlas\\tests\\rust_parser\\src",
+      "accessCount": 1,
+      "lastAccessed": 1786245370031,
+      "type": "directory"
+    },
+    {
+      "path": "src-tauri\\src\\game\\mod.rs",
+      "accessCount": 1,
+      "lastAccessed": 1786245574671,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\game\\entity.rs",
+      "accessCount": 1,
+      "lastAccessed": 1786245576872,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\game\\combat.rs",
+      "accessCount": 1,
+      "lastAccessed": 1786245579306,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri\\src\\game\\procgen.rs",
+      "accessCount": 1,
+      "lastAccessed": 1786245581825,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

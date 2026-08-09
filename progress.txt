@@ -1,0 +1,22 @@
+# Voidbound Ralph Progress
+
+## Session: 2026-08-09
+
+### Done before Ralph
+- M1 core (Tauri + WebGL2 + WASD + 火球/近战 + 怪物 + 程序化世界 + 日志)
+- M1C verification doc
+- 2 commits: M1 build + M1 smoke checklist
+
+### Ralph plan
+8 user stories to complete:
+1. US-001 hitFlash visual
+2. US-002 death particles
+3. US-003 walk animation
+4. US-004 SFX (rodio)
+5. US-005 pause menu
+6. US-006 death screen
+7. US-007 save system
+8. US-008 production build
+
+### Iteration log
+(updates as stories complete)

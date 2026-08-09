@@ -4,6 +4,8 @@
 import type { GameState } from './state';
 import { aabbOverlap } from './world';
 import { inf, dbg } from '../util/log';
+import { spawnDeathFx } from './deathFx';
+import { playSfxClient } from '../ipc/sfx';
 
 export type MonsterType = 'bat' | 'slime' | 'worm';
 
@@ -43,6 +45,9 @@ export interface Monster {
   /** 攻击冷却 (避免每帧都扣血) */
   attackCd: number;
   hitFlash: number;          // 受击闪光剩余秒数
+  /** walk 动画 (每 0.3s 切换 0/1) */
+  walkFrame: 0 | 1;
+  walkT: number;             // 倒计时 (s)
 }
 
 let nextMonsterId = 1;
@@ -77,6 +82,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       wanderTimer: 3 + Math.random() * 2,
       attackCd: 0,
       hitFlash: 0,
+      walkFrame: 0,
+      walkT: Math.random() * 0.3,
     };
     return m;
   }
@@ -92,6 +99,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     wanderTimer: 3,
     attackCd: 0,
     hitFlash: 0,
+    walkFrame: 0,
+    walkT: 0,
   };
 }
 
@@ -181,6 +190,13 @@ export function updateMonsters(state: GameState, dt: number): void {
     if (m.attackCd > 0) m.attackCd -= dt;
     if (m.hitFlash > 0) m.hitFlash -= dt;
 
+    // walk 动画
+    m.walkT -= dt;
+    if (m.walkT <= 0) {
+      m.walkFrame = m.walkFrame === 0 ? 1 : 0;
+      m.walkT = 0.3;
+    }
+
     if (dist < def.aggroRange) {
       if (dist > 0.01) {
         m.vel.x = (dx / dist) * def.speed;
@@ -235,8 +251,12 @@ export function resolveFireballHits(state: GameState): number {
           alive = false;
           kills++;
           state.score += def.score;
+          spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
+          playSfxClient('die');
           inf('combat', `${m.type} killed by fireball (+${def.score})`);
           break;
+        } else {
+          playSfxClient('hit');
         }
       }
     }
@@ -263,8 +283,12 @@ export function resolveMeleeHits(state: GameState): number {
           alive = false;
           kills++;
           state.score += def.score;
+          spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
+          playSfxClient('die');
           inf('combat', `${m.type} killed by melee (+${def.score})`);
           break;
+        } else {
+          playSfxClient('hit');
         }
       }
     }

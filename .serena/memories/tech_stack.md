@@ -1,0 +1,1 @@
+技术栈：Tauri 2.2 + Rust 2021（rust-version 1.77）；WebGL2 + 原生 TypeScript（非 React/Three.js）；glam、ringbuf、parking_lot、rand、serde/serde_json、log/env_logger、thiserror/anyhow。素材脚本使用 Python 3 + Pillow；图集 Rust parser 测试位于 `assets/atlas/tests/rust_parser/`。

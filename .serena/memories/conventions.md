@@ -1,0 +1,1 @@
+素材命名约定：`<class>_<state>.png`；stain_sprites 默认输出 `assets/atlas/input/characters/`，每职业生成 16x16 单帧 stand 与 64x16 四帧横向 walk。6 职业键名为 barbarian/paladin/sorceress/necromancer/ranger/assassin；图集脚本按宽高比推断帧数，采用 horizontal 排版，padding=2，最大图集 4096。

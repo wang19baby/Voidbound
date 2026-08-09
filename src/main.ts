@@ -1,9 +1,11 @@
-// Voidbound 入口: 程序化分块世界 + 摄像机跟随 + 墙碰撞 + 火球 + 近战 + HUD + 日志 + 鼠标技能
+// Voidbound 入口: 程序化分块世界 + 摄像机跟随 + 墙碰撞 + 火球 + 近战 + HUD + 日志 + 鼠标技能 + SFX
 
 import { createContext } from './render/gl/context';
 import { createQuadBuffer } from './render/gl/resources';
 import { VERT, FRAG } from './render/shaders';
 import { loadAtlas } from './ipc/atlas';
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+const invoke = tauriInvoke;
 import { buildRenderResources } from './render/resources';
 import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
@@ -15,6 +17,8 @@ import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/skill';
 import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS } from './game/monster';
+import { saveGame, loadGame } from './ipc/save';
+import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
 const VW = 1280;
@@ -92,6 +96,9 @@ const state = {
   fireballSize: 32,
   monsters: [] as import('./game/monster').Monster[],
   score: 0,
+  paused: false,
+  dying: false,
+  deathTimer: 0,
   resources: res,
 };
 
@@ -108,7 +115,9 @@ window.addEventListener('keydown', (e) => {
     const aimDir = mouseAimDirection(state, mouse.state());
     if (!tryCastSlot('Q', state, aimDir, nowSec)) {
       wrn('skill', 'cast Q failed (cd or mp)');
+      return;
     }
+    invoke('play_sfx', { name: 'fireball' }).catch(() => {});
   }
   if (e.key === 'l' || e.key === 'L') {
     const order: LogLevel[] = ['DBG', 'INF', 'WRN'];
@@ -117,6 +126,38 @@ window.addEventListener('keydown', (e) => {
     (window as unknown as { __lvl?: LogLevel }).__lvl = next;
     setLogLevel(next);
     inf('gl', `log level → ${next}`);
+  }
+  if (e.key === 'Escape') {
+    state.paused = !state.paused;
+    inf('gl', state.paused ? 'paused' : 'resumed');
+  }
+  if (e.key === 'p' || e.key === 'P') {
+    saveGame({
+      player_x: state.player.pos.x,
+      player_y: state.player.pos.y,
+      player_hp: state.player.hp,
+      player_mp: state.player.mp,
+      facing_x: state.player.facing.x,
+      facing_y: state.player.facing.y,
+      score: state.score,
+      world_w: state.world.w,
+      world_h: state.world.h,
+    }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
+  }
+  if (e.key === 'r' || e.key === 'R') {
+    // 避免和 L (log level) 冲突; 这里只触发 read 不切换 log level
+    if (!(window as unknown as { __lvl?: LogLevel }).__lvl) {
+      loadGame().then(d => {
+        state.player.pos.x = d.player_x;
+        state.player.pos.y = d.player_y;
+        state.player.hp = d.player_hp;
+        state.player.mp = d.player_mp;
+        state.player.facing.x = d.facing_x;
+        state.player.facing.y = d.facing_y;
+        state.score = d.score;
+        inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)}`);
+      }).catch(e => wrn('save', `load failed: ${e}`));
+    }
   }
 });
 
@@ -160,6 +201,14 @@ function loop(now: number) {
   // 鼠标边沿 (本帧按下的按键)
   mouse.sync();
 
+  // 暂停时: 跳过游戏逻辑更新, 但仍渲染当前帧 (让 PAUSED 文字画在最新画面上)
+  if (state.paused) {
+    drawFrame();
+    mouse.reset();
+    requestAnimationFrame(loop);
+    return;
+  }
+
   const dir = keys.direction();
   // 仅在有方向输入时更新 facing; 松开按键保持最后一次方向 (解决默认朝右问题)
   if (dir.x !== 0 || dir.y !== 0) {
@@ -176,10 +225,33 @@ function loop(now: number) {
   updateFireballs(state, dt);
   updateSwings(state, dt);
   updateMonsters(state, dt);
+  updateDeathFx(state, dt);
   resolveFireballHits(state);
   resolveMeleeHits(state);
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);
   state.player.hp = Math.min(100, state.player.hp + 2 * dt);  // 被动回血
+
+  // 死亡检测
+  if (state.player.hp <= 0 && !state.dying) {
+    state.dying = true;
+    state.deathTimer = 2.0;  // 2s 后重开
+    inf('combat', 'YOU DIED (score=' + state.score + ')');
+  }
+  if (state.dying) {
+    state.deathTimer -= dt;
+    if (state.deathTimer <= 0) {
+      // 重开
+      state.dying = false;
+      state.fireballs.length = 0;
+      state.score = 0;
+      state.monsters.length = 0;
+      for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'bat'));
+      for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'slime'));
+      state.monsters.push(spawnMonster(state, 'worm'));
+      import('./game/state').then(({ resetPlayer }) => resetPlayer(state));
+      inf('gl', 'respawned');
+    }
+  }
 
   // 怪物被清空后重生 (保持地图始终有怪)
   if (state.monsters.length < 3) {
@@ -189,21 +261,47 @@ function loop(now: number) {
     dbg('world', `respawn ${t}, total=${state.monsters.length}`);
   }
 
+  drawFrame();
+  mouse.reset();
+  requestAnimationFrame(loop);
+}
+
+/** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */
+function drawFrame() {
+
   // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
   const aimDir = mouseAimDirection(state, mouse.state());
   if (mouse.wasClicked('LMB')) {
-    if (!tryCastSlot('LMB', state, aimDir, nowSec)) {
+    if (tryCastSlot('LMB', state, aimDir, nowSec)) {
+      invoke('play_sfx', { name: 'swing' }).catch(() => {});
+    } else {
       dbg('skill', 'LMB on cd');
     }
   }
   if (mouse.wasClicked('RMB')) {
-    if (!tryCastSlot('RMB', state, aimDir, nowSec)) {
+    if (tryCastSlot('RMB', state, aimDir, nowSec)) {
+      invoke('play_sfx', { name: 'swing' }).catch(() => {});
+    } else {
       dbg('skill', 'RMB on cd');
     }
   }
 
+  // 暂停时: 跳过游戏逻辑 (但仍画当前帧 + pause 遮罩)
+  if (state.paused) {
+    mouse.reset();
+    requestAnimationFrame(loop);
+    return;
+  }
+
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT);
+  // ↑ 上面 2 行保留但被 drawFrameToScreen 重复执行; 这块临时兼容旧引用
+  drawFrameToScreen();
+  return;
+}
+
+/** 抽出单帧绘制逻辑 (含 pause 遮罩) */
+function drawFrameToScreen() {
 
   // 设置 reticle 位置给 drawHud 用
   setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
@@ -234,12 +332,25 @@ function loop(now: number) {
     drawSprite(gl, quad, res, sp, f.size, 'particles', 'magic_01');
   }
 
-  // 怪物 (受击时变红通过叠加红色 sprite 简化: 闪烁时整体用纯色 tint; M1 先省略)
+  // 死亡粒子 (在世界图层之后, 怪物之前)
+  for (const fx of getDeathFx(state)) {
+    const sp = worldToScreen(state, fx.pos);
+    if (sp.x + fx.size.w < 0 || sp.x > state.viewport.w) continue;
+    if (sp.y + fx.size.h < 0 || sp.y > state.viewport.h) continue;
+    const lifeFrac = Math.max(0, fx.life / fx.maxLife);
+    // 后期变小
+    const sz = fx.size.w * (0.4 + 0.6 * lifeFrac);
+    drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: sz, h: sz }, 'particles', 'slash_02', { rot: fx.rot });
+  }
+
+  // 怪物 (受击时变红闪烁, 复用 color tint)
   for (const m of state.monsters) {
     const sp = worldToScreen(state, m.pos);
     if (sp.x + m.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + m.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, m.size, 'monsters', MONSTER_DEFS[m.type].sprite);
+    const color: [number, number, number] | undefined = m.hitFlash > 0 ? [1, 0.3, 0.3] : undefined;
+    const monsterSprite = `${MONSTER_DEFS[m.type].sprite}_${m.walkFrame}`;
+    drawSprite(gl, quad, res, sp, m.size, 'monsters', monsterSprite, { color });
     // HP 条
     const def = MONSTER_DEFS[m.type];
     const frac = Math.max(0, m.hp) / def.hp;
@@ -262,6 +373,36 @@ function loop(now: number) {
 
   drawHud(gl, quad, state);
   drawHudOverlay(hudCtx, state);
+
+  // 暂停遮罩 (Canvas2D 文字层)
+  if (state.paused) {
+    hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = 'bold 48px monospace';
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2);
+    hudCtx.font = '20px monospace';
+    hudCtx.fillText('press ESC to resume', hudCanvas.width / 2, hudCanvas.height / 2 + 50);
+    hudCtx.textAlign = 'left';
+  }
+
+  // 死亡屏
+  if (state.dying) {
+    hudCtx.fillStyle = 'rgba(120, 0, 0, 0.7)';
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = 'bold 56px monospace';
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillText('YOU DIED', hudCanvas.width / 2, hudCanvas.height / 2 - 20);
+    hudCtx.font = '24px monospace';
+    hudCtx.fillText(`score: ${state.score}`, hudCanvas.width / 2, hudCanvas.height / 2 + 30);
+    hudCtx.font = '16px monospace';
+    hudCtx.fillText(`respawn in ${state.deathTimer.toFixed(1)}s`, hudCanvas.width / 2, hudCanvas.height / 2 + 70);
+    hudCtx.textAlign = 'left';
+  }
 
   mouse.reset();
   requestAnimationFrame(loop);

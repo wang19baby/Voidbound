@@ -17,6 +17,7 @@ pub mod game {
 
 pub mod render;
 pub mod save;
+pub mod audio;
 
 use std::sync::Arc;
 
@@ -71,6 +72,10 @@ pub fn run() {
                 atlases: Arc::clone(&atlases),
             });
 
+            if let Err(e) = audio::setup(app) {
+                log::warn!("audio init failed: {e}");
+            }
+
             app.handle().listen_any("tauri://close_requested", |_| {
                 log::info!("Voidbound closing...");
             });
@@ -78,7 +83,7 @@ pub fn run() {
             log::info!("Voidbound ready (M1 MVP scaffold)");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas])
+        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas, audio::play_sfx, audio::set_volume, save::save_game, save::load_game])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
