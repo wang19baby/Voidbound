@@ -23,6 +23,23 @@ export interface SkillDef {
 }
 
 export const MAX_SKILL_LEVEL = 20;
+export const COMBO_WINDOW = 4.0;
+export const COMBO_CAP = 20;
+export const COMBO_STEP = 0.1;
+
+/** 连击分数乘数 (US-017): 1 + min(count,20) * 0.1, 上限 3x */
+export function comboScoreMult(count: number): number {
+  return 1 + Math.min(COMBO_CAP, count) * COMBO_STEP;
+}
+
+/** 连击推进: 窗口内击杀 → count++, 超窗重置; 返回新连击数 */
+export function advanceCombo(state: GameState): number {
+  const c = state.combo;
+  if (c.timer <= 0) c.count = 0;
+  c.count++;
+  c.timer = COMBO_WINDOW;
+  return c.count;
+}
 
 /** 每级 +10% 伤害 (纯函数, US-004 单测) */
 export function skillDamageScale(level: number): number {

@@ -10,7 +10,7 @@ import { dropLoot } from './equipment';
 import { spawnDamageNum } from './damageNum';
 import { gainExp } from './player';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
-import { skillDamageScale } from './skill';
+import { skillDamageScale, advanceCombo, comboScoreMult } from './skill';
 import { DIFFICULTY_MODS } from './difficulty';
 
 export type MonsterType =
@@ -313,7 +313,9 @@ export function killMonster(state: GameState, m: Monster): void {
   const def = MONSTER_DEFS[m.type];
   const cx = m.pos.x + m.size.w / 2;
   const cy = m.pos.y + m.size.h / 2;
-  state.score += def.score;
+  // 连击 (US-017): 5s 窗口累积, 分数乘 1+min(combo,20)*0.1
+  const combo = advanceCombo(state);
+  state.score += Math.round(def.score * comboScoreMult(combo));
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
   state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
   const ups = gainExp(state, def.score * 2);
@@ -328,7 +330,7 @@ export function killMonster(state: GameState, m: Monster): void {
   playSfxClient('die');
   dropLoot(state, cx, cy);
   spawnDamageNum(state, cx, m.pos.y, 'KILL!', '#ffaa00');
-  inf('combat', `${m.type} killed (+${def.score})`);
+  inf('combat', `${m.type} killed (+${Math.round(def.score * comboScoreMult(combo))}${combo > 1 ? ` combo x${combo}` : ''})`);
 }
 
 /** 对怪物结算一次 D-04 伤害; 支持击退 (F-CBT-005, US-016) */

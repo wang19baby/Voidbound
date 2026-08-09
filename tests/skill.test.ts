@@ -1,7 +1,7 @@
 // 技能系统纯函数单测 (US-004: 等级缩放 + 符文选项池)
 // 运行: npm test
 
-import { skillDamageScale, pickRuneOptions, MAX_SKILL_LEVEL } from '../src/game/skill';
+import { skillDamageScale, pickRuneOptions, MAX_SKILL_LEVEL, comboScoreMult } from '../src/game/skill';
 import { RUNE_DEFS } from '../src/game/rune';
 
 let failures = 0;
@@ -29,6 +29,12 @@ for (let i = 0; i < 20; i++) {
   check(`不重复 (run ${i})`, new Set(opts).size === opts.length);
   check(`不含 none (run ${i})`, opts.every(r => r !== 'none' && r in RUNE_DEFS));
 }
+
+// === US-017 Combo 分数乘数 ===
+eq('combo 0 → 1.0', comboScoreMult(0), 1.0);
+eq('combo 10 → 2.0', comboScoreMult(10), 2.0);
+eq('combo 20 → 3.0 (上限)', comboScoreMult(20), 3.0);
+eq('combo 30 → 3.0 (封顶)', comboScoreMult(30), 3.0);
 
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);

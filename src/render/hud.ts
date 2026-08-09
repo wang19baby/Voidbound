@@ -233,7 +233,22 @@ export function drawHudOverlay(
     }
     ctx2d.fillStyle = '#888';
     ctx2d.font = '12px monospace';
-    ctx2d.fillText('反伤/移动速度 等: 见词条 UI (未展开)', rx, ry + 4);
+    ry += 8;
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.font = 'bold 14px monospace';
+    ctx2d.fillText('技能', rx, ry); ry += 18;
+    ctx2d.font = '13px monospace';
+    for (const slot of SKILL_SLOTS) {
+      const sk = getSkill(slot);
+      ctx2d.fillStyle = '#aaa';
+      ctx2d.fillText(`${slot} ${sk.name}`, rx, ry);
+      ctx2d.fillStyle = '#eee';
+      ctx2d.fillText(`Lv${sk.level}${sk.rune && sk.rune !== 'none' ? '  ' + RUNE_DEFS[sk.rune].name : ''}`, rx + 160, ry);
+      ry += 18;
+    }
+    ctx2d.fillStyle = '#888';
+    ctx2d.fillText('被动槽: 10 (规划中, 未实现)', rx, ry + 2);
+    ctx2d.fillText('反伤/移动速度 等: 见词条 UI (未展开)', rx, ry + 20);
   }
 }
 

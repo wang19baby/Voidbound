@@ -135,6 +135,8 @@ const state = {
   difficulty: 'normal' as Difficulty,
   bossKillTrigger: 0,
   equipmentOpen: false,
+  combo: { count: 0, timer: 0 },
+  levelUpFlash: 0,
   volume: 0.8,
   resources: res,
 };
@@ -398,6 +400,11 @@ function loop(now: number) {
   if (state.player.potionCd > 0) state.player.potionCd -= dt;
   if (state.player.dodgeT > 0) state.player.dodgeT -= dt;
   if (state.player.dodgeCd > 0) state.player.dodgeCd -= dt;
+  if (state.combo.timer > 0) {
+    state.combo.timer -= dt;
+    if (state.combo.timer <= 0) state.combo.count = 0;
+  }
+  if (state.levelUpFlash > 0) state.levelUpFlash -= dt;
   resolveFireballHits(state);
   resolveMeleeHits(state);
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);

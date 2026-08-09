@@ -82,6 +82,10 @@ export interface GameState {
   bossKillTrigger: number;
   /** 装备面板开关 (Tab, US-014) */
   equipmentOpen: boolean;
+  /** 连击 (US-017) */
+  combo: { count: number; timer: number };
+  /** 升级全屏闪光剩余秒 (US-019) */
+  levelUpFlash: number;
   /** 活跃的符文三选一 (10 级触发) */
   runeChoice: RuneChoice | null;
   /** 已拒绝变异的槽 (本局不再触发) */
