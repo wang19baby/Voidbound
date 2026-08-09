@@ -15,10 +15,10 @@ import { getActiveWalls, type Wall } from './game/world';
 import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
-import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/skill';
+import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, getSkill, SKILL_SLOTS, type SkillSlot } from './game/skill';
 import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
-import { RUNE_DEFS, getActiveRune, cycleActiveRune, setActiveRune, type RuneId } from './game/rune';
+import type { RuneId } from './game/rune';
 import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix, type Rarity, type AffixStat } from './game/equipment';
 import { playBgmClient } from './ipc/sfx';
 import { baseCombat, type DamageType } from './game/combat';
@@ -88,6 +88,7 @@ const state = {
     hp: 100,
     mp: 100,
     level: 1,
+    skillPoints: 0,
     facing: { x: 0, y: 0 },
     idleT: 0,
     flipDir: 'N' as 'L' | 'R' | 'N',
@@ -109,6 +110,8 @@ const state = {
   dying: false,
   deathTimer: 0,
   theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
+  runeChoice: null,
+  rejectedRunes: [],
   resources: res,
 };
 
@@ -119,6 +122,27 @@ state.monsters.push(spawnMonster(state, 'worm'));
 inf('world', `spawned ${state.monsters.length} monsters (2 bat + 2 slime + 1 worm)`);
 
 window.addEventListener('keydown', (e) => {
+  // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
+  if (state.runeChoice) {
+    if (e.key === '1' || e.key === '2' || e.key === '3') {
+      chooseRune(state, Number(e.key) - 1);
+      return;
+    }
+    if (e.key === 'Escape' || e.key === '0') {
+      rejectRune(state);
+      return;
+    }
+    return;
+  }
+  // Ctrl+1..6: 分配技能点 (LMB/RMB/Q/W/E/R)
+  if (e.ctrlKey) {
+    const idx = '123456'.indexOf(e.key);
+    if (idx >= 0) {
+      const errMsg = assignSkillPoint(state, SKILL_SLOTS[idx]);
+      if (errMsg) wrn('skill', `${SKILL_SLOTS[idx]} assign failed: ${errMsg}`);
+      return;
+    }
+  }
   if (e.key === 'q' || e.key === 'Q') {
     const nowSec = performance.now() / 1000;
     // 技能方向 = 鼠标位置 - 玩家中心, 转换为世界方向
@@ -158,7 +182,10 @@ window.addEventListener('keydown', (e) => {
         rarity: eq.rarity,
         affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
       })),
-      rune: getActiveRune(),
+      runes: SKILL_SLOTS.flatMap(slot => {
+        const r = skillRune(slot);
+        return r ? [{ slot, rune: r }] : [];
+      }),
       theme: state.theme,
     }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
   }
@@ -189,8 +216,11 @@ window.addEventListener('keydown', (e) => {
           });
         }
         recomputeCombat(state);
-        // 永久层: 符文/主题
-        setActiveRune(d.rune);
+        // 永久层: 符文绑定 (按槽) + 主题
+        for (const rr of d.runes ?? []) {
+          const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
+          if (sk) sk.rune = rr.rune;
+        }
         if (d.theme && d.theme !== state.theme) {
           state.theme = d.theme;
           playBgmClient(`bgm_${state.theme}`);
@@ -335,11 +365,7 @@ function drawFrame() {
       dbg('skill', 'RMB on cd');
     }
   }
-  // MMB 切换激活符文
-  if (mouse.wasClicked('MMB')) {
-    const next = cycleActiveRune();
-    inf('rune', `activated: ${RUNE_DEFS[next].name} (${RUNE_DEFS[next].desc})`);
-  }
+  // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
 
   // 暂停时: 跳过游戏逻辑 (但仍画当前帧 + pause 遮罩)
   if (state.paused) {

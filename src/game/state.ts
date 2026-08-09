@@ -3,8 +3,10 @@
 
 import type { RenderResources } from '../render/resources';
 import { WORLD_W, WORLD_H } from './world';
-import type { Monster } from './monster';
+import { FIREBALL_DAMAGE, type Monster } from './monster';
 import type { CombatStats } from './combat';
+import type { RuneId } from './rune';
+import type { SkillSlot } from './skill';
 
 export interface Camera {
   x: number;
@@ -25,6 +27,8 @@ export interface Player {
   flipDir: 'L' | 'R' | 'N';
   /** D-04 战斗属性 (基础 + 装备聚合, US-002 后由 recomputeCombat 生成) */
   combat: CombatStats;
+  /** 可分配技能点 (击杀 +1, Ctrl+1..6 分配) */
+  skillPoints: number;
 }
 
 export interface Fireball {
@@ -32,6 +36,15 @@ export interface Fireball {
   vel: { x: number; y: number };
   size: { w: number; h: number };
   life: number;
+  /** D-04 命中伤害 (等级缩放后) */
+  dmg: number;
+  /** 发射时的符文 (pierce/vampire/homing 生效) */
+  rune: RuneId;
+}
+
+export interface RuneChoice {
+  slot: SkillSlot;
+  options: RuneId[];
 }
 
 export interface GameState {
@@ -54,6 +67,10 @@ export interface GameState {
   deathTimer: number;
   theme: 'forest' | 'desert' | 'ruin' | 'void';
   resources: RenderResources;
+  /** 活跃的符文三选一 (10 级触发) */
+  runeChoice: RuneChoice | null;
+  /** 已拒绝变异的槽 (本局不再触发) */
+  rejectedRunes: SkillSlot[];
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
@@ -83,19 +100,38 @@ export function updateFireballs(state: GameState, dt: number): void {
   const next: Fireball[] = [];
   let wallHits = 0;
   for (const f of state.fireballs) {
+    // 追踪符文: 每帧朝最近怪物转向
+    if (f.rune === 'homing') {
+      let best: Monster | null = null;
+      let bd = 520;
+      for (const m of state.monsters) {
+        const d = Math.hypot(m.pos.x - f.pos.x, m.pos.y - f.pos.y);
+        if (d < bd) { bd = d; best = m; }
+      }
+      if (best) {
+        const dx = best.pos.x - f.pos.x;
+        const dy = best.pos.y - f.pos.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const speed = Math.hypot(f.vel.x, f.vel.y) || 320;
+        f.vel.x = (dx / len) * speed;
+        f.vel.y = (dy / len) * speed;
+      }
+    }
     f.pos.x += f.vel.x * dt;
     f.pos.y += f.vel.y * dt;
     f.life -= dt;
     if (f.life <= 0) continue;
     if (f.pos.x < 0 || f.pos.x + f.size.w > state.world.w) continue;
     if (f.pos.y < 0 || f.pos.y + f.size.h > state.world.h) continue;
-    // 墙碰撞
+    // 墙碰撞 (穿透符文免疫)
     let blocked = false;
-    for (const w of state.world.walls) {
-      if (f.pos.x < w.pos.x + w.size.w && f.pos.x + f.size.w > w.pos.x &&
-          f.pos.y < w.pos.y + w.size.h && f.pos.y + f.size.h > w.pos.y) {
-        blocked = true;
-        break;
+    if (f.rune !== 'pierce') {
+      for (const w of state.world.walls) {
+        if (f.pos.x < w.pos.x + w.size.w && f.pos.x + f.size.w > w.pos.x &&
+            f.pos.y < w.pos.y + w.size.h && f.pos.y + f.size.h > w.pos.y) {
+          blocked = true;
+          break;
+        }
       }
     }
     if (blocked) { wallHits++; continue; }
@@ -110,9 +146,12 @@ export function updateFireballs(state: GameState, dt: number): void {
   state.fireballs = next;
 }
 
-export function spawnFireball(state: GameState, dir: { x: number; y: number }): void {
-  let dx = dir.x;
-  let dy = dir.y;
+export function spawnFireball(state: GameState, dir: { x: number; y: number }, spread = 0, rune: RuneId = 'none', dmg = FIREBALL_DAMAGE): void {
+  // 按 spread 弧度旋转方向
+  const cos = Math.cos(spread);
+  const sin = Math.sin(spread);
+  let dx = dir.x * cos - dir.y * sin;
+  let dy = dir.x * sin + dir.y * cos;
   const len = Math.hypot(dx, dy);
   if (len === 0) { dx = 1; dy = 0; }
   else { dx /= len; dy /= len; }
@@ -126,9 +165,11 @@ export function spawnFireball(state: GameState, dir: { x: number; y: number }): 
     },
     vel: { x: dx * speed, y: dy * speed },
     size: { w: state.fireballSize, h: state.fireballSize },
-    life: 1.5,
+    life: rune === 'pierce' ? 3.0 : 1.5,
+    dmg,
+    rune,
   });
-  void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)})`));
+  void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)}) rune=${rune} dmg=${dmg}`));
 }
 
 export interface PlayerSprite {

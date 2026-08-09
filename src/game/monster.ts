@@ -9,6 +9,7 @@ import { playSfxClient } from '../ipc/sfx';
 import { dropLoot } from './equipment';
 import { spawnDamageNum } from './damageNum';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
+import { skillDamageScale } from './skill';
 
 export type MonsterType = 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking';
 
@@ -273,6 +274,7 @@ export function damageMonster(
   dbg('combat', `${spec.type} hit ${m.type} for ${damage} (hp=${m.hp.toFixed(0)})${isCrit ? ' CRIT' : ''}`);
   if (m.hp <= 0) {
     state.score += def.score;
+    state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
     spawnDeathFx(state, cx, cy);
     playSfxClient('die');
     dropLoot(state, cx, cy);
@@ -291,10 +293,16 @@ export function resolveFireballHits(state: GameState): number {
     if (m.hp <= 0) return false;
     for (const f of fireballs) {
       if (aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
-        // 移除火球 (命中即消耗)
-        const idx = fireballs.indexOf(f);
-        if (idx >= 0) fireballs.splice(idx, 1);
-        const r = damageMonster(state, m, { base: FIREBALL_DAMAGE, type: 'fire' });
+        // 移除火球 (穿透/嗜血符文不消耗)
+        if (f.rune !== 'pierce') {
+          const idx = fireballs.indexOf(f);
+          if (idx >= 0) fireballs.splice(idx, 1);
+        }
+        const r = damageMonster(state, m, { base: f.dmg, type: 'fire' });
+        // 嗜血: 命中回 5 HP
+        if (f.rune === 'vampire' && r.damage > 0) {
+          state.player.hp = Math.min(100, state.player.hp + 5);
+        }
         if (r.killed) { kills++; return false; }
         // 同一目标可被多发命中 (W 扇形)
       }
@@ -314,7 +322,8 @@ export function resolveMeleeHits(state: GameState): number {
     if (m.hp <= 0) return false;
     for (const s of swings) {
       if (aabbOverlap(s.pos.x, s.pos.y, s.size.w, s.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
-        const r = damageMonster(state, m, { base: MELEE_DAMAGE, type: 'physical' });
+        const base = Math.round(MELEE_DAMAGE * skillDamageScale(s.level));
+        const r = damageMonster(state, m, { base, type: 'physical' });
         if (r.killed) { kills++; return false; }
         // 一次挥击只结算一次
       }

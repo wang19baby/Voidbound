@@ -4,6 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { DamageType } from '../game/combat';
 import type { AffixStat, Rarity } from '../game/equipment';
+import type { SkillSlot } from '../game/skill';
 import type { RuneId } from '../game/rune';
 import type { Theme } from '../game/state';
 
@@ -19,6 +20,11 @@ export interface SaveItem {
   affixes: SaveAffix[];
 }
 
+export interface SaveRune {
+  slot: SkillSlot;
+  rune: RuneId;
+}
+
 export interface SaveData {
   player_x: number;
   player_y: number;
@@ -31,7 +37,7 @@ export interface SaveData {
   world_h: number;
   level: number;
   owned: SaveItem[];
-  rune: RuneId;
+  runes: SaveRune[];
   theme: Theme;
 }
 

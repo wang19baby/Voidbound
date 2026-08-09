@@ -7,7 +7,7 @@ import { drawSprite } from './draw';
 import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
-import { getSkillCooldowns } from '../game/skill';
+import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
 import { worldToScreen } from '../game/state';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
@@ -61,9 +61,22 @@ export function drawHudOverlay(
   ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${MAX_MP}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 4);
   ctx2d.fillText(`SCORE ${state.score}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 16);
   ctx2d.fillText(`KILLS ${state.monsters.length}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 30);
+  // 技能等级 + 可用技能点
+  ctx2d.font = '11px monospace';
   for (let i = 0; i < SKILL_KEYS.length; i++) {
-    ctx2d.fillText(SKILL_KEYS[i], HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 2);
+    const slot = SKILL_KEYS[i];
+    ctx2d.fillText(`${slot} Lv${skillLevel(slot)}`, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 46);
+    const r = skillRune(slot);
+    if (r !== 'none' && r !== null) {
+      const col = RUNE_DEFS[r].color;
+      ctx2d.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+      ctx2d.fillText(RUNE_DEFS[r].name, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 58);
+      ctx2d.fillStyle = '#fff';
+    }
   }
+  ctx2d.fillStyle = '#ffd';
+  ctx2d.fillText(`技能点: ${state.player.skillPoints ?? 0} (Ctrl+1..6 分配)`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 74);
+  ctx2d.fillStyle = '#fff';
   const nowSec = performance.now() / 1000;
   ctx2d.fillText(
     `pos ${state.player.pos.x.toFixed(0)},${state.player.pos.y.toFixed(0)}  fireballs:${state.fireballs.length}  facing:${state.player.facing.x.toFixed(1)},${state.player.facing.y.toFixed(1)}`,
@@ -100,6 +113,42 @@ export function drawHudOverlay(
     ctx2d.fillText(d.text, sp.x, sp.y);
   }
   ctx2d.textAlign = 'left';
+
+  // 符文三选一 overlay (D-01, 技能 10 级触发)
+  const choice = state.runeChoice;
+  if (choice) {
+    const cw = state.viewport.w;
+    const ch = state.viewport.h;
+    const boxW = 260;
+    const boxGap = 20;
+    const totalW = boxW * 3 + boxGap * 2;
+    const x0 = (cw - totalW) / 2;
+    const y0 = ch / 2 - 70;
+    ctx2d.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx2d.fillRect(0, 0, cw, ch);
+    ctx2d.textAlign = 'center';
+    ctx2d.font = 'bold 18px monospace';
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.fillText(`${choice.slot} 达到 Lv10 — 选择符文变异`, cw / 2, y0 - 34);
+    ctx2d.font = '12px monospace';
+    ctx2d.fillStyle = '#aaa';
+    ctx2d.fillText('按 1/2/3 选择 · Esc 拒绝(本局不再触发)', cw / 2, y0 - 14);
+    for (let i = 0; i < choice.options.length; i++) {
+      const r = RUNE_DEFS[choice.options[i]];
+      const bx = x0 + i * (boxW + boxGap);
+      ctx2d.fillStyle = 'rgba(30,30,40,0.95)';
+      ctx2d.strokeStyle = `rgb(${r.color.map(c => Math.round(c * 255)).join(',')})`;
+      ctx2d.strokeRect(bx, y0, boxW, 84);
+      ctx2d.fillRect(bx, y0, boxW, 84);
+      ctx2d.font = 'bold 16px monospace';
+      ctx2d.fillStyle = `rgb(${r.color.map(c => Math.round(c * 255)).join(',')})`;
+      ctx2d.fillText(`${i + 1}. ${r.name}`, bx + boxW / 2, y0 + 22);
+      ctx2d.font = '12px monospace';
+      ctx2d.fillStyle = '#ddd';
+      ctx2d.fillText(r.desc, bx + boxW / 2, y0 + 56);
+    }
+    ctx2d.textAlign = 'left';
+  }
 }
 
 function drawLogPanel(ctx2d: CanvasRenderingContext2D, viewportH: number) {
