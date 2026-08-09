@@ -150,6 +150,7 @@ const state = {
   runeChoice: null,
   rejectedRunes: [],
   mode: 'dungeon' as 'dungeon' | 'town',
+  townReturn: null as { x: number; y: number } | null,
   townPanel: null as TownPanel | null,
   townStock: null as MerchantStock[] | null,
   settingsOpen: false,
@@ -629,6 +630,7 @@ for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 
 /** 城镇: 进入 (商人库存刷新) */
 function enterTown(state: GameState) {
+  if (!state.townReturn) state.townReturn = { x: state.player.pos.x, y: state.player.pos.y };
   state.mode = 'town';
   state.townPanel = null;
   state.townStock = null;
@@ -653,11 +655,13 @@ function interactTown(state: GameState) {
       state.difficulty = cycleDifficulty(state.difficulty);
       inf('ui', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
       break;
-    case 'exit':
+    case 'exit': {
       state.mode = 'dungeon';
       state.townPanel = null;
+      if (state.townReturn) { state.player.pos = state.townReturn; state.townReturn = null; }
       inf('ui', '出发 → 地下城');
       break;
+    }
   }
 }
 
@@ -696,7 +700,10 @@ function drawTownFrame() {
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = '#9aa';
   hudCtx.font = 'bold 26px monospace';
-  hudCtx.fillText('城镇', hudCanvas.width / 2, 40);
+  hudCtx.fillText('城镇', hudCanvas.width / 2, 26);
+  hudCtx.fillStyle = '#889';
+  hudCtx.font = '12px monospace';
+  hudCtx.fillText('WASD 移动 · 靠近 NPC 按 E 交互 · [1-5]买 [6]卖 [1-9]重铸 · Esc 暂停', hudCanvas.width / 2, 62);
   // NPC
   for (const npc of TOWN_NPCS) {
     const near = nearestNpc(state)?.kind === npc.kind;
@@ -725,7 +732,10 @@ function drawTownFrame() {
   hudCtx.textAlign = 'left';
   hudCtx.fillStyle = '#ffd64a';
   hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`金: ${state.player.gold}`, 16, 30);
+  hudCtx.fillText(`金: ${state.player.gold}`, 16, 26);
+  hudCtx.fillStyle = '#9cc';
+  hudCtx.font = '12px monospace';
+  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}`, 16, 44);
   // 面板
   if (state.townPanel) drawTownPanel();
   mouse.reset();

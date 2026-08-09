@@ -86,6 +86,8 @@ export interface GameState {
   killsTotal: number;
   /** 场景: 地下城 / 城镇 (US-021) */
   mode: 'dungeon' | 'town';
+  /** 进入城镇前的地下城坐标 (出发时还原) */
+  townReturn: { x: number; y: number } | null;
   /** 装备面板开关 (Tab, US-014) */
   equipmentOpen: boolean;
   /** 连击 (US-017) */
