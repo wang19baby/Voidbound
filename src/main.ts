@@ -134,7 +134,7 @@ const state = {
   resources: res,
 };
 
-// 初始 spawn 5 只怪物: 2 bat + 2 slime + 1 worm
+// 初始 spawn 5 只怪物 (当前主题池随机, US-007)
 for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 inf('world', `spawned ${state.monsters.length} monsters (2 bat + 2 slime + 1 worm)`);
 
