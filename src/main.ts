@@ -529,7 +529,9 @@ function loopImpl(now: number) {
     else state.player.flipDir = 'N';
     updatePlayer(state, dir, dt);
     state.player.idleT += dt;
-    updateCamera(state);
+    // 城镇=屏幕坐标: clamp 到视口内
+    state.player.pos.x = Math.max(0, Math.min(state.viewport.w - state.player.size.w, state.player.pos.x));
+    state.player.pos.y = Math.max(0, Math.min(state.viewport.h - state.player.size.h, state.player.pos.y));
     drawTownFrame();
     mouse.reset();
     return; // 包装器统一 rAF
@@ -696,9 +698,9 @@ function drawTownFrame() {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   gl.clearColor(0.10, 0.11, 0.16, 1);   // 城镇底色 (GL 层, 勿画进 canvas 否则盖住角色)
   gl.clear(gl.COLOR_BUFFER_BIT);
-  // 先画角色 (GL 层, 在 canvas 叠加层之下)
+  // 先画角色 (GL 层; 城镇=屏幕坐标, 直接按 pos 绘制)
   const tSprite = pickPlayerSprite(state, mouse.state().pos.x);
-  drawSprite(gl, quad, res, worldToScreen(state, state.player.pos), state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot });
+  drawSprite(gl, quad, res, state.player.pos, state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot });
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = '#9aa';
   hudCtx.font = 'bold 26px monospace';
