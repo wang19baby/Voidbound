@@ -41,6 +41,7 @@ pub struct SaveData {
     // 永久层
     pub runes: Vec<(String, String)>,
     pub theme: String,
+    pub difficulty: String,
 }
 
 fn save_path() -> Result<PathBuf, String> {
@@ -96,6 +97,7 @@ mod tests {
             }],
             runes: vec![("Q".into(), "split".into())],
             theme: "forest".into(),
+            difficulty: "nightmare".into(),
         }
     }
 
@@ -110,6 +112,7 @@ mod tests {
         assert_eq!(back.owned[0].set_name.as_deref(), Some("shadow_set"));
         assert_eq!(back.runes, vec![("Q".to_string(), "split".to_string())]);
         assert_eq!(back.theme, "forest");
+        assert_eq!(back.difficulty, "nightmare");
     }
 
     #[test]
