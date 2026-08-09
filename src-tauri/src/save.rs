@@ -1,7 +1,7 @@
 // 存档系统: bincode 序列化核心字段到 save.bin (US-003 分层)
 // 路径: dirs::data_local_dir()/voidbound/save.bin
 // 角色层: level / owned(装备) / combat 可重建 (recomputeCombat)
-// 永久层: rune (已解锁符文), theme
+// 永久层: runes (技能符文绑定), theme
 // 本局层: pos / hp / mp / score
 
 use std::fs;
@@ -38,7 +38,7 @@ pub struct SaveData {
     pub level: u32,
     pub owned: Vec<OwnedItem>,
     // 永久层
-    pub rune: String,
+    pub runes: Vec<(String, String)>,
     pub theme: String,
 }
 
@@ -55,7 +55,7 @@ pub fn save_game(data: SaveData) -> Result<String, String> {
     let p = save_path()?;
     let bytes = bincode::serialize(&data).map_err(|e| format!("serialize: {e}"))?;
     fs::write(&p, &bytes).map_err(|e| format!("write: {e}"))?;
-    log::info!("save_game: wrote {} bytes (owned={}, theme={}) to {:?}", bytes.len(), data.owned.len(), data.theme, p);
+    log::info!("save_game: wrote {} bytes (owned={}, runes={}, theme={}) to {:?}", bytes.len(), data.owned.len(), data.runes.len(), data.theme, p);
     Ok(format!("saved {} bytes", bytes.len()))
 }
 
@@ -69,7 +69,7 @@ pub fn load_game() -> Result<SaveData, String> {
     // bincode 无版本头: 旧版 M1 存档字段不同 → 反序列化失败, 报明确错误 (US-003 接受: 旧档重开)
     let data: SaveData = bincode::deserialize(&bytes)
         .map_err(|e| format!("deserialize failed (旧版存档需重新开始): {e}"))?;
-    log::info!("load_game: {} bytes, pos=({},{}), owned={}", bytes.len(), data.player_x, data.player_y, data.owned.len());
+    log::info!("load_game: {} bytes, pos=({},{}), owned={}, runes={}", bytes.len(), data.player_x, data.player_y, data.owned.len(), data.runes.len());
     Ok(data)
 }
 
@@ -92,7 +92,7 @@ mod tests {
                     OwnedAffix { stat: "res".into(), value: 12.0, element: Some("fire".into()) },
                 ],
             }],
-            rune: "split".into(),
+            runes: vec![("Q".into(), "split".into())],
             theme: "forest".into(),
         }
     }
@@ -105,7 +105,7 @@ mod tests {
         assert_eq!(data, back);
         assert_eq!(back.owned.len(), 1);
         assert_eq!(back.owned[0].affixes.len(), 2);
-        assert_eq!(back.rune, "split");
+        assert_eq!(back.runes, vec![("Q".to_string(), "split".to_string())]);
         assert_eq!(back.theme, "forest");
     }
 
