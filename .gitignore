@@ -70,3 +70,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+# OMC 运行状态 (会话/状态文件, 不入库)
+.omc/
+
+# 临时产物 (测试 bundle / CDP 脚本 / 启动日志)
+tmp/
+.tmp/
