@@ -20,6 +20,7 @@ pub struct OwnedItem {
     pub name: String,
     pub rarity: String,
     pub affixes: Vec<OwnedAffix>,
+    pub set_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -86,7 +87,8 @@ mod tests {
             level: 3,
             owned: vec![OwnedItem {
                 name: "烈焰之牙".into(),
-                rarity: "magic".into(),
+                rarity: "set".into(),
+                set_name: Some("shadow_set".into()),
                 affixes: vec![
                     OwnedAffix { stat: "physPct".into(), value: 0.25, element: None },
                     OwnedAffix { stat: "res".into(), value: 12.0, element: Some("fire".into()) },
@@ -105,6 +107,7 @@ mod tests {
         assert_eq!(data, back);
         assert_eq!(back.owned.len(), 1);
         assert_eq!(back.owned[0].affixes.len(), 2);
+        assert_eq!(back.owned[0].set_name.as_deref(), Some("shadow_set"));
         assert_eq!(back.runes, vec![("Q".to_string(), "split".to_string())]);
         assert_eq!(back.theme, "forest");
     }
