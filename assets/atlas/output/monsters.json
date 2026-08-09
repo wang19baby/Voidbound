@@ -1,10 +1,10 @@
 {
   "atlas": "monsters",
   "size": {
-    "width": 434,
+    "width": 722,
     "height": 36
   },
-  "sprite_count": 12,
+  "sprite_count": 20,
   "sprites": [
     {
       "name": "bat",
@@ -37,9 +37,89 @@
       "is_animated": false
     },
     {
+      "name": "bee_0",
+      "file": "bee_0.png",
+      "x": 110,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bee_1",
+      "file": "bee_1.png",
+      "x": 146,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_0",
+      "file": "eyeball_0.png",
+      "x": 182,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_1",
+      "file": "eyeball_1.png",
+      "x": 218,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_0",
+      "file": "ghost_0.png",
+      "x": 254,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_1",
+      "file": "ghost_1.png",
+      "x": 290,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_0",
+      "file": "pumpking_0.png",
+      "x": 326,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_1",
+      "file": "pumpking_1.png",
+      "x": 362,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "slime",
       "file": "slime.png",
-      "x": 110,
+      "x": 398,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -49,7 +129,7 @@
     {
       "name": "slime_0",
       "file": "slime_0.png",
-      "x": 146,
+      "x": 434,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -59,7 +139,7 @@
     {
       "name": "slime_1",
       "file": "slime_1.png",
-      "x": 182,
+      "x": 470,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -69,7 +149,7 @@
     {
       "name": "small_worm",
       "file": "small_worm.png",
-      "x": 218,
+      "x": 506,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -79,7 +159,7 @@
     {
       "name": "small_worm_0",
       "file": "small_worm_0.png",
-      "x": 254,
+      "x": 542,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -89,7 +169,7 @@
     {
       "name": "small_worm_1",
       "file": "small_worm_1.png",
-      "x": 290,
+      "x": 578,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -99,7 +179,7 @@
     {
       "name": "worm",
       "file": "worm.png",
-      "x": 326,
+      "x": 614,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -109,7 +189,7 @@
     {
       "name": "worm_0",
       "file": "worm_0.png",
-      "x": 362,
+      "x": 650,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -119,7 +199,7 @@
     {
       "name": "worm_1",
       "file": "worm_1.png",
-      "x": 398,
+      "x": 686,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,

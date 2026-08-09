@@ -16,7 +16,7 @@ import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/skill';
-import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS } from './game/monster';
+import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
 import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
 import { pickupLoot, getLoot, RARITY_COLORS, describeAffix } from './game/equipment';
@@ -227,6 +227,7 @@ function loop(now: number) {
   updateFireballs(state, dt);
   updateSwings(state, dt);
   updateMonsters(state, dt);
+  updateEnemyProj(state, dt);
   updateDeathFx(state, dt);
   resolveFireballHits(state);
   resolveMeleeHits(state);
@@ -337,6 +338,14 @@ function drawFrameToScreen() {
   for (const f of state.fireballs) {
     const sp = worldToScreen(state, f.pos);
     drawSprite(gl, quad, res, sp, f.size, 'particles', 'magic_01');
+  }
+
+  // 怪物远程投射物 (红色小点)
+  for (const p of getEnemyProj(state)) {
+    const sp = worldToScreen(state, p.pos);
+    if (sp.x + p.size.w < 0 || sp.x > state.viewport.w) continue;
+    if (sp.y + p.size.h < 0 || sp.y > state.viewport.h) continue;
+    drawSprite(gl, quad, res, sp, p.size, 'particles', 'magic_05', { color: [1, 0.3, 0.3] });
   }
 
   // 死亡粒子 (在世界图层之后, 怪物之前)

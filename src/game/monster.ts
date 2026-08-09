@@ -8,28 +8,32 @@ import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
 import { dropLoot } from './equipment';
 
-export type MonsterType = 'bat' | 'slime' | 'worm';
+export type MonsterType = 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking';
 
 export interface MonsterDef {
   type: MonsterType;
-  sprite: string;            // atlas sprite name
+  sprite: string;
   size: { w: number; h: number };
   hp: number;
-  speed: number;             // px/s
-  /** 检测玩家的距离 (触发追击) */
+  speed: number;
   aggroRange: number;
-  /** 接触玩家造成伤害的距离 */
   attackRange: number;
-  /** 接触伤害 */
   contactDmg: number;
-  /** 击杀分数 */
   score: number;
+  /** 远程攻击间隔 (秒); 0 = 不远程 */
+  rangedCooldown?: number;
+  /** boss 标记 (大血量, 慢速, 单独 spawn) */
+  boss?: boolean;
 }
 
 export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
-  bat:   { type: 'bat',   sprite: 'bat',   size: { w: 32, h: 32 }, hp: 30,  speed: 80,  aggroRange: 200, attackRange: 28, contactDmg: 5,  score: 10 },
-  slime: { type: 'slime', sprite: 'slime', size: { w: 32, h: 32 }, hp: 60,  speed: 40,  aggroRange: 160, attackRange: 30, contactDmg: 8,  score: 15 },
-  worm:  { type: 'worm',  sprite: 'worm',  size: { w: 32, h: 32 }, hp: 45,  speed: 60,  aggroRange: 180, attackRange: 28, contactDmg: 6,  score: 12 },
+  bat:      { type: 'bat',      sprite: 'bat',      size: { w: 32, h: 32 }, hp: 30,  speed: 80,  aggroRange: 200, attackRange: 28, contactDmg: 5,  score: 10 },
+  slime:    { type: 'slime',    sprite: 'slime',    size: { w: 32, h: 32 }, hp: 60,  speed: 40,  aggroRange: 160, attackRange: 30, contactDmg: 8,  score: 15 },
+  worm:     { type: 'worm',     sprite: 'worm',     size: { w: 32, h: 32 }, hp: 45,  speed: 60,  aggroRange: 180, attackRange: 28, contactDmg: 6,  score: 12 },
+  ghost:    { type: 'ghost',    sprite: 'ghost',    size: { w: 32, h: 32 }, hp: 35,  speed: 100, aggroRange: 220, attackRange: 24, contactDmg: 7,  score: 18, rangedCooldown: 2.0 },
+  bee:      { type: 'bee',      sprite: 'bee',      size: { w: 32, h: 32 }, hp: 25,  speed: 120, aggroRange: 250, attackRange: 22, contactDmg: 6,  score: 14, rangedCooldown: 1.5 },
+  eyeball:  { type: 'eyeball',  sprite: 'eyeball',  size: { w: 32, h: 32 }, hp: 80,  speed: 50,  aggroRange: 200, attackRange: 32, contactDmg: 10, score: 25, rangedCooldown: 2.5 },
+  pumpking: { type: 'pumpking', sprite: 'pumpking', size: { w: 64, h: 64 }, hp: 400, speed: 25,  aggroRange: 280, attackRange: 48, contactDmg: 20, score: 100, boss: true, rangedCooldown: 3.0 },
 };
 
 export interface Monster {
@@ -198,6 +202,12 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.walkT = 0.3;
     }
 
+    // 远程攻击: 朝玩家发射投射物
+    if (def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
+      spawnEnemyProjectile(state, m, def.contactDmg);
+      m.attackCd = def.rangedCooldown;
+    }
+
     if (dist < def.aggroRange) {
       if (dist > 0.01) {
         m.vel.x = (dx / dist) * def.speed;
@@ -302,3 +312,58 @@ export function resolveMeleeHits(state: GameState): number {
 
 // 共享 aabbOverlap re-export
 export { aabbOverlap };
+
+/** 怪物远程投射物 (类似玩家火球) */
+export interface EnemyProjectile {
+  pos: { x: number; y: number };
+  vel: { x: number; y: number };
+  size: { w: number; h: number };
+  dmg: number;
+  life: number;
+  fromId: number; // monster id
+}
+
+let nextProjId = 1;
+function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number): void {
+  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
+  ext._enemyProj = ext._enemyProj ?? [];
+  const dx = state.player.pos.x - m.pos.x;
+  const dy = state.player.pos.y - m.pos.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const speed = 180;
+  ext._enemyProj.push({
+    pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
+    vel: { x: (dx / len) * speed, y: (dy / len) * speed },
+    size: { w: 12, h: 12 },
+    dmg,
+    life: 2.0,
+    fromId: m.id,
+  });
+  nextProjId++;
+}
+
+export function getEnemyProj(state: GameState): readonly EnemyProjectile[] {
+  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
+  return ext._enemyProj ?? [];
+}
+
+export function updateEnemyProj(state: GameState, dt: number): void {
+  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
+  if (!ext._enemyProj) return;
+  ext._enemyProj = ext._enemyProj.filter(p => {
+    p.pos.x += p.vel.x * dt;
+    p.pos.y += p.vel.y * dt;
+    p.life -= dt;
+    if (p.life <= 0) return false;
+    // 撞玩家 → 扣血 + 消失
+    if (aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h,
+                    state.player.pos.x, state.player.pos.y,
+                    state.player.size.w, state.player.size.h)) {
+      state.player.hp -= p.dmg;
+      return false;
+    }
+    // 出界
+    if (p.pos.x < 0 || p.pos.x > state.world.w || p.pos.y < 0 || p.pos.y > state.world.h) return false;
+    return true;
+  });
+}
