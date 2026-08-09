@@ -320,6 +320,7 @@ export function killMonster(state: GameState, m: Monster): void {
   state.player.gold = (state.player.gold ?? 0) + Math.max(1, Math.round(def.score * 0.5 * DIFFICULTY_MODS[state.difficulty].dropMult));
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
   state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
+  state.killsTotal = (state.killsTotal ?? 0) + 1;
   const ups = gainExp(state, def.score * 2);
   if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
   if (Math.random() < 0.12) {

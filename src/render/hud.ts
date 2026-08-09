@@ -16,6 +16,7 @@ import { getToasts } from '../game/toast';
 import { getOwned, getLoot, RARITY_COLORS, describeAffix } from '../game/equipment';
 import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS } from '../game/skill';
 import { expNext } from '../game/player';
+import { itemPower } from '../game/equipment';
 import { DAMAGE_TYPES } from '../game/combat';
 import { DIFFICULTY_MODS } from '../game/difficulty';
 import { worldToScreen } from '../game/state';
@@ -103,7 +104,7 @@ export function drawHudOverlay(
   ctx2d.font = '13px monospace';
   ctx2d.fillText(`积分 ${state.score}`, rx, HUD_PAD + 22);
   ctx2d.fillStyle = '#bbb';
-  ctx2d.fillText(`击杀 ${state.monsters.length}`, rx, HUD_PAD + 40);
+  ctx2d.fillText(`击杀 ${state.killsTotal ?? 0}`, rx, HUD_PAD + 40);
   ctx2d.fillStyle = '#9cc';
   ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, rx, HUD_PAD + 58);
   ctx2d.textAlign = 'left';
@@ -272,7 +273,7 @@ export function drawHudOverlay(
       ctx2d.fillStyle = `rgb(${col.map(v => Math.round(v * 255)).join(',')})`;
       ctx2d.fillText(`${i + 1}. ${eq.name}`, 40, py);
       ctx2d.fillStyle = '#bbb';
-      ctx2d.fillText(eq.affixes.map(describeAffix).join('  '), 320, py);
+      ctx2d.fillText(`战力+${itemPower(eq)}  ${eq.affixes.map(describeAffix).join('  ')}`, 320, py);
       py += 20;
     }
     if (owned.length > shown) {
@@ -322,7 +323,8 @@ export function drawHudOverlay(
     }
     ctx2d.fillStyle = '#888';
     ctx2d.fillText('被动槽: 10 (规划中, 未实现)', rx, ry + 2);
-    ctx2d.fillText('反伤/移动速度 等: 见词条 UI (未展开)', rx, ry + 20);
+    ctx2d.fillText('词条拾取即自动生效 (聚合进左侧属性)', rx, ry + 20);
+    ctx2d.fillText('多余装备去城镇商人处卖出换金 (6键)', rx, ry + 38);
   }
 }
 

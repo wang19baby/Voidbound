@@ -157,6 +157,7 @@ const state = {
   titleMsg: '',
   difficulty: 'normal' as Difficulty,
   bossKillTrigger: 0,
+  killsTotal: 0,
   equipmentOpen: false,
   combo: { count: 0, timer: 0 },
   levelUpFlash: 0,

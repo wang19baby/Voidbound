@@ -202,6 +202,20 @@ export function rerollAffixes(eq: Equipment): void {
   for (let i = 0; i < n; i++) eq.affixes.push(genAffix());
 }
 
+/** 简化战力评分 (展示用): 词条数值加权和 */
+export function itemPower(eq: Equipment): number {
+  let p = 5; // 基础
+  for (const a of eq.affixes) {
+    if (a.stat === 'physPct' || a.stat === 'elemPct') p += Math.round(a.value * 100);
+    else if (a.stat === 'critRate') p += Math.round(a.value * 100);
+    else if (a.stat === 'critBonus') p += Math.round(a.value);
+    else if (a.stat === 'shred' || a.stat === 'vuln') p += Math.round(a.value);
+    else if (a.stat === 'res') p += Math.round(a.value * 0.5);
+    else if (a.stat === 'hp' || a.stat === 'mp') p += Math.round(a.value * 0.3);
+  }
+  return p;
+}
+
 /** 入库 (商店购买/读档重建共用): push owned + 重算 combat */
 export function addOwned(state: GameState, eq: Equipment): void {
   eq.pickedUp = true;

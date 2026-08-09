@@ -82,6 +82,8 @@ export interface GameState {
   difficulty: Difficulty;
   /** 连杀计数 (每 10 击杀召当前主题 Boss) */
   bossKillTrigger: number;
+  /** 累计击杀 (HUD 显示) */
+  killsTotal: number;
   /** 场景: 地下城 / 城镇 (US-021) */
   mode: 'dungeon' | 'town';
   /** 装备面板开关 (Tab, US-014) */
