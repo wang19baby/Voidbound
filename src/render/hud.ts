@@ -34,6 +34,7 @@ export function drawHud(
   q: import('./gl/resources').QuadResources,
   state: GameState,
 ): void {
+  const nowSec = performance.now() / 1000;
   const hpFrac = Math.max(0, state.player.hp) / MAX_HP;
   const mpFrac = Math.max(0, state.player.mp) / MAX_MP;
   drawSprite(gl, q, state.resources, { x: HUD_PAD, y: HUD_PAD }, { w: BAR_WIDTH * hpFrac, h: BAR_HEIGHT }, 'ui', 'slide_horizontal_color');
@@ -184,6 +185,35 @@ export function drawHudOverlay(
       ctx2d.fillStyle = '#ddd';
       ctx2d.fillText(r.desc, bx + boxW / 2, y0 + 56);
     }
+    ctx2d.textAlign = 'left';
+  }
+
+  // 地面装备名称标签 (US-018): 距玩家 700px 内, 稀有度色小字
+  ctx2d.font = '12px monospace';
+  for (const eq of getLoot(state)) {
+    const dx = eq.pos.x - state.player.pos.x;
+    const dy = eq.pos.y - state.player.pos.y;
+    if (dx * dx + dy * dy > 700 * 700) continue;
+    const sp = worldToScreen(state, eq.pos);
+    if (sp.x < 0 || sp.x > state.viewport.w || sp.y - 14 < 0 || sp.y > state.viewport.h) continue;
+    const col = RARITY_COLORS[eq.rarity];
+    ctx2d.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+    ctx2d.fillText(eq.name, sp.x + eq.size.w / 2, sp.y - 12);
+  }
+
+  // 升级全屏金光 (US-019)
+  if (state.levelUpFlash > 0) {
+    const a = Math.min(1, state.levelUpFlash / 0.3);
+    ctx2d.globalAlpha = a * 0.30;
+    ctx2d.fillStyle = '#ffd700';
+    ctx2d.fillRect(0, 0, state.viewport.w, state.viewport.h);
+    ctx2d.globalAlpha = a;
+    ctx2d.fillStyle = '#fff';
+    ctx2d.font = 'bold 56px monospace';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(`LEVEL UP → ${state.player.level}`, state.viewport.w / 2, state.viewport.h / 2 - 40);
+    ctx2d.globalAlpha = 1;
+    ctx2d.font = '12px monospace';
     ctx2d.textAlign = 'left';
   }
 
