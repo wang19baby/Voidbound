@@ -19,7 +19,7 @@ import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rej
 import { spawnThemeMonster, spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix } from './game/equipment';
-import { playBgmClient } from './ipc/sfx';
+import { playBgmClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
@@ -149,6 +149,7 @@ const state = {
   rejectedRunes: [],
   settingsOpen: false,
   titleOpen: true,
+  titleMsg: '',
   difficulty: 'normal' as Difficulty,
   bossKillTrigger: 0,
   equipmentOpen: false,
@@ -180,14 +181,22 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  // 标题画面 (GAME_FLOW §1.2): 1 开始 / 2 设置 / R 读档
+  // 标题画面 (GAME_FLOW §1.2): 1 开始 / 2 设置 / R 读档 / Esc 关设置
   if (state.titleOpen) {
     const k = e.key.toLowerCase();
-    if (k === '1') { state.titleOpen = false; inf('ui', '新游戏开始'); }
-    else if (k === '2') { state.settingsOpen = true; }
+    if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
+    if (state.settingsOpen) {
+      if (k === 'escape') { state.settingsOpen = false; return; }
+      if (k === 'n') { state.difficulty = cycleDifficulty(state.difficulty); state.titleMsg = `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`; return; }
+      if (k === 'f') { void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs))); return; }
+      if (k === '+' || k === '=') { state.volume = Math.min(1, state.volume + 0.05); setVolumeClient(state.volume); return; }
+      if (k === '-' || k === '_') { state.volume = Math.max(0, state.volume - 0.05); setVolumeClient(state.volume); return; }
+      return;
+    }
+    if (k === '1') { state.titleOpen = false; state.titleMsg = ''; inf('ui', '新游戏开始'); }
     else if (k === 'r') {
-      loadGame().then(() => { state.titleOpen = false; inf('save', '读档并继续'); })
-        .catch(err => wrn('save', `读档失败: ${err}`));
+      loadGame().then(() => { state.titleOpen = false; state.titleMsg = ''; inf('save', '读档并继续'); })
+        .catch((err: unknown) => { state.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
     }
     return;
   }
@@ -573,6 +582,34 @@ function drawTitle() {
   hudCtx.fillText('WASD 移动 · 左/右键 近战 · Q/W/E/R 技能 · Space 翻滚 · 1/2 药水 · Tab 装备 · Esc 暂停', hudCanvas.width / 2, hudCanvas.height / 2 + 140);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
+
+  // 标题页状态消息 (读档反馈等)
+  if (state.titleMsg) {
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = '16px monospace';
+    hudCtx.textAlign = 'center';
+    hudCtx.fillText(state.titleMsg, hudCanvas.width / 2, hudCanvas.height / 2 + 190);
+    hudCtx.textAlign = 'left';
+  }
+
+  // 标题页设置面板 (复用暂停版内容)
+  if (state.settingsOpen) {
+    hudCtx.fillStyle = 'rgba(0,0,0,0.55)';
+    hudCtx.fillRect(0, hudCanvas.height / 2 - 130, hudCanvas.width, 300);
+    hudCtx.textAlign = 'center';
+    hudCtx.fillStyle = '#ffd';
+    hudCtx.font = 'bold 26px monospace';
+    hudCtx.fillText('设置', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
+    hudCtx.font = '18px monospace';
+    hudCtx.fillStyle = '#fff';
+    hudCtx.fillText(`音量: ${Math.round(state.volume * 100)}%   [+]/[-]`, hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+    hudCtx.fillText('全屏: [F] 切换', hudCanvas.width / 2, hudCanvas.height / 2);
+    hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}  [N] 循环`, hudCanvas.width / 2, hudCanvas.height / 2 + 40);
+    hudCtx.fillStyle = '#888';
+    hudCtx.font = '14px monospace';
+    hudCtx.fillText('[Esc] 返回标题', hudCanvas.width / 2, hudCanvas.height / 2 + 90);
+    hudCtx.textAlign = 'left';
+  }
 }
 
 /** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */
@@ -582,31 +619,27 @@ function drawFrame() {
 
   // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
   const aimDir = mouseAimDirection(state, mouse.state());
-  if (mouse.wasClicked('LMB')) {
-    if (tryCastSlot('LMB', state, aimDir, nowSec)) {
-      invoke('play_sfx', { name: 'swing' }).catch(() => {});
-    } else {
-      dbg('skill', 'LMB on cd');
+  // 暂停/装备面板时: 屏蔽技能点击, 但仍渲染 (遮罩与面板画在 drawFrameToScreen)
+  if (!state.paused) {
+    if (mouse.wasClicked('LMB')) {
+      if (tryCastSlot('LMB', state, aimDir, nowSec)) {
+        invoke('play_sfx', { name: 'swing' }).catch(() => {});
+      } else {
+        dbg('skill', 'LMB on cd');
+      }
     }
-  }
-  if (mouse.wasClicked('RMB')) {
-    if (tryCastSlot('RMB', state, aimDir, nowSec)) {
-      invoke('play_sfx', { name: 'swing' }).catch(() => {});
-    } else {
-      dbg('skill', 'RMB on cd');
+    if (mouse.wasClicked('RMB')) {
+      if (tryCastSlot('RMB', state, aimDir, nowSec)) {
+        invoke('play_sfx', { name: 'swing' }).catch(() => {});
+      } else {
+        dbg('skill', 'RMB on cd');
+      }
     }
   }
   // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
 
-  // 暂停时: 跳过游戏逻辑 (包装器统一 rAF, 这里只画)
-  if (state.paused) {
-    mouse.reset();
-    return;
-  }
-
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  // ↑ 上面 2 行保留但被 drawFrameToScreen 重复执行; 这块临时兼容旧引用
   drawFrameToScreen();
   return;
 }

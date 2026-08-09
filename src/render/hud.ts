@@ -9,7 +9,7 @@ import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
 import { getOwned, getLoot, RARITY_COLORS, describeAffix } from '../game/equipment';
-import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
+import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS } from '../game/skill';
 import { expNext } from '../game/player';
 import { DAMAGE_TYPES } from '../game/combat';
 import { DIFFICULTY_MODS } from '../game/difficulty';

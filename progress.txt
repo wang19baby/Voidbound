@@ -111,3 +111,10 @@
 - 主菜单: titleOpen 状态 + drawTitle (GAME_FLOW §1.2: 1 新游戏/2 设置/R 读档), loop 标题分支, keydown 门控
 - 清理: 移除 f1 分段探针 (保留 boot/js_log/loop-crash/hb 心跳)
 - 验证: 标题画面下 hb 每 5s 正常 (定时器健康), raf=0 静止预期; 无崩溃
+
+## Session: 2026-08-09 (Ralph 6e: 暂停/面板不可见 + hud 漏导入)
+- 根因1: drawFrame 在 paused 时提前 return 不渲染 → ESC 暂停遮罩与 Tab 装备面板永远画不出来 (看起来"按键没反应"); 修复: 暂停时仍调 drawFrameToScreen, 仅屏蔽技能点击
+- 根因2: hud.ts 面板技能列用 SKILL_SLOTS/getSkill 但导入缺失 (python 批量替换没匹配到旧导入行) → 面板打开即每帧 ReferenceError → 面板不可见
+- 根因3: 标题页 2/R 无反馈 → 设置面板画进 drawTitle + titleMsg 状态行 + Esc 关设置
+- 验证: 重启 40s 0 loop-crash, boot 干净
+- 教训: 依赖"python 整行替换导入"不可靠 — 改用 edit 工具精确锚点; 每个 UI 分支用完测一遍按键路径
