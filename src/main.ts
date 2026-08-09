@@ -10,7 +10,7 @@ import { buildRenderResources } from './render/resources';
 import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
-import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, WORLD_W, WORLD_H } from './game/state';
+import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, WORLD_W, WORLD_H } from './game/state';
 import { getActiveWalls, type Wall } from './game/world';
 import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
@@ -193,7 +193,12 @@ window.addEventListener('keydown', (e) => {
       if (k === '-' || k === '_') { state.volume = Math.max(0, state.volume - 0.05); setVolumeClient(state.volume); return; }
       return;
     }
-    if (k === '1') { state.titleOpen = false; state.titleMsg = ''; inf('ui', '新游戏开始'); }
+    if (k === '1') {
+      startFreshRun(state);
+      state.titleOpen = false;
+      state.titleMsg = '';
+      inf('ui', '新游戏开始');
+    }
     else if (k === 'r') {
       loadGame().then(() => { state.titleOpen = false; state.titleMsg = ''; inf('save', '读档并继续'); })
         .catch((err: unknown) => { state.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
@@ -213,6 +218,14 @@ window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === '1') { state.paused = false; inf('gl', 'resumed'); return; }
     if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
+    if (k === '3') {
+      state.paused = false;
+      state.settingsOpen = false;
+      state.equipmentOpen = false;
+      state.titleOpen = true;
+      inf('ui', '返回主菜单');
+      return;
+    }
     // 装备面板打开: 只响应关闭 (Escape/Tab)
     if (state.equipmentOpen) {
       if (k === 'escape') { state.equipmentOpen = false; state.paused = false; inf('gl', 'resumed'); }
@@ -559,6 +572,24 @@ for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
   mouse.reset();
 }
 
+/** 新开一局: 重置临时状态 (保留等级/装备/符文 = 本局永久), 重刷怪物到中心 */
+function startFreshRun(state: GameState) {
+  state.score = 0;
+  state.dying = false;
+  state.deathTimer = 0;
+  state.fireballs.length = 0;
+  state.monsters.length = 0;
+  state.combo = { count: 0, timer: 0 };
+  state.bossKillTrigger = 0;
+  state.player.dodgeT = 0;
+  state.player.dodgeCd = 0;
+  state.player.potionCd = 0;
+  state.player.potions = { hp: 3, mp: 3 };
+  resetPlayer(state);
+  for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
+  inf('world', 'fresh run: 5 monsters spawned');
+}
+
 /** 标题画面 (GAME_FLOW §1.2): 主菜单 */
 function drawTitle() {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
@@ -754,7 +785,7 @@ function drawFrameToScreen() {
       hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
       hudCtx.font = '20px monospace';
       hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
       hudCtx.fillStyle = '#777';
       hudCtx.font = '14px monospace';
       hudCtx.fillText('Ctrl+1..6 分配技能点 · Ctrl+Q 退出(未实现)', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
