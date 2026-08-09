@@ -36,3 +36,19 @@
 - 伤害数字颜色: type 色/CRIT 橙 (#ffaa00), KILL 金黄
 - 存档 bincode 无版本头: 结构变更 = 旧档不可读 (后续需 add version byte)
 - 符文机制从"全局循环切换"重构为"按技能槽绑定永久" — 与 D-01 语义一致
+
+## Session: 2026-08-09 (Ralph 3: M2 内容波次 US-007~010)
+
+### 已完成
+- US-007 怪物扩充+Boss阶段: +7 变体 (direwolf/plague_slime/frost_worm/wraith/bloat_eye/queen_bee/giant_worm, 染色复用图集), THEME_MONSTER_POOL 4 主题 spawn/重生; pumpking 50% 血 → PHASE2 (1.6x 速 + 双发偏角 0.22rad + cd 1.6 + 阶段提示数字)
+- US-008 药水+翻滚: 1/2 键 HP(30)/MP(80) 药水 cd2s 上限3, 击杀12%掉药; Space 翻滚 0.2s 无敌 (接触/弹幕免疫) + 1.6x 位移, cd1.2s; HUD 计数
+- US-009 经验升级: expNext=floor(100*Lv^1.5) D-05; 击杀 score×2 EXP; 升级 +5 技能点 +5 attr 满血; HUD 经验条+等级
+- US-010 套装: 暗影/烈焰 2 套, 2/3 件触发 (elemPct/critBonus/shred), aggregate 计数; set 掉落必带套装名; 存档 setName (rust set_name)
+
+### 验证
+- npm test 4 组 (combat 28 + equipment 20 + skill 20 + player 5) 全绿
+- cargo test 5/5; build 通过
+- 教训: 测试追加块若写在 process.exit(0) 之后是死代码 — 用例必须置于退出前; 套装用例第一次"通过"是假象
+### 学习
+- 精灵染色 (tint) 低成本扩充怪物池: 复用图集同 frame, 数据驱动 stats 差异
+- Boss 阶段 = 阈值触发行为切换 (hp ≤ maxHp×0.5 → 状态迁移), 状态字段 phase 放 Monster 实体

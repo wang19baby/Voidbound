@@ -72,6 +72,51 @@
         "启动时画布先显示 splash + loading 文案直至 6 atlas 加载完成"
       ],
       "passes": true
+    },
+    {
+      "id": "US-007",
+      "title": "怪物扩充 + Boss 阶段机制",
+      "description": "F-MOB-001/003: MONSTER_DEFS 扩容 6+ 变体 (现有 sprite 染色+尺寸, 各异抗性/远程), 重生池按 4 主题分流; pumpking Boss 二阶段 (50% 血 → 狂暴: 提速 1.6x + 双弹速射 + 回合)",
+      "acceptanceCriteria": [
+        "MONSTER_DEFS 新增 >=6 种类 (精灵变体, res/血量/射程差异), MonsterType 合并",
+        "重生池按主题: forest/desert/ruin/void 各返回不同怪物池",
+        "pumpking 50% 血触发 phase 2: speed*1.6, 双发投射物, cd 缩短, 日志 + 阶段提示",
+        "新怪物掉率 (dropLoot) 与 掉药 (US-008) 不冲突; build+test 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-008",
+      "title": "药水栏 + 翻滚 (F-CBT-001/002)",
+      "description": "1-2 键喝 HP/MP 药 (上限 3, 击杀 12% 掉落), CD 2s, HUD 图标; Space 翻滚: 0.15s 位移加速 + 0.2s 无敌 (免接触/免弹幕)",
+      "acceptanceCriteria": [
+        "player.potions {hp,mp} 初始 3; 按键 1/2 消耗 + 回复, cd 2s; 击杀 12% 掉药",
+        "Space 触发翻滚: dodgeT>0 时 接触伤害/敌方投射物无效",
+        "HUD 显示药水数量与翻滚 cd; build+test 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-009",
+      "title": "经验/升级 (F-RPG-002, D-05)",
+      "description": "击杀得 EXP (def.exp), 曲线 expNext(Lv) = 100*Lv^1.5 (D-05); 升级 +5 技能点 +5 attr +满血, HUD 经验条",
+      "acceptanceCriteria": [
+        "expNext 纯函数 + 单测 (Lv1=100, Lv2=283, Lv10=3163)",
+        "等级升时 skillPoints+5, combat.attr+5, 满血, 日志",
+        "HUD 经验条 (HP 条下方)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-010",
+      "title": "套装效果 (F-ITEM-004)",
+      "description": "set 稀有度装备挂 setName, 成套 2/3 件触发加成 (elemPct/critBonus/shred), aggregateCombat 统计套装数量; 掉落 set 时随机套装名",
+      "acceptanceCriteria": [
+        "Equipment.setName 可选; set 掉落必带套装名 (>=2 套)",
+        "聚合: 同套装 >=2 件 +bonus1, >=3 件 +bonus2 (SET_BONUSES 表)",
+        "装备单测覆盖套装加成; describeAffix 不变"
+      ],
+      "passes": true
     }
   ]
 }
