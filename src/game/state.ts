@@ -7,6 +7,7 @@ import { FIREBALL_DAMAGE, type Monster } from './monster';
 import type { CombatStats } from './combat';
 import type { RuneId } from './rune';
 import type { SkillSlot } from './skill';
+import type { Difficulty } from './difficulty';
 
 export interface Camera {
   x: number;
@@ -75,6 +76,10 @@ export interface GameState {
   deathTimer: number;
   theme: 'forest' | 'desert' | 'ruin' | 'void';
   resources: RenderResources;
+  /** 难度 (US-011, F-DIFF) */
+  difficulty: Difficulty;
+  /** 连杀计数 (每 10 击杀召当前主题 Boss) */
+  bossKillTrigger: number;
   /** 活跃的符文三选一 (10 级触发) */
   runeChoice: RuneChoice | null;
   /** 已拒绝变异的槽 (本局不再触发) */

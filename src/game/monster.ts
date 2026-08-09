@@ -11,10 +11,12 @@ import { spawnDamageNum } from './damageNum';
 import { gainExp } from './player';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
 import { skillDamageScale } from './skill';
+import { DIFFICULTY_MODS } from './difficulty';
 
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
-  | 'direwolf' | 'plague_slime' | 'frost_worm' | 'wraith' | 'bloat_eye' | 'queen_bee' | 'giant_worm';
+  | 'direwolf' | 'plague_slime' | 'frost_worm' | 'wraith' | 'bloat_eye' | 'queen_bee' | 'giant_worm'
+  | 'sun_pharaoh' | 'frost_lich' | 'void_overlord';
 
 export interface MonsterDef {
   type: MonsterType;
@@ -57,6 +59,18 @@ export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
   bloat_eye:   { type: 'bloat_eye',   sprite: 'eyeball',  size: { w: 40, h: 40 }, hp: 160, speed: 32,  aggroRange: 210, attackRange: 36, contactDmg: 12, score: 46, rangedCooldown: 2.0, res: { fire: 30 }, tint: [1, 0.5, 0.7] },
   queen_bee:   { type: 'queen_bee',   sprite: 'bee',      size: { w: 32, h: 32 }, hp: 50,  speed: 140, aggroRange: 270, attackRange: 26, contactDmg: 7,  score: 20, rangedCooldown: 1.1, res: { fire: -20 }, tint: [1, 0.85, 0.3] },
   giant_worm:  { type: 'giant_worm',  sprite: 'worm',     size: { w: 48, h: 48 }, hp: 200, speed: 42,  aggroRange: 220, attackRange: 40, contactDmg: 16, score: 58, res: { physical: 35, fire: -10 }, tint: [0.75, 0.55, 0.25] },
+  // === US-013 主题 Boss (通用二阶段机制) ===
+  war_pharaoh:  { type: 'war_pharaoh',  sprite: 'eyeball',  size: { w: 56, h: 56 }, hp: 620, speed: 30,  aggroRange: 320, attackRange: 64, contactDmg: 12, score: 170, boss: true, rangedCooldown: 2.5, res: { fire: 30, physical: 20 }, tint: [1, 0.82, 0.4] },
+  frost_lich:   { type: 'frost_lich',   sprite: 'ghost',    size: { w: 56, h: 56 }, hp: 700, speed: 36,  aggroRange: 340, attackRange: 56, contactDmg: 15, score: 190, boss: true, rangedCooldown: 2.0, res: { fire: 30, physical: 40, ice: 45 }, tint: [0.5, 0.85, 1] },
+  void_overlord:{ type: 'void_overlord', sprite: 'pumpking', size: { w: 72, h: 72 }, hp: 1300, speed: 26, aggroRange: 360, attackRange: 88, contactDmg: 20, score: 270, boss: true, rangedCooldown: 2.4, res: { fire: 50, physical: 45, shadow: 30 }, tint: [0.75, 0.4, 1] },
+};
+
+/** 主题 Boss (US-013): 每 10 连杀召唤 */
+export const THEME_BOSS: Record<Theme, MonsterType> = {
+  forest: 'pumpking',
+  desert: 'war_pharaoh',
+  ruin:   'frost_lich',
+  void:   'void_overlord',
 };
 
 /** 主题怪物池 (US-007: 4 主题不同怪, 初始 spawn 与重生共用) */
@@ -122,8 +136,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       type,
       pos: { x, y },
       vel: { x: 0, y: 0 },
-      hp: def.hp,
-      maxHp: def.hp,
+      hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
+      maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
       phase: 1,
       size: { ...def.size },
       wanderTarget: pickWanderTarget(state, x, y, def.aggroRange * 2),
@@ -141,8 +155,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     type,
     pos: { x: state.player.pos.x, y: state.player.pos.y - 800 },
     vel: { x: 0, y: 0 },
-    hp: def.hp,
-    maxHp: def.hp,
+    hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
+    maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
     phase: 1,
     size: { w: 32, h: 32 },
     wanderTarget: { x: state.player.pos.x, y: state.player.pos.y - 1000 },
@@ -243,7 +257,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.vel.y = (dy / dist) * spd;
       }
       if (dist < def.attackRange && m.attackCd <= 0 && state.player.dodgeT <= 0) {
-        state.player.hp -= def.contactDmg;
+        state.player.hp -= def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult;
         m.attackCd = 1.0;
         dbg('monster', `${m.type} hit player for ${def.contactDmg} (hp=${state.player.hp.toFixed(0)})`);
       }
@@ -294,6 +308,7 @@ export function damageMonster(
   if (m.hp <= 0) {
     state.score += def.score;
     state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
+    state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
     // 经验 (F-RPG-002, D-05): 击杀 score×2, 升级 +5 技能点 +5 attr
     const ups = gainExp(state, def.score * 2);
     if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
@@ -389,7 +404,7 @@ function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle =
     pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
     vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
     size: { w: 12, h: 12 },
-    dmg,
+    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult),
     life: 2.0,
     fromId: m.id,
   });

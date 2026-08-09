@@ -7,6 +7,7 @@ import { drawSprite } from './draw';
 import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
+import { getToasts } from '../game/toast';
 import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
 import { expNext } from '../game/player';
 import { worldToScreen } from '../game/state';
@@ -126,7 +127,21 @@ export function drawHudOverlay(
   }
   ctx2d.textAlign = 'left';
 
-  // 符文三选一 overlay (D-01, 技能 10 级触发)
+  // 拾取 toast (US-012): 顶部中央, 淡出
+  const toasts = getToasts(state);
+  if (toasts.length > 0) {
+    ctx2d.textAlign = 'center';
+    let ty = 70;
+    for (const t of toasts) {
+      ctx2d.globalAlpha = Math.min(1, t.life / 0.8);
+      ctx2d.fillStyle = t.color;
+      ctx2d.font = 'bold 15px monospace';
+      ctx2d.fillText(t.text, state.viewport.w / 2, ty);
+      ty += 22;
+    }
+    ctx2d.globalAlpha = 1;
+    ctx2d.textAlign = 'left';
+  }
   const choice = state.runeChoice;
   if (choice) {
     const cw = state.viewport.w;

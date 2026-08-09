@@ -5,6 +5,7 @@
 import type { GameState } from './state';
 import { baseCombat, type CombatStats, type DamageType, DAMAGE_TYPES } from './combat';
 import { MAX_HP, MAX_MP } from './player';
+import { DIFFICULTY_MODS } from './difficulty';
 
 // === 5 阶稀有度 (F-ITEM-002: 普通/魔法/稀有/套装/传奇) ===
 
@@ -168,17 +169,21 @@ export function recomputeCombat(state: GameState): void {
 export function dropLoot(state: GameState, x: number, y: number): Equipment | null {
   const ext = state as GameState & { _loot?: Equipment[] };
   ext._loot = ext._loot ?? [];
+  const mods = DIFFICULTY_MODS[state.difficulty];
+  const baseTotal = Object.values(RARITY_DROP_RATE).reduce((a, b) => a + b, 0);
+  const total = baseTotal * mods.dropMult;
   const r = Math.random();
+  if (r >= total) return null;
   let cum = 0;
   let chosen: Rarity | null = null;
   for (const [rar, rate] of Object.entries(RARITY_DROP_RATE) as [Rarity, number][]) {
-    cum += rate;
+    cum += rate * mods.dropMult;
     if (r < cum) { chosen = rar; break; }
   }
   if (!chosen) return null;
 
   const [min, max] = RARITY_AFFIX_COUNT[chosen];
-  const n = Math.min(max, min + Math.floor(Math.random() * (max - min + 1)));
+  const n = Math.min(max, min + Math.floor(Math.random() * (max - min + 1)) + mods.affixBonus);
   const affixes: Affix[] = [];
   for (let i = 0; i < n; i++) affixes.push(genAffix());
 

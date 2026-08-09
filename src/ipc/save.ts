@@ -7,6 +7,7 @@ import type { AffixStat, Rarity, SetName } from '../game/equipment';
 import type { SkillSlot } from '../game/skill';
 import type { RuneId } from '../game/rune';
 import type { Theme } from '../game/state';
+import type { Difficulty } from '../game/difficulty';
 
 export interface SaveAffix {
   stat: AffixStat;
@@ -40,6 +41,7 @@ export interface SaveData {
   owned: SaveItem[];
   runes: SaveRune[];
   theme: Theme;
+  difficulty: Difficulty;
 }
 
 export function saveGame(data: SaveData): Promise<string> {

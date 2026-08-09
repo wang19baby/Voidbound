@@ -16,12 +16,14 @@ import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, getSkill, SKILL_SLOTS, type SkillSlot } from './game/skill';
-import { spawnThemeMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
+import { spawnThemeMonster, spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix } from './game/equipment';
 import { playBgmClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
+import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
+import { pushToast, getToasts, updateToasts } from './game/toast';
 import { getSkillCooldowns } from './game/cooldown';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
@@ -130,13 +132,15 @@ const state = {
   runeChoice: null,
   rejectedRunes: [],
   settingsOpen: false,
+  difficulty: 'normal' as Difficulty,
+  bossKillTrigger: 0,
   volume: 0.8,
   resources: res,
 };
 
 // 初始 spawn 5 只怪物 (当前主题池随机, US-007)
 for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
-inf('world', `spawned ${state.monsters.length} monsters (2 bat + 2 slime + 1 worm)`);
+inf('world', `spawned ${state.monsters.length} monsters (theme=${state.theme} pool, US-007)`);
 
 window.addEventListener('keydown', (e) => {
   // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
@@ -172,6 +176,11 @@ window.addEventListener('keydown', (e) => {
       if (k === 'f') {
         void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
           getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs)));
+        return;
+      }
+      if (k === 'n') {
+        state.difficulty = cycleDifficulty(state.difficulty);
+        inf('game', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
         return;
       }
     }
@@ -247,6 +256,7 @@ window.addEventListener('keydown', (e) => {
         return r ? [{ slot, rune: r }] : [];
       }),
       theme: state.theme,
+      difficulty: state.difficulty,
     }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
   }
   if (e.key === 'r' || e.key === 'R') {
@@ -286,6 +296,7 @@ window.addEventListener('keydown', (e) => {
           state.theme = d.theme;
           playBgmClient(`bgm_${state.theme}`);
         }
+        if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
       }).catch(e => wrn('save', `load failed: ${e}`));
     }
@@ -367,6 +378,7 @@ function loop(now: number) {
   updateEnemyProj(state, dt);
   updateDeathFx(state, dt);
   updateDamageNums(state, dt);
+  updateToasts(state, dt);
   // CD 递减 (药水/翻滚)
   if (state.player.potionCd > 0) state.player.potionCd -= dt;
   if (state.player.dodgeT > 0) state.player.dodgeT -= dt;
@@ -391,6 +403,7 @@ function loop(now: number) {
       state.score = 0;
       state.player.potions = { hp: 3, mp: 3 };
       state.player.potionCd = 0;
+      state.bossKillTrigger = 0;
       state.player.dodgeT = 0;
       state.player.dodgeCd = 0;
       state.monsters.length = 0;
@@ -400,10 +413,16 @@ function loop(now: number) {
     }
   }
 
-  // 怪物被清空后重生 (保持地图始终有怪)
+  // 怪物被清空后重生 (保持地图始终有怪; 每 10 连杀召主题 Boss)
   if (state.monsters.length < 3) {
-    state.monsters.push(spawnThemeMonster(state));
-    dbg('world', `respawn ${t}, total=${state.monsters.length}`);
+    if ((state.bossKillTrigger ?? 0) >= 10) {
+      state.monsters.push(spawnMonster(state, THEME_BOSS[state.theme]));
+      state.bossKillTrigger = 0;
+      inf('world', `BOSS 出现: ${MONSTER_DEFS[THEME_BOSS[state.theme]].type} (${state.theme})`);
+    } else {
+      state.monsters.push(spawnThemeMonster(state));
+    }
+    dbg('world', `respawn, total=${state.monsters.length}`);
   }
 
   drawFrame();
@@ -526,6 +545,8 @@ function drawFrameToScreen() {
   for (const eq of picked) {
     const affix = eq.affixes.map(describeAffix).join(' ');
     inf('loot', `picked ${eq.rarity} ${eq.name} (${affix})`);
+    const col = RARITY_COLORS[eq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+    pushToast(state, `${eq.name}${affix ? ' — ' + affix : ''}`, `#${col}`);
   }
 
   const sprite = pickPlayerSprite(state, mouse.state().pos.x);
@@ -577,6 +598,7 @@ function drawFrameToScreen() {
       hudCtx.strokeStyle = '#666';
       hudCtx.strokeRect(sliderX, sliderY, 240, 10);
       hudCtx.fillText('全屏: [F] 切换', hudCanvas.width / 2, hudCanvas.height / 2 + 6);
+      hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}  [N] 循环`, hudCanvas.width / 2, hudCanvas.height / 2 + 32);
       hudCtx.fillStyle = '#999';
       hudCtx.font = '14px monospace';
       hudCtx.fillText('WASD 移动 · 鼠标左/右键 近战 · Q 火球  W 连发  E 回血  R 大招', hudCanvas.width / 2, hudCanvas.height / 2 + 46);
