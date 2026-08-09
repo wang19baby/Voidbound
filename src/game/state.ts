@@ -46,10 +46,14 @@ export interface GameState {
   monsters: Monster[];
   score: number;
   paused: boolean;
-  dying: boolean;        // 死亡屏阶段
-  deathTimer: number;   // 倒计时 (s), 0 时重开
+  dying: boolean;
+  deathTimer: number;
+  theme: 'forest' | 'desert' | 'ruin' | 'void';
   resources: RenderResources;
 }
+
+export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
+export type Theme = (typeof THEMES)[number];
 
 /** 重置 player 状态到世界中心 */
 export function resetPlayer(state: GameState): void {

@@ -1,10 +1,10 @@
 {
   "atlas": "world",
   "size": {
-    "width": 82,
+    "width": 242,
     "height": 20
   },
-  "sprite_count": 4,
+  "sprite_count": 12,
   "sprites": [
     {
       "name": "floor",
@@ -17,9 +17,49 @@
       "is_animated": false
     },
     {
+      "name": "floor_desert",
+      "file": "floor_desert.png",
+      "x": 22,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "floor_forest",
+      "file": "floor_forest.png",
+      "x": 42,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "floor_ruin",
+      "file": "floor_ruin.png",
+      "x": 62,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "floor_void",
+      "file": "floor_void.png",
+      "x": 82,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "grass",
       "file": "grass.png",
-      "x": 22,
+      "x": 102,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -29,7 +69,7 @@
     {
       "name": "wall",
       "file": "wall.png",
-      "x": 42,
+      "x": 122,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -39,7 +79,47 @@
     {
       "name": "wall_alt",
       "file": "wall_alt.png",
-      "x": 62,
+      "x": 142,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall_desert",
+      "file": "wall_desert.png",
+      "x": 162,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall_forest",
+      "file": "wall_forest.png",
+      "x": 182,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall_ruin",
+      "file": "wall_ruin.png",
+      "x": 202,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall_void",
+      "file": "wall_void.png",
+      "x": 222,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,

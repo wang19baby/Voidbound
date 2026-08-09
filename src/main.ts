@@ -101,6 +101,7 @@ const state = {
   paused: false,
   dying: false,
   deathTimer: 0,
+  theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
   resources: res,
 };
 
@@ -160,6 +161,13 @@ window.addEventListener('keydown', (e) => {
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)}`);
       }).catch(e => wrn('save', `load failed: ${e}`));
     }
+  }
+  // T 键循环切换主题
+  if (e.key === 't' || e.key === 'T') {
+    const themes = ['forest', 'desert', 'ruin', 'void'] as const;
+    const i = themes.indexOf(state.theme);
+    state.theme = themes[(i + 1) % themes.length];
+    inf('world', `theme → ${state.theme}`);
   }
 });
 
@@ -318,14 +326,14 @@ function drawFrameToScreen() {
     gl, quad, res,
     { x: -state.camera.x + state.world.floorPos.x, y: -state.camera.y + state.world.floorPos.y },
     state.world.floorSize,
-    'world', 'floor',
+    'world', `floor_${state.theme}`,
   );
 
   for (const w of state.world.walls) {
     const sp = worldToScreen(state, w.pos);
     if (sp.x + w.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + w.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, w.size, 'world', 'wall');
+    drawSprite(gl, quad, res, sp, w.size, 'world', `wall_${state.theme}`);
   }
 
   // 近战挥击 (slash particle, 在玩家前)
