@@ -52,3 +52,19 @@
 ### 学习
 - 精灵染色 (tint) 低成本扩充怪物池: 复用图集同 frame, 数据驱动 stats 差异
 - Boss 阶段 = 阈值触发行为切换 (hp ≤ maxHp×0.5 → 状态迁移), 状态字段 phase 放 Monster 实体
+
+
+## Session: 2026-08-09 (Ralph 4: US-011~013 难度/反馈/Boss)
+
+### 已完成
+- US-011 难度: difficulty.ts (normal/nightmare/hell) — 怪物 HP x{1,1.8,2.8} / 接触 x{1,1.4,1.8} / 投射 x{1,1.2,1.5} / 掉落率 x{1,1.25,1.5} / 词条+{0,1,2}; 设置 [N] 循环; save difficulty (rust 字段+断言)
+- US-012 拾取 toast: src/game/toast.ts (顶部中央, 名称+词条, 稀有度 hex 色, 上限 4, 3.5s 淡出)
+- US-013 主题 Boss: war_pharaoh(沙漠)/frost_lich(废墟, 冰抗45)/void_overlord(虚空, 全抗 30-50), 通用二阶段; THEME_BOSS 映射; 10 连杀召唤; 顺带修了重生块残留的未定义 t 变量
+
+### 验证
+- npm test 5 组 (combat 28 + equipment 20 + skill 20 + player 5 + difficulty 6) 全绿
+- cargo 5/5; build 159.5kb
+### 学习
+- 难度=全局倍率表 (monster spawn/b 伤害/掉落) 放独立模块, 避免散落 magic number
+- Boss 阶段机制已在 pumpking 通用化, 新 Boss 只需 boss:true + defs
+- 教训: 用 python 批量 replace 时 count=1 会命中首个出现 (init spawn), 必须锚定上下文; 上一轮 t 未定义 bug 因此存活

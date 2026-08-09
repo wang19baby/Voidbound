@@ -117,6 +117,40 @@
         "装备单测覆盖套装加成; describeAffix 不变"
       ],
       "passes": true
+    },
+    {
+      "id": "US-011",
+      "title": "难度系统 (F-DIFF, D-03)",
+      "description": "3 档难度 normal/nightmare/hell: 怪物 HP×{1,1.8,2.8}/伤害×{1,1.4,1.8}/投射×{1,1.2,1.5}/掉落倍率×{1,1.25,1.5}/词条密度+{0,1,2}; Esc 设置菜单 [N] 切换; 存档持久化 difficulty",
+      "acceptanceCriteria": [
+        "DIFFICULTIES 表 + setter/cycle; GameState.difficulty",
+        "spawnMonster hp/游戏 contactDmg 按难度乘; dropLoot 掉落率/词条数按难度",
+        "设置面板 [N] 循环难度 + 显示当前; save/load 持久化 difficulty (rust 字段+回环)",
+        "build+test 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-012",
+      "title": "拾取反馈 toast (F-UI)",
+      "description": "拾取装备时 HUD 顶部中央显示 toast (装备名+词条列表, 稀有度着色, 3 条)",
+      "acceptanceCriteria": [
+        "pickupLoot 返回的物品计入 toasts (state._toasts) 上限 4, 每条 3.5s 淡出",
+        "toast 内容 = 名称 + describeAffix 列表, 稀有度色",
+        "drawHudOverlay 绘制; build 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-013",
+      "title": "4 主题 Boss 补全 (F-MOB-003)",
+      "description": "每主题 1 Boss (forest=pumpking 已有; desert/sand_pharaoh/ruin/frost_lich/void_yu 加 defs), 通用二阶段机制 (hp50%→狂暴); 每 10 击杀在重生时 spawn 当前主题 Boss, 重生池不含 Boss",
+      "acceptanceCriteria": [
+        "MONSTER_DEFS 新增 3 个 boss:true 变体 (大号/染色), 各带阶段阈值行为",
+        "THEME_BOSS 映射; 连杀 %10 触发主题 Boss 出现一次",
+        "普通重生池过滤 boss; 阶段二逻辑对全部 Boss 生效; build+test 绿"
+      ],
+      "passes": true
     }
   ]
 }
