@@ -210,6 +210,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     state.equipmentOpen = !state.equipmentOpen;
     inf('ui', state.equipmentOpen ? 'equipment panel open' : 'equipment panel closed');
+
     return;
   }
   // 装备面板开着: 只响应 Tab/Esc 关闭, 阻断游戏键
@@ -217,6 +218,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.code === 'Tab') {
       state.equipmentOpen = false;
       inf('ui', 'equipment panel closed');
+
     }
     return;
   }
