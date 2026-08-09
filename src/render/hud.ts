@@ -66,6 +66,13 @@ export function drawHudOverlay(
   ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${MAX_MP}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 4);
   ctx2d.fillText(`SCORE ${state.score}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 16);
   ctx2d.fillText(`KILLS ${state.monsters.length}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 30);
+  // COMBO (US-017): 连击 >1 时顶部醒目金色
+  if (state.combo.count > 1 && state.combo.timer > 0) {
+    ctx2d.fillStyle = '#ffd64a';
+    ctx2d.font = 'bold 16px monospace';
+    ctx2d.fillText(`COMBO x${state.combo.count}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 46 + 26);
+    ctx2d.font = '11px monospace';
+  }
   // 经验条 (D-05): Lv / 进度
   const need = expNext(state.player.level);
   const frac = Math.min(1, (state.player.exp ?? 0) / need);
