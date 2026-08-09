@@ -19,6 +19,7 @@ import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/ski
 import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
 import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
+import { pickupLoot, getLoot, RARITY_COLORS, describeAffix } from './game/equipment';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
@@ -364,6 +365,19 @@ function drawFrameToScreen() {
     const barH = 3;
     drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 5 }, { w: barW * frac, h: barH }, 'ui', 'slide_horizontal_color');
     drawSprite(gl, quad, res, { x: sp.x + barW * frac, y: sp.y - 5 }, { w: barW * (1 - frac), h: barH }, 'ui', 'slide_horizontal_grey');
+  }
+
+  // 装备 (Loot) - 4 阶稀有度上色, 玩家走过即拾
+  for (const eq of getLoot(state)) {
+    const sp = worldToScreen(state, eq.pos);
+    if (sp.x + eq.size.w < 0 || sp.x > state.viewport.w) continue;
+    if (sp.y + eq.size.h < 0 || sp.y > state.viewport.h) continue;
+    drawSprite(gl, quad, res, sp, eq.size, 'particles', 'spark_03', { color: RARITY_COLORS[eq.rarity] });
+  }
+  const picked = pickupLoot(state);
+  for (const eq of picked) {
+    const affix = eq.affixes.map(describeAffix).join(' ');
+    inf('loot', `picked ${eq.rarity} ${eq.name} (${affix})`);
   }
 
   const sprite = pickPlayerSprite(state, mouse.state().pos.x);

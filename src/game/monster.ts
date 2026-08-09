@@ -6,6 +6,7 @@ import { aabbOverlap } from './world';
 import { inf, dbg } from '../util/log';
 import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
+import { dropLoot } from './equipment';
 
 export type MonsterType = 'bat' | 'slime' | 'worm';
 
@@ -253,6 +254,7 @@ export function resolveFireballHits(state: GameState): number {
           state.score += def.score;
           spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           playSfxClient('die');
+          dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           inf('combat', `${m.type} killed by fireball (+${def.score})`);
           break;
         } else {
@@ -285,6 +287,7 @@ export function resolveMeleeHits(state: GameState): number {
           state.score += def.score;
           spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           playSfxClient('die');
+          dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
           inf('combat', `${m.type} killed by melee (+${def.score})`);
           break;
         } else {
