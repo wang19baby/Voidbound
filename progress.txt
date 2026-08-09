@@ -74,3 +74,11 @@
 - P0: N 键难度循环原锁在 settingsOpen 内 → 移到暂停层, 暂停即可切换
 - P2: hell dmgMult 1.8→1.5 (评审 P2 平衡); 死亡时立即 reset bossKillTrigger; HUD 显示难度
 - 教训: 数据结构变更 (接口加字段) 时必须同步检查所有使用点 — DIFFICULTY_MODS[...].name 是引用未声名字段; 评审的 schema 违规把内容丢进 data 字段, 用 hub send await 请求重发即可
+
+
+## Session: 2026-08-09 (Ralph 5: US-014~016 面板/难度/DOT)
+- US-014 Tab 装备面板: getOwned 列表(稀有度色/词条 20 件截断) + 右侧 D-04 聚合属性; 打开即暂停; Esc/Tab 关闭
+- US-015 5 档难度: inferno(4.0x)/hardcore(5.0x)+禁药+死亡清空(owned/level/skill/rune); D-09 硬核规则落地
+- US-016 击退(melee 40/fireball 60) + 燃烧 3s×3dps 0.5s 跳伤; killMonster 统一击杀出口 (命中/燃烧共用, 修掉重复击杀逻辑)
+- 验证: npm test 5 组 + cargo 5/5 + build 绿
+- 教训: monster.ts 击杀逻辑经 3 轮增量后重复 (火球/近战/燃烧各写一份) — 本轮统一为 killMonster 出口

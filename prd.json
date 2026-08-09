@@ -151,6 +151,41 @@
         "普通重生池过滤 boss; 阶段二逻辑对全部 Boss 生效; build+test 绿"
       ],
       "passes": true
+    },
+    {
+      "id": "US-014",
+      "title": "装备面板 (Tab, F-UI)",
+      "description": "Tab 打开/关闭装备面板: 已装备列表 (名称/稀有度色/词条), 底部聚合战斗属性 (物理%/元素%/暴击率/暴击伤害/减抗/易伤/各系抗性), Esc 关闭, 面板内暂停不游戏",
+      "acceptanceCriteria": [
+        "keydown Tab 切换 设备面板 (preventDefault), Esc 关闭",
+        "面板列出 getOwned 全部 (稀有度色+词条, 上限 20 件+省略)",
+        "底部显示 player.combat 聚合值 (physPct/elemPct/critRating/critBonus/shred/vuln/res)",
+        "面板打开时暂停主逻辑; build 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-015",
+      "title": "5 档难度 + 硬核规则 (D-03/D-09)",
+      "description": "扩展 inferno/hardcore 两档 (倍率表); hardcore: 禁用 1-4 药水 + 死亡永久性 (清空装备/技能/等级, 重开)",
+      "acceptanceCriteria": [
+        "DIFFICULTIES 5 档: normal/nightmare/hell/inferno/hardcore + 倍率表",
+        "hardcore 下 usePotion 拒绝",
+        "hardcore 死亡重生时: owned 清空/level=1/skillPoints=0/combat=baseCombat/skill 全 reset",
+        "difficulty.test 覆盖 5 档 cycle 闭环 + 倍率单调"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-016",
+      "title": "击退 + 燃烧 DOT (F-CBT-005)",
+      "description": "近战/火球命中击退 (玩家→怪方向 40/60px); 火球命中施加燃烧 3s×3dps (Monster.burn), tick 每 0.5s 跳伤害数字",
+      "acceptanceCriteria": [
+        "damageMonster 命中后: melee 击退 40px, fireball 击退 60px (方向玩家→怪)",
+        "fireball 命中设 burnT=3/burnDps=3; updateMonsters tick 扣血 (0.5s 间隔跳数字)",
+        "死亡/重生重置 burn; build+test 绿"
+      ],
+      "passes": true
     }
   ]
 }
