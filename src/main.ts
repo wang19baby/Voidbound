@@ -31,12 +31,16 @@ import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 const VW = 1280;
 const VH = 720;
 
-// 全局错误捕获: JS 异常同步到 console + log, 方便排查
+// 全局错误捕获: JS 异常同步到 console + log, 并转发到 Rust stdout (js_log 调试通道)
 window.addEventListener('error', (e) => {
-  err('loop', `JS error: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`);
+  const msg = `JS error: ${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`;
+  err('loop', msg);
+  invoke('js_log', { msg }).catch(() => {});
 });
 window.addEventListener('unhandledrejection', (e) => {
-  err('loop', `unhandled rejection: ${String(e.reason)}`);
+  const msg = `unhandled rejection: ${String(e.reason)}`;
+  err('loop', msg);
+  invoke('js_log', { msg }).catch(() => {});
 });
 
 const canvas = document.getElementById('gl');

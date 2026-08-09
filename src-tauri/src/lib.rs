@@ -53,6 +53,12 @@ fn ping() -> String {
     "pong from Voidbound".into()
 }
 
+/// 前端 JS 错误/日志转发 (调试通道, 让 JS 异常出现在 Rust stdout)
+#[tauri::command]
+fn js_log(msg: String) {
+    log::warn!("[js] {msg}");
+}
+
 /// 应用入口
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -83,7 +89,7 @@ pub fn run() {
             log::info!("Voidbound ready (M1 MVP scaffold)");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas, audio::play_sfx, audio::set_volume, audio::play_bgm, audio::stop_bgm, save::save_game, save::load_game])
+        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas, audio::play_sfx, audio::set_volume, audio::play_bgm, audio::stop_bgm, save::save_game, save::load_game, js_log])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
