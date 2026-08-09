@@ -1,0 +1,220 @@
+{
+  "atlas": "characters",
+  "size": {
+    "width": 422,
+    "height": 20
+  },
+  "sprite_count": 21,
+  "sprites": [
+    {
+      "name": "assassin_stand",
+      "file": "assassin_stand.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "assassin_walk",
+      "file": "assassin_walk.png",
+      "x": 22,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barbarian_stand",
+      "file": "barbarian_stand.png",
+      "x": 42,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barbarian_stand_east",
+      "file": "barbarian_stand_east.png",
+      "x": 62,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barbarian_stand_north",
+      "file": "barbarian_stand_north.png",
+      "x": 82,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barbarian_stand_west",
+      "file": "barbarian_stand_west.png",
+      "x": 102,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barbarian_walk",
+      "file": "barbarian_walk.png",
+      "x": 122,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "necromancer_stand",
+      "file": "necromancer_stand.png",
+      "x": 142,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "necromancer_walk",
+      "file": "necromancer_walk.png",
+      "x": 162,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "paladin_stand",
+      "file": "paladin_stand.png",
+      "x": 182,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "paladin_walk",
+      "file": "paladin_walk.png",
+      "x": 202,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ranger_stand",
+      "file": "ranger_stand.png",
+      "x": 222,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ranger_walk",
+      "file": "ranger_walk.png",
+      "x": 242,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_stand",
+      "file": "sorceress_stand.png",
+      "x": 262,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_stand_east",
+      "file": "sorceress_stand_east.png",
+      "x": 282,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_stand_north",
+      "file": "sorceress_stand_north.png",
+      "x": 302,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_stand_west",
+      "file": "sorceress_stand_west.png",
+      "x": 322,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_walk",
+      "file": "sorceress_walk.png",
+      "x": 342,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_walk_east",
+      "file": "sorceress_walk_east.png",
+      "x": 362,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_walk_north",
+      "file": "sorceress_walk_north.png",
+      "x": 382,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "sorceress_walk_west",
+      "file": "sorceress_walk_west.png",
+      "x": 402,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    }
+  ]
+}

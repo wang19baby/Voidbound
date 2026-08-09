@@ -2,6 +2,8 @@
 
 > 一款 2D 俯视肉鸽 ARPG，灵感来自《暗黑破坏神 2 重制版》，融合肉鸽随机机制。
 
+> **当前版本：v1.1 文档草案** —— 详见 [`docs/CHANGELOG-v1.1.md`](docs/CHANGELOG-v1.1.md)。3 项架构决策已敲定，20 项默认提案待 review。
+
 ---
 
 ## 游戏简介
@@ -87,9 +89,16 @@ Voidbound/
 ## 文档导航
 
 - 📋 [需求规格](docs/REQUIREMENTS.md) —— 功能 / 非功能 / 约束
-- 🎨 [完整设计文档](docs/DESIGN.md) —— 10 大系统 + 技术架构
+- 🎨 [完整设计文档](docs/DESIGN.md) —— 11 大系统 + 技术架构
 - 🛣️ [实施路线](docs/ROADMAP.md) —— 4 阶段 7 周时间线
 - 📝 [内容规格](docs/CONTENT.md) —— 怪物 / 技能 / 装备 / 地图提示词模板
+- 📜 [v1.1 变更单](docs/CHANGELOG-v1.1.md) —— 3 项架构决策 + 20 项默认提案
+- 🎨 [素材资源清单](docs/ASSETS.md) —— CC0 素材 / Kenney 系列 / SFX / BGM 来源
+- 🎮 [核心游戏流程](docs/GAME_FLOW.md) —— 启动到战斗的完整 UI / 数据流
+- 👥 [玩家需求与优化](docs/PLAYER_UX.md) —— 5 类玩家画像 + 12 项痛点 + 优化矩阵
+- ✅ [M1 启动 Checklist](docs/M1_CHECKLIST.md) —— 第 1 周逐项执行清单
+- 🚀 [M1 Day 0 README](docs/M1_DAY0_README.md) —— 开工前 4 小时准备指南
+- 🦀 [Rust 架构规划](docs/RUST_ARCHITECTURE.md) —— 模块分层 / 数据结构 / 设计模式 / 14 天实施
 
 ---
 
@@ -108,12 +117,12 @@ Voidbound/
 
 ---
 
-## 灵感来源
+## 灵感来源（v1.1 调整）
 
 - 《暗黑破坏神 2 重制版》—— 装备系统 / 技能树 / 视觉风格
-- 《Hades》—— 肉鸽循环 / build 变异
+- 《Hades》—— 肉鸽循环 / 双轨符文变异
 - 《死亡细胞》—— 随机地图 / 高密度战斗
-- 《Vampire Survivors》—— 单局时长 / 自动化战斗感
+- 《Path of Exile》—— 全套难度系统 / 词条密度
 
 ---
 

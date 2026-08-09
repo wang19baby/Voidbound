@@ -1,0 +1,1060 @@
+{
+  "atlas": "icons",
+  "size": {
+    "width": 418,
+    "height": 730
+  },
+  "sprite_count": 105,
+  "sprites": [
+    {
+      "name": "arrowDown",
+      "file": "arrowDown.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrowLeft",
+      "file": "arrowLeft.png",
+      "x": 56,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrowRight",
+      "file": "arrowRight.png",
+      "x": 110,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrowUp",
+      "file": "arrowUp.png",
+      "x": 164,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "audioOff",
+      "file": "audioOff.png",
+      "x": 218,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "audioOn",
+      "file": "audioOn.png",
+      "x": 272,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "backward",
+      "file": "backward.png",
+      "x": 326,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barsHorizontal",
+      "file": "barsHorizontal.png",
+      "x": 380,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "barsVertical",
+      "file": "barsVertical.png",
+      "x": 434,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "basket",
+      "file": "basket.png",
+      "x": 488,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button1",
+      "file": "button1.png",
+      "x": 542,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button2",
+      "file": "button2.png",
+      "x": 596,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button3",
+      "file": "button3.png",
+      "x": 650,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonA",
+      "file": "buttonA.png",
+      "x": 704,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonB",
+      "file": "buttonB.png",
+      "x": 758,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonL",
+      "file": "buttonL.png",
+      "x": 812,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonL1",
+      "file": "buttonL1.png",
+      "x": 866,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonL2",
+      "file": "buttonL2.png",
+      "x": 920,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonR",
+      "file": "buttonR.png",
+      "x": 974,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonR1",
+      "file": "buttonR1.png",
+      "x": 1028,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonR2",
+      "file": "buttonR2.png",
+      "x": 1082,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonSelect",
+      "file": "buttonSelect.png",
+      "x": 1136,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonStart",
+      "file": "buttonStart.png",
+      "x": 1190,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonX",
+      "file": "buttonX.png",
+      "x": 1244,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "buttonY",
+      "file": "buttonY.png",
+      "x": 1298,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "cart",
+      "file": "cart.png",
+      "x": 1352,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "checkmark",
+      "file": "checkmark.png",
+      "x": 1406,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "contrast",
+      "file": "contrast.png",
+      "x": 1460,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "cross",
+      "file": "cross.png",
+      "x": 1514,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "door",
+      "file": "door.png",
+      "x": 1568,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "down",
+      "file": "down.png",
+      "x": 1622,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "downLeft",
+      "file": "downLeft.png",
+      "x": 1676,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "downRight",
+      "file": "downRight.png",
+      "x": 1730,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "exclamation",
+      "file": "exclamation.png",
+      "x": 1784,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "exitLeft",
+      "file": "exitLeft.png",
+      "x": 1838,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "exitRight",
+      "file": "exitRight.png",
+      "x": 1892,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "export",
+      "file": "export.png",
+      "x": 1946,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "fastForward",
+      "file": "fastForward.png",
+      "x": 2000,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "film",
+      "file": "film.png",
+      "x": 2054,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "forward",
+      "file": "forward.png",
+      "x": 2108,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gamepad",
+      "file": "gamepad.png",
+      "x": 2162,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gamepad1",
+      "file": "gamepad1.png",
+      "x": 2216,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gamepad2",
+      "file": "gamepad2.png",
+      "x": 2270,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gamepad3",
+      "file": "gamepad3.png",
+      "x": 2324,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gamepad4",
+      "file": "gamepad4.png",
+      "x": 2378,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "gear",
+      "file": "gear.png",
+      "x": 2432,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "home",
+      "file": "home.png",
+      "x": 2486,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "import",
+      "file": "import.png",
+      "x": 2540,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "information",
+      "file": "information.png",
+      "x": 2594,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "joystick",
+      "file": "joystick.png",
+      "x": 2648,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "joystickLeft",
+      "file": "joystickLeft.png",
+      "x": 2702,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "joystickRight",
+      "file": "joystickRight.png",
+      "x": 2756,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "joystickUp",
+      "file": "joystickUp.png",
+      "x": 2810,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "larger",
+      "file": "larger.png",
+      "x": 2864,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "leaderboardsComplex",
+      "file": "leaderboardsComplex.png",
+      "x": 2918,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "leaderboardsSimple",
+      "file": "leaderboardsSimple.png",
+      "x": 2972,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "locked",
+      "file": "locked.png",
+      "x": 3026,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "massiveMultiplayer",
+      "file": "massiveMultiplayer.png",
+      "x": 3080,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "medal1",
+      "file": "medal1.png",
+      "x": 3134,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "medal2",
+      "file": "medal2.png",
+      "x": 3188,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "menuGrid",
+      "file": "menuGrid.png",
+      "x": 3242,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "menuList",
+      "file": "menuList.png",
+      "x": 3296,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "minus",
+      "file": "minus.png",
+      "x": 3350,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "mouse",
+      "file": "mouse.png",
+      "x": 3404,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "multiplayer",
+      "file": "multiplayer.png",
+      "x": 3458,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "musicOff",
+      "file": "musicOff.png",
+      "x": 3512,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "musicOn",
+      "file": "musicOn.png",
+      "x": 3566,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "next",
+      "file": "next.png",
+      "x": 3620,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "open",
+      "file": "open.png",
+      "x": 3674,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pause",
+      "file": "pause.png",
+      "x": 3728,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "phone",
+      "file": "phone.png",
+      "x": 3782,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "plus",
+      "file": "plus.png",
+      "x": 3836,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "power",
+      "file": "power.png",
+      "x": 3890,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "previous",
+      "file": "previous.png",
+      "x": 3944,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "question",
+      "file": "question.png",
+      "x": 3998,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "return",
+      "file": "return.png",
+      "x": 4052,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "rewind",
+      "file": "rewind.png",
+      "x": 4106,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "save",
+      "file": "save.png",
+      "x": 4160,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scrollHorizontal",
+      "file": "scrollHorizontal.png",
+      "x": 4214,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scrollVertical",
+      "file": "scrollVertical.png",
+      "x": 4268,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "share1",
+      "file": "share1.png",
+      "x": 4322,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "share2",
+      "file": "share2.png",
+      "x": 4376,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "signal1",
+      "file": "signal1.png",
+      "x": 4430,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "signal2",
+      "file": "signal2.png",
+      "x": 4484,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "signal3",
+      "file": "signal3.png",
+      "x": 4538,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "singleplayer",
+      "file": "singleplayer.png",
+      "x": 4592,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "smaller",
+      "file": "smaller.png",
+      "x": 4646,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "star",
+      "file": "star.png",
+      "x": 4700,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "stop",
+      "file": "stop.png",
+      "x": 4754,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "tablet",
+      "file": "tablet.png",
+      "x": 4808,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "target",
+      "file": "target.png",
+      "x": 4862,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "trashcan",
+      "file": "trashcan.png",
+      "x": 4916,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "trashcanOpen",
+      "file": "trashcanOpen.png",
+      "x": 4970,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "trophy",
+      "file": "trophy.png",
+      "x": 5024,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "unlocked",
+      "file": "unlocked.png",
+      "x": 5078,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "up",
+      "file": "up.png",
+      "x": 5132,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "upLeft",
+      "file": "upLeft.png",
+      "x": 5186,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "upRight",
+      "file": "upRight.png",
+      "x": 5240,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "video",
+      "file": "video.png",
+      "x": 5294,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "warning",
+      "file": "warning.png",
+      "x": 5348,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wrench",
+      "file": "wrench.png",
+      "x": 5402,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "zoom",
+      "file": "zoom.png",
+      "x": 5456,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "zoomDefault",
+      "file": "zoomDefault.png",
+      "x": 5510,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "zoomIn",
+      "file": "zoomIn.png",
+      "x": 5564,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "zoomOut",
+      "file": "zoomOut.png",
+      "x": 5618,
+      "y": 2,
+      "frame_width": 50,
+      "frame_height": 50,
+      "frames": 1,
+      "is_animated": false
+    }
+  ]
+}

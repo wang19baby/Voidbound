@@ -1,0 +1,98 @@
+# Voidbound 4 主题调色板(16 色 / 主题)
+# 用于 AI 生成 prompt 提示 + post_process.py 量化
+
+version: 1
+description: 4 主题调色板规范
+
+palettes:
+  forest:
+    name_cn: 暗黑森林
+    name_en: Dark Forest
+    primary_color: "#1a3a1a"
+    prompt_hint: "dark green forest color palette"
+    colors:
+      - "#1a3a1a"  # 主色 - 深绿草地
+      - "#2d5a2d"  # 辅色 - 中绿
+      - "#3d6a3d"
+      - "#5fa55f"  # 高光 - 亮绿
+      - "#4a2d1a"  # 棕树干
+      - "#5a3d2d"
+      - "#6d4d3d"
+      - "#8b5a3a"
+      - "#1a1a1a"  # 暗影
+      - "#2d2d2d"
+      - "#4a4a4a"
+      - "#d4af37"  # 强调 - 萤火虫金
+      - "#e8c547"
+      - "#f5f5f5"
+      - "#8b4513"
+      - "#3a2d1a"
+
+  desert:
+    name_cn: 灼热沙漠
+    name_en: Scorching Desert
+    primary_color: "#8b4513"
+    prompt_hint: "warm orange desert color palette"
+    colors:
+      - "#8b4513"  # 主色 - 暗橙沙
+      - "#a55a1a"
+      - "#daa520"  # 辅色 - 中黄
+      - "#ffd700"  # 高光 - 亮金
+      - "#5a1a1a"  # 红岩
+      - "#7a2d1a"
+      - "#3d1a0a"
+      - "#f5f5dc"  # 骸骨白
+      - "#1a0a05"  # 暗影
+      - "#2d1a10"
+      - "#5a3a1a"
+      - "#ff4500"  # 强调 - 火焰橙
+      - "#ff6a33"
+      - "#ffa07a"
+      - "#ffe4b5"
+      - "#4a2d0a"
+
+  frozen:
+    name_cn: 冰冻废墟
+    name_en: Frozen Ruins
+    primary_color: "#1e3a5f"
+    prompt_hint: "cold blue ice color palette"
+    colors:
+      - "#1e3a5f"  # 主色 - 深蓝冰
+      - "#2d4d7a"
+      - "#4a7ab5"  # 辅色 - 中蓝
+      - "#87ceeb"  # 天蓝
+      - "#e8f4ff"  # 高光 - 亮白
+      - "#708090"  # 灰石
+      - "#5a7080"
+      - "#3d4d5a"
+      - "#d3d3d3"  # 雪
+      - "#a8b5c5"
+      - "#1a2a3a"  # 暗影
+      - "#0a1525"
+      - "#5fa5d4"  # 强调 - 冰晶蓝
+      - "#a8d4e8"
+      - "#ffffff"
+      - "#4a4a4a"
+
+  void:
+    name_cn: 虚空深渊
+    name_en: Void Abyss
+    primary_color: "#2d0a3d"
+    prompt_hint: "dark purple cosmic color palette"
+    colors:
+      - "#2d0a3d"  # 主色 - 深紫
+      - "#3d1a4d"
+      - "#5a1a7a"  # 辅色 - 中紫
+      - "#7a2a9a"
+      - "#e85ad0"  # 高光 - 亮粉
+      - "#0a0a0a"  # 纯黑
+      - "#1a1a1a"
+      - "#2d2d2d"
+      - "#4a1a2d"  # 血紫
+      - "#7a2a4d"
+      - "#1a0a2d"  # 暗影
+      - "#3a2d4d"
+      - "#ff00ff"  # 强调 - 赛博粉
+      - "#ff66ff"
+      - "#ffaaff"
+      - "#4a3d5a"

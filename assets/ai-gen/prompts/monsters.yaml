@@ -1,0 +1,170 @@
+# Voidbound 怪物 AI 生成提示词
+# 30+ 怪物分主题组织
+
+version: 1
+description: 怪物 sprite AI 生成模板
+
+base_prefix: >-
+  pixel art, 32x32 sprite, top-down view, monster sprite,
+  clean pixel art, low color count, fantasy RPG creature,
+  transparent background, dark mood
+
+base_negative: >-
+  smooth gradient, photorealistic, 3d render, blurry,
+  watermark, signature, modern, sci-fi, cute kawaii
+
+lora_weight: 0.85
+
+themes:
+  forest:
+    name_cn: 暗黑森林
+    palette: forest
+    monsters:
+      zombie_infant:
+        name_cn: 僵尸幼崽
+        base: "small rotting humanoid, infant zombie, green skin, hanging entrails, slow shamble"
+        attacks: "melee bite"
+        ai: "chase"
+      poison_spider:
+        name_cn: 毒蜘蛛
+        base: "large black spider, purple spots on back, dripping venom, 8 legs"
+        attacks: "ranged venom spit"
+        ai: "kite"
+      shadow_wolf:
+        name_cn: 暗影狼
+        base: "translucent black wolf, glowing blue eyes, shadowy form"
+        attacks: "melee tear + summon shadow clone"
+        ai: "pack swarm"
+      plague_bear:  # 精英
+        name_cn: 瘟疫熊
+        base: "large diseased bear, green plague particles swirling, oozing sores"
+        attacks: "melee swipe + plague aura DOT"
+        ai: "aggressive"
+        elite: true
+      venom_queen:  # 精英
+        name_cn: 剧毒蜘蛛女王
+        base: "huge purple-black spider queen, 2x size, glowing abdomen, web traps"
+        attacks: "summon spiderlings + venom spit + web net"
+        ai: "summoner"
+        elite: true
+      fallen_druid:  # BOSS
+        name_cn: 堕落德鲁伊
+        base: "corrupted giant druid, vines缠绕, purple glowing eyes, twisted nature form"
+        attacks: "summon treants + thorn aura + nature beam"
+        ai: "boss 3-phase"
+        boss: true
+
+  desert:
+    name_cn: 灼热沙漠
+    palette: desert
+    monsters:
+      sand_scorpion:
+        name_cn: 沙蝎
+        base: "large golden scorpion, glowing orange tail stinger, sand-crusted claws"
+        attacks: "melee sting + sand spit"
+        ai: "ambush"
+      fire_lizard:
+        name_cn: 火蜥蜴
+        base: "red lizard, body covered in flames, flame tail, hot to the touch"
+        attacks: "melee flame breath + tail whip"
+        ai: "melee + aoe"
+      skeleton_warrior:
+        name_cn: 骷髅兵
+        base: "white skeleton soldier, rusty curved sword, tattered cloth armor"
+        attacks: "melee slash"
+        ai: "static"
+      fire_giant:  # 精英
+        name_cn: 火焰巨人
+        base: "huge 3x size magma giant, lava cracks, flame crown, molten rock armor"
+        attacks: "flame shield + aoe burn + regen"
+        ai: "aggressive"
+        elite: true
+      flame_phoenix:  # 精英
+        name_cn: 烈焰凤凰
+        base: "burning phoenix, wings of fire, golden plumage, eternal flame crown"
+        attacks: "flame dive + fire nova + rebirth once"
+        ai: "fly + dive"
+        elite: true
+      cursed_pharaoh:  # BOSS
+        name_cn: 被诅咒的法老
+        base: "golden mummy pharaoh, bandages缠绕, glowing red eyes, cursed crown"
+        attacks: "summon mummies + sandstorm + cursed spirits"
+        ai: "boss 3-phase"
+        boss: true
+
+  frozen:
+    name_cn: 冰冻废墟
+    palette: frozen
+    monsters:
+      frost_elemental:
+        name_cn: 冰霜元素
+        base: "blue translucent humanoid, glowing cold core, ice crystals forming"
+        attacks: "ranged ice bolt + ice wall"
+        ai: "ranged + summon wall"
+      ice_zombie:
+        name_cn: 寒冰僵尸
+        base: "blue frozen zombie, frost-covered, ice claws, slow movement"
+        attacks: "melee ice claws + frost aura"
+        ai: "slow chase"
+      werewolf:
+        name_cn: 狼人
+        base: "grey-white werewolf, red eyes, sharp claws, howling pose"
+        attacks: "melee claw + howl buff"
+        ai: "pack coordinated"
+      frost_lich:  # 精英
+        name_cn: 霜巫妖
+        base: "ice-robed lich, holding ice staff, frost crown, cold aura"
+        attacks: "frost nova + summon skeletons + ice immunity"
+        ai: "caster"
+        elite: true
+      ancient_ice_dragon:  # 精英
+        name_cn: 远古冰龙
+        base: "huge ice dragon, frozen scales, breath weapon, ancient wise eyes"
+        attacks: "ice breath + tail sweep + frost bite"
+        ai: "fly + breath"
+        elite: true
+      fallen_angel:  # BOSS
+        name_cn: 堕落天使
+        base: "white angel, broken wings, black glowing eyes, holy-demonic fusion"
+        attacks: "sword slash + holy light + dark phase transition"
+        ai: "boss 3-phase"
+        boss: true
+
+  void:
+    name_cn: 虚空深渊
+    palette: void
+    monsters:
+      void_walker:
+        name_cn: 虚空行者
+        base: "black void wraith, floating, glowing purple eyes, no fixed form"
+        attacks: "void ray + short-range teleport"
+        ai: "kite + teleport"
+      chaos_demon:
+        name_cn: 混沌恶魔
+        base: "twisted multi-armed demon, purple skin, chaos flames"
+        attacks: "multi-target melee + chaos fire"
+        ai: "melee swarm"
+      nightmare:
+        name_cn: 梦魇
+        base: "black nightmare beast, dream-like form, floating, terror aura"
+        attacks: "psychic attack + fear curse"
+        ai: "psychic + slow"
+      abyss_lord:  # 精英
+        name_cn: 深渊领主
+        base: "2x size multi-eyed demon lord, void crown, shadow tendrils"
+        attacks: "phase shift + void breath + summon imps"
+        ai: "teleport + summon"
+        elite: true
+      void_whelp:  # 精英
+        name_cn: 虚空幼龙
+        base: "young void dragon, dark purple scales, reality-distortion aura"
+        attacks: "void breath + tail whip + phase"
+        ai: "fly + breath"
+        elite: true
+      void_lord:  # BOSS(最终)
+        name_cn: 虚空之主
+        base: "massive formless shadow, multiple eyes and arms, cosmic horror"
+        attacks: "summon voidlings + reality warp + invulnerability phase"
+        ai: "boss 4-phase"
+        boss: true
+        final_boss: true

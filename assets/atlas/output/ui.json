@@ -1,0 +1,830 @@
+{
+  "atlas": "ui",
+  "size": {
+    "width": 1360,
+    "height": 1178
+  },
+  "sprite_count": 82,
+  "sprites": [
+    {
+      "name": "arrow_basic_e",
+      "file": "arrow_basic_e.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_e_small",
+      "file": "arrow_basic_e_small.png",
+      "x": 38,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_n",
+      "file": "arrow_basic_n.png",
+      "x": 66,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_n_small",
+      "file": "arrow_basic_n_small.png",
+      "x": 102,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_s",
+      "file": "arrow_basic_s.png",
+      "x": 130,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_s_small",
+      "file": "arrow_basic_s_small.png",
+      "x": 166,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_w",
+      "file": "arrow_basic_w.png",
+      "x": 194,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_basic_w_small",
+      "file": "arrow_basic_w_small.png",
+      "x": 230,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_e",
+      "file": "arrow_decorative_e.png",
+      "x": 258,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_e_small",
+      "file": "arrow_decorative_e_small.png",
+      "x": 294,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_n",
+      "file": "arrow_decorative_n.png",
+      "x": 322,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_n_small",
+      "file": "arrow_decorative_n_small.png",
+      "x": 358,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_s",
+      "file": "arrow_decorative_s.png",
+      "x": 386,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_s_small",
+      "file": "arrow_decorative_s_small.png",
+      "x": 422,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_w",
+      "file": "arrow_decorative_w.png",
+      "x": 450,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "arrow_decorative_w_small",
+      "file": "arrow_decorative_w_small.png",
+      "x": 486,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 24,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_rectangle_border",
+      "file": "button_rectangle_border.png",
+      "x": 514,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_depth_border",
+      "file": "button_rectangle_depth_border.png",
+      "x": 710,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_depth_flat",
+      "file": "button_rectangle_depth_flat.png",
+      "x": 906,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_depth_gloss",
+      "file": "button_rectangle_depth_gloss.png",
+      "x": 1102,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_depth_gradient",
+      "file": "button_rectangle_depth_gradient.png",
+      "x": 1298,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_depth_line",
+      "file": "button_rectangle_depth_line.png",
+      "x": 1494,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_flat",
+      "file": "button_rectangle_flat.png",
+      "x": 1690,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_gloss",
+      "file": "button_rectangle_gloss.png",
+      "x": 1886,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_gradient",
+      "file": "button_rectangle_gradient.png",
+      "x": 2082,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_rectangle_line",
+      "file": "button_rectangle_line.png",
+      "x": 2278,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 3,
+      "is_animated": true
+    },
+    {
+      "name": "button_round_border",
+      "file": "button_round_border.png",
+      "x": 2474,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_depth_border",
+      "file": "button_round_depth_border.png",
+      "x": 2542,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_depth_flat",
+      "file": "button_round_depth_flat.png",
+      "x": 2610,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_depth_gloss",
+      "file": "button_round_depth_gloss.png",
+      "x": 2678,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_depth_gradient",
+      "file": "button_round_depth_gradient.png",
+      "x": 2746,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_depth_line",
+      "file": "button_round_depth_line.png",
+      "x": 2814,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_flat",
+      "file": "button_round_flat.png",
+      "x": 2882,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_gloss",
+      "file": "button_round_gloss.png",
+      "x": 2950,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_gradient",
+      "file": "button_round_gradient.png",
+      "x": 3018,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_round_line",
+      "file": "button_round_line.png",
+      "x": 3086,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_border",
+      "file": "button_square_border.png",
+      "x": 3154,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_depth_border",
+      "file": "button_square_depth_border.png",
+      "x": 3222,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_depth_flat",
+      "file": "button_square_depth_flat.png",
+      "x": 3290,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_depth_gloss",
+      "file": "button_square_depth_gloss.png",
+      "x": 3358,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_depth_gradient",
+      "file": "button_square_depth_gradient.png",
+      "x": 3426,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_depth_line",
+      "file": "button_square_depth_line.png",
+      "x": 3494,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_flat",
+      "file": "button_square_flat.png",
+      "x": 3562,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_gloss",
+      "file": "button_square_gloss.png",
+      "x": 3630,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_gradient",
+      "file": "button_square_gradient.png",
+      "x": 3698,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "button_square_line",
+      "file": "button_square_line.png",
+      "x": 3766,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_round_color",
+      "file": "check_round_color.png",
+      "x": 3834,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_round_grey",
+      "file": "check_round_grey.png",
+      "x": 3870,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_round_grey_circle",
+      "file": "check_round_grey_circle.png",
+      "x": 3906,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_round_round_circle",
+      "file": "check_round_round_circle.png",
+      "x": 3942,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_color",
+      "file": "check_square_color.png",
+      "x": 3978,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_color_checkmark",
+      "file": "check_square_color_checkmark.png",
+      "x": 4014,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_color_cross",
+      "file": "check_square_color_cross.png",
+      "x": 4050,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_color_square",
+      "file": "check_square_color_square.png",
+      "x": 4086,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_grey",
+      "file": "check_square_grey.png",
+      "x": 4122,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_grey_checkmark",
+      "file": "check_square_grey_checkmark.png",
+      "x": 4158,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_grey_cross",
+      "file": "check_square_grey_cross.png",
+      "x": 4194,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "check_square_grey_square",
+      "file": "check_square_grey_square.png",
+      "x": 4230,
+      "y": 2,
+      "frame_width": 32,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_checkmark",
+      "file": "icon_checkmark.png",
+      "x": 4266,
+      "y": 2,
+      "frame_width": 20,
+      "frame_height": 18,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_circle",
+      "file": "icon_circle.png",
+      "x": 4290,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_cross",
+      "file": "icon_cross.png",
+      "x": 4310,
+      "y": 2,
+      "frame_width": 18,
+      "frame_height": 18,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_outline_checkmark",
+      "file": "icon_outline_checkmark.png",
+      "x": 4332,
+      "y": 2,
+      "frame_width": 20,
+      "frame_height": 18,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_outline_circle",
+      "file": "icon_outline_circle.png",
+      "x": 4356,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_outline_cross",
+      "file": "icon_outline_cross.png",
+      "x": 4376,
+      "y": 2,
+      "frame_width": 18,
+      "frame_height": 18,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_outline_square",
+      "file": "icon_outline_square.png",
+      "x": 4398,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "icon_square",
+      "file": "icon_square.png",
+      "x": 4418,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_hangle",
+      "file": "slide_hangle.png",
+      "x": 4438,
+      "y": 2,
+      "frame_width": 24,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_horizontal_color",
+      "file": "slide_horizontal_color.png",
+      "x": 4466,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 6,
+      "is_animated": true
+    },
+    {
+      "name": "slide_horizontal_color_section",
+      "file": "slide_horizontal_color_section.png",
+      "x": 4566,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_horizontal_color_section_wide",
+      "file": "slide_horizontal_color_section_wide.png",
+      "x": 4586,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 2,
+      "is_animated": true
+    },
+    {
+      "name": "slide_horizontal_grey",
+      "file": "slide_horizontal_grey.png",
+      "x": 4622,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 6,
+      "is_animated": true
+    },
+    {
+      "name": "slide_horizontal_grey_section",
+      "file": "slide_horizontal_grey_section.png",
+      "x": 4722,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_horizontal_grey_section_wide",
+      "file": "slide_horizontal_grey_section_wide.png",
+      "x": 4742,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 2,
+      "is_animated": true
+    },
+    {
+      "name": "slide_vertical_color",
+      "file": "slide_vertical_color.png",
+      "x": 4778,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 96,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_vertical_color_section",
+      "file": "slide_vertical_color_section.png",
+      "x": 4798,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_vertical_color_section_wide",
+      "file": "slide_vertical_color_section_wide.png",
+      "x": 4818,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_vertical_grey",
+      "file": "slide_vertical_grey.png",
+      "x": 4838,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 96,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_vertical_grey_section",
+      "file": "slide_vertical_grey_section.png",
+      "x": 4858,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slide_vertical_grey_section_wide",
+      "file": "slide_vertical_grey_section_wide.png",
+      "x": 4878,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 32,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "star",
+      "file": "star.png",
+      "x": 4898,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 60,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "star_outline",
+      "file": "star_outline.png",
+      "x": 4966,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 60,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "star_outline_depth",
+      "file": "star_outline_depth.png",
+      "x": 5034,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 60,
+      "frames": 1,
+      "is_animated": false
+    }
+  ]
+}

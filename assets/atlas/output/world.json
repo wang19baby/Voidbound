@@ -1,0 +1,50 @@
+{
+  "atlas": "world",
+  "size": {
+    "width": 82,
+    "height": 20
+  },
+  "sprite_count": 4,
+  "sprites": [
+    {
+      "name": "floor",
+      "file": "floor.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "grass",
+      "file": "grass.png",
+      "x": 22,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall",
+      "file": "wall.png",
+      "x": 42,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wall_alt",
+      "file": "wall_alt.png",
+      "x": 62,
+      "y": 2,
+      "frame_width": 16,
+      "frame_height": 16,
+      "frames": 1,
+      "is_animated": false
+    }
+  ]
+}

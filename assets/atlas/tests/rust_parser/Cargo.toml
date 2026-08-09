@@ -1,0 +1,19 @@
+[package]
+name = "voidbound_atlas_parser"
+version = "0.1.0"
+edition = "2021"
+description = "Voidbound sprite atlas .bin 格式解析器(Rust 端)"
+license = "MIT"
+
+# 测试用,无需 [lib] 依赖
+# src-tauri/ 真正初始化后,这个 parser 会移到那里
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+flate2 = "1.0"
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]

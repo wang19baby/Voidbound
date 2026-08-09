@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"rm -f /d/work_space/personal_workspace/Voidbound/assets/ai-gen/downloads/lpc-character-generator.zip && cd /d/work_space/personal_workspace/Voidbound/assets/ai-gen/downloads && GIT_TERMINA...",
+  "error": "Exit code 143\nCommand timed out after 5m 0s",
+  "timestamp": "2026-08-08T16:05:29.296Z",
+  "retry_count": 1
+}

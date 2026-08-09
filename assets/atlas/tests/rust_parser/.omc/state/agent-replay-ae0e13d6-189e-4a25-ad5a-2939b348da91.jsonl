@@ -1,0 +1,10 @@
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_start","parent_mode":"none"}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":99358}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":107530}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":110554}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":113150}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":115663}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":117982}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":120145}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":122039}
+{"t":0,"agent":"a9188df","agent_type":"architect","event":"agent_stop","success":true,"duration_ms":124203}

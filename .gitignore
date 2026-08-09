@@ -51,3 +51,22 @@ saves/
 # 测试覆盖
 coverage/
 *.lcov
+
+# AI 生成素材
+assets/ai-gen/output/
+assets/ai-gen/**/_processed/
+assets/ai-gen/**/sheet_*.png
+
+# 第三方下载原始包 (解包即可, 不入库)
+assets/ai-gen/downloads/
+*.zip
+game-icons.zip
+particle-pack.zip
+ui-pack.zip
+lpc-base-assets.zip
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

@@ -1,0 +1,142 @@
+# Voidbound 6 职业 AI 生成提示词
+# 用法:被 batch_generate.py 读取
+# 提示词模板基于 SDXL + PixelArtXL LoRA
+
+version: 1
+description: 6 职业 sprite AI 生成模板
+
+# 全局通用正向提示词前缀
+base_prefix: >-
+  pixel art, 32x32 sprite, top-down view, character sprite,
+  clean pixel art, low color count, no anti-aliasing,
+  fantasy RPG style, transparent background
+
+# 全局通用反向提示词
+base_negative: >-
+  smooth gradient, photorealistic, 3d render, blurry,
+  deformed hands, extra limbs, watermark, signature,
+  high resolution, modern clothing, sci-fi
+
+# LoRA 权重建议
+lora_weight: 0.85
+
+classes:
+  # ============================================
+  barbarian:
+    name_cn: 野蛮人
+    name_en: Barbarian
+    role: 近战坦克
+    primary_color: "dark red brown leather (#8b3a1a)"
+    base: >-
+      muscular male warrior, red color scheme, leather armor,
+      holding large battle axe, barbarian warrior, fantasy RPG,
+      strong facial features, wild hair
+    poses:
+      - {name: standing, suffix: "standing idle pose, full body visible, looking at camera"}
+      - {name: walking, suffix: "walking animation pose, mid-stride"}
+      - {name: attacking, suffix: "swinging battle axe overhead attack pose"}
+    theme_tints:
+      forest: "dark forest ambient lighting, green mossy atmosphere"
+      desert: "hot desert sun, warm orange ambient"
+      frozen: "cold blue ice ambient, breath visible"
+      void: "purple void energy cracks, dark cosmic ambient"
+
+  # ============================================
+  paladin:
+    name_cn: 圣骑士
+    name_en: Paladin
+    role: 坦克 / 辅助
+    primary_color: "gold white holy (#d4af37)"
+    base: >-
+      holy knight in golden armor, white cape, holding war hammer and shield,
+      paladin warrior, fantasy RPG, golden helmet with plume,
+      divine light aura, righteous expression
+    poses:
+      - {name: standing, suffix: "standing in defensive stance, shield raised"}
+      - {name: walking, suffix: "walking forward pose, cape flowing"}
+      - {name: attacking, suffix: "hammer smite attack pose, holy light burst"}
+    theme_tints:
+      forest: "divine light through forest canopy"
+      desert: "sun-blessed desert warrior"
+      frozen: "frozen holy knight, ice on armor"
+      void: "corrupted paladin, golden cracks against void"
+
+  # ============================================
+  sorceress:
+    name_cn: 法师
+    name_en: Sorceress
+    role: 远程玻璃炮
+    primary_color: "blue purple magic (#3a7bd5)"
+    base: >-
+      female mage in blue robes, pointed wizard hat,
+      holding glowing magic staff, sorceress, fantasy RPG,
+      arcane energy swirling, mystical expression
+    poses:
+      - {name: standing, suffix: "standing with staff, magic orb floating above"}
+      - {name: walking, suffix: "walking with robes flowing"}
+      - {name: attacking, suffix: "casting fireball from staff, magic burst"}
+    theme_tints:
+      forest: "forest sorceress, vines growing on staff"
+      desert: "desert mage, sand swirling around"
+      frozen: "ice mage, frost crystals forming"
+      void: "void sorceress, dark magic corruption"
+
+  # ============================================
+  necromancer:
+    name_cn: 死灵法师
+    name_en: Necromancer
+    role: 召唤 / 诅咒
+    primary_color: "purple black dark (#5a1a7a)"
+    base: >-
+      dark necromancer in tattered purple robes, skull shoulder pad,
+      holding bone staff with skull, necromancer, fantasy RPG,
+      green ghost energy, dark hood, skeletal minions nearby
+    poses:
+      - {name: standing, suffix: "standing with arms raised, summoning pose"}
+      - {name: walking, suffix: "walking, robe dragging on ground"}
+      - {name: attacking, suffix: "casting dark curse, purple magic circle"}
+    theme_tints:
+      forest: "forest necromancer, dead trees around"
+      desert: "desert necromancer, mummy minions"
+      frozen: "frozen necromancer, ice-bound skeletons"
+      void: "void necromancer, pure dark energy"
+
+  # ============================================
+  ranger:
+    name_cn: 游侠
+    name_en: Ranger
+    role: 远程物理
+    primary_color: "green brown nature (#3a8b3a)"
+    base: >-
+      female ranger archer in green leather armor, hooded cloak,
+      holding elven bow with quiver of arrows, ranger, fantasy RPG,
+      forest scout, sharp eyes, leather boots
+    poses:
+      - {name: standing, suffix: "standing with bow drawn slightly"}
+      - {name: walking, suffix: "walking through forest, hood up"}
+      - {name: attacking, suffix: "drawing bow, arrow nocked, aiming"}
+    theme_tints:
+      forest: "forest ranger, leaves in hair"
+      desert: "desert scout, sand-colored cloak"
+      frozen: "frozen ranger, fur-lined cloak"
+      void: "void hunter, dark purple cloak"
+
+  # ============================================
+  assassin:
+    name_cn: 刺客
+    name_en: Assassin
+    role: 高速爆发
+    primary_color: "black red stealth (#1a1a1a)"
+    base: >-
+      shadowy assassin in black leather armor, red face mask,
+      dual wielding daggers, assassin, fantasy RPG,
+      crouched low pose, hooded, silent killer
+    poses:
+      - {name: standing, suffix: "standing in shadow, daggers ready"}
+      - {name: walking, suffix: "sneaking pose, low to ground"}
+      - {name: attacking, suffix: "dual dagger strike pose, motion blur"}
+    theme_tints:
+      forest: "forest assassin, leaf camouflage"
+      desert: "desert assassin, sand-colored wraps"
+      frozen: "frozen assassin, ice daggers"
+      void: "void assassin, fully shadowed"

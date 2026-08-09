@@ -1,0 +1,58 @@
+[package]
+name = "voidbound"
+version = "0.1.0"
+description = "Voidbound - 2D Top-down ARPG Roguelite"
+authors = ["wang19"]
+edition = "2021"
+rust-version = "1.77"
+
+# 二进制入口(对应 src/main.rs)
+[[bin]]
+name = "voidbound"
+path = "src/main.rs"
+
+# 库(供测试和集成用)
+[lib]
+name = "voidbound"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.2", features = [] }
+
+[dependencies]
+# Tauri 2.2 先行版 (v1.1 D-13 已确认)
+tauri = { version = "2.2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+glam = "0.29"
+
+# 共享环形缓冲 (v1.1 D-02 混合主循环核心)
+ringbuf = "0.4"
+parking_lot = "0.12"
+
+# 加密随机
+rand = "0.8"
+
+# 日志
+log = "0.4"
+env_logger = "0.11"
+
+# 错误处理
+thiserror = "1"
+anyhow = "1"
+
+# 图集二进制解析(本地 path crate, 与 tests/rust_parser 共享同一份源码)
+voidbound_atlas_parser = { path = "../assets/atlas/tests/rust_parser", features = ["serde"] }
+base64 = "0.22"
+flate2 = "1.0"
+
+[dev-dependencies]
+# 单元测试 + 集成测试
+flate2 = "1.0"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
