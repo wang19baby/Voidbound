@@ -209,8 +209,18 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Tab') {
     e.preventDefault();
     state.equipmentOpen = !state.equipmentOpen;
-    state.paused = state.equipmentOpen;  // 面板打开 = 暂停世界 (保留 pause 分支 UI)
     inf('ui', state.equipmentOpen ? 'equipment panel open' : 'equipment panel closed');
+    return;
+  }
+  // Esc (未暂停, 无面板): 打开暂停菜单
+  if (!state.paused && e.key === 'Escape') {
+    state.paused = true;
+    inf('gl', 'paused');
+    return;
+  }
+  // Esc (装备面板打开): 只关面板
+  if (state.equipmentOpen && e.key === 'Escape') {
+    state.equipmentOpen = false;
     return;
   }
   // 暂停/设置菜单: 阻断游戏按键
@@ -224,11 +234,6 @@ window.addEventListener('keydown', (e) => {
       state.equipmentOpen = false;
       state.titleOpen = true;
       inf('ui', '返回主菜单');
-      return;
-    }
-    // 装备面板打开: 只响应关闭 (Escape/Tab)
-    if (state.equipmentOpen) {
-      if (k === 'escape') { state.equipmentOpen = false; state.paused = false; inf('gl', 'resumed'); }
       return;
     }
     if (state.settingsOpen) {
@@ -256,7 +261,6 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (k === 'escape') {
-      if (state.equipmentOpen) { state.equipmentOpen = false; state.paused = false; return; }
       if (state.settingsOpen) state.settingsOpen = false;
       else state.paused = false;
       inf('gl', state.paused ? 'paused' : 'resumed');
@@ -287,15 +291,17 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (e.key === 'q' || e.key === 'Q') {
+  // 技能键: Q=火球 F=多重火球(原W槽, 避免 WASD 冲突) E=回血 R=大招
+  const skillByKey: Record<string, SkillSlot> = { q: 'Q', f: 'W', e: 'E', r: 'R' };
+  const skillSlot = skillByKey[e.key.toLowerCase()];
+  if (skillSlot) {
     const nowSec = performance.now() / 1000;
-    // 技能方向 = 鼠标位置 - 玩家中心, 转换为世界方向
     const aimDir = mouseAimDirection(state, mouse.state());
-    if (!tryCastSlot('Q', state, aimDir, nowSec)) {
-      wrn('skill', 'cast Q failed (cd or mp)');
+    if (!tryCastSlot(skillSlot, state, aimDir, nowSec)) {
+      wrn('skill', `cast ${skillSlot} failed (cd or mp)`);
       return;
     }
-    invoke('play_sfx', { name: 'fireball' }).catch(() => {});
+    if (skillSlot === 'Q') invoke('play_sfx', { name: 'fireball' }).catch(() => {});
   }
   if (e.key === 'l' || e.key === 'L') {
     const order: LogLevel[] = ['DBG', 'INF', 'WRN'];
@@ -331,8 +337,8 @@ window.addEventListener('keydown', (e) => {
       difficulty: state.difficulty,
     }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
   }
-  if (e.key === 'r' || e.key === 'R') {
-    // 避免和 L (log level) 冲突; 这里只触发 read 不切换 log level
+  if (e.key === 'o' || e.key === 'O') {
+    // O=读档 (R 已让给大招)
     if (!(window as unknown as { __lvl?: LogLevel }).__lvl) {
       loadGame().then(d => {
         state.player.pos.x = d.player_x;
@@ -473,8 +479,8 @@ function loopImpl(now: number) {
   // 鼠标边沿 (本帧按下的按键)
   mouse.sync();
 
-  // 暂停时: 跳过游戏逻辑更新, 但仍渲染当前帧 (让 PAUSED 文字画在最新画面上)
-  if (state.paused) {
+  // 暂停或装备面板: 跳过游戏逻辑, 只渲染 (遮罩/面板画在 drawFrameToScreen)
+  if (state.paused || state.equipmentOpen) {
     drawFrame();
     mouse.reset();
     return; // 包装器统一 rAF
@@ -610,7 +616,7 @@ function drawTitle() {
   hudCtx.fillText('[R] 读取存档', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
   hudCtx.fillStyle = '#666';
   hudCtx.font = '14px monospace';
-  hudCtx.fillText('WASD 移动 · 左/右键 近战 · Q/W/E/R 技能 · Space 翻滚 · 1/2 药水 · Tab 装备 · Esc 暂停', hudCanvas.width / 2, hudCanvas.height / 2 + 140);
+  hudCtx.fillText('WASD 移动 · 左/右键 近战 · Q/F/E/R 技能 · Space 翻滚 · 1/2 药水 · P 存档 O 读档 · Tab 装备 · Esc 暂停', hudCanvas.width / 2, hudCanvas.height / 2 + 140);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
 
@@ -773,8 +779,8 @@ function drawFrameToScreen() {
   drawHud(gl, quad, state);
   drawHudOverlay(hudCtx, state);
 
-  // 暂停遮罩 (Canvas2D 文字层)
-  if (state.paused) {
+  // 暂停遮罩 (Canvas2D 文字层; 装备面板时全屏面板代替)
+  if (state.paused && !state.equipmentOpen) {
     hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hudCtx.textAlign = 'center';
@@ -785,7 +791,7 @@ function drawFrameToScreen() {
       hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
       hudCtx.font = '20px monospace';
       hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · P 存档 · O 读档', hudCanvas.width / 2, hudCanvas.height / 2);
       hudCtx.fillStyle = '#777';
       hudCtx.font = '14px monospace';
       hudCtx.fillText('Ctrl+1..6 分配技能点 · Ctrl+Q 退出(未实现)', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
@@ -811,7 +817,7 @@ function drawFrameToScreen() {
       hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}  [N] 循环`, hudCanvas.width / 2, hudCanvas.height / 2 + 32);
       hudCtx.fillStyle = '#999';
       hudCtx.font = '14px monospace';
-      hudCtx.fillText('WASD 移动 · 鼠标左/右键 近战 · Q 火球  W 连发  E 回血  R 大招', hudCanvas.width / 2, hudCanvas.height / 2 + 46);
+      hudCtx.fillText('WASD 移动 · 左/右键 近战 · Q 火球  F 连发  E 回血  R 大招 · P 存档  O 读档', hudCanvas.width / 2, hudCanvas.height / 2 + 46);
       hudCtx.fillText('Ctrl+1..6 技能点 · P 存档 · R 读档 · T 主题 · L 日志级别', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
       hudCtx.fillText('[Esc] 返回暂停菜单', hudCanvas.width / 2, hudCanvas.height / 2 + 100);
     }

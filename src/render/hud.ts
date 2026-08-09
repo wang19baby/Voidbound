@@ -25,7 +25,7 @@ const BAR_WIDTH = 240;
 const HUD_PAD = 16;
 const SLOT_SIZE = 40;
 const SLOT_GAP = 8;
-const SKILL_KEYS = ['Q', 'W', 'E', 'R'] as const;
+const SKILL_KEYS = ['Q', 'F', 'E', 'R'] as const;
 const SKILL_ICONS = ['buttonA', 'buttonB', 'buttonX', 'buttonY'] as const;
 const LOG_LINES = 6;
 
