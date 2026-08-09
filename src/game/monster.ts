@@ -352,13 +352,16 @@ export function damageMonster(
   spawnDamageNum(state, cx, m.pos.y - 6, `-${damage}`, isCrit ? CRIT_COLOR : DAMAGE_TYPE_COLORS[spec.type]);
   playSfxClient('hit');
   dbg('combat', `${spec.type} hit ${m.type} for ${damage} (hp=${m.hp.toFixed(0)})${isCrit ? ' CRIT' : ''}`);
-  // 击退: 从玩家推离 (US-016)
+  // 击退: 从玩家推离 (US-016), 随后沿墙滑移防穿墙
   if (spec.knockback) {
     const dx = m.pos.x - state.player.pos.x;
     const dy = m.pos.y - state.player.pos.y;
     const len = Math.hypot(dx, dy) || 1;
     m.pos.x = Math.max(0, Math.min(state.world.w - m.size.w, m.pos.x + (dx / len) * spec.knockback));
     m.pos.y = Math.max(0, Math.min(state.world.h - m.size.h, m.pos.y + (dy / len) * spec.knockback));
+    const slid = slideAxis({ x: m.pos.x, y: m.pos.y, w: m.size.w, h: m.size.h }, state.world.walls);
+    m.pos.x = slid.x;
+    m.pos.y = slid.y;
     m.hitFlash = 0.3;
   }
   if (m.hp <= 0) {
