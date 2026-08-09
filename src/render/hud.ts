@@ -8,6 +8,7 @@ import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, getActiveRune } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
+import { expNext } from '../game/player';
 import { worldToScreen } from '../game/state';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
@@ -61,21 +62,32 @@ export function drawHudOverlay(
   ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${MAX_MP}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 4);
   ctx2d.fillText(`SCORE ${state.score}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 16);
   ctx2d.fillText(`KILLS ${state.monsters.length}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 30);
+  // 经验条 (D-05): Lv / 进度
+  const need = expNext(state.player.level);
+  const frac = Math.min(1, (state.player.exp ?? 0) / need);
+  ctx2d.fillStyle = '#222';
+  ctx2d.fillRect(HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 34, BAR_WIDTH, 6);
+  ctx2d.fillStyle = '#b070ff';
+  ctx2d.fillRect(HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 34, BAR_WIDTH * frac, 6);
+  ctx2d.fillStyle = '#ccc';
+  ctx2d.font = '11px monospace';
+  ctx2d.fillText(`Lv${state.player.level} EXP ${state.player.exp ?? 0}/${need}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 44);
   // 技能等级 + 可用技能点
   ctx2d.font = '11px monospace';
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const slot = SKILL_KEYS[i];
-    ctx2d.fillText(`${slot} Lv${skillLevel(slot)}`, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 46);
+    ctx2d.fillText(`${slot} Lv${skillLevel(slot)}`, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 56);
     const r = skillRune(slot);
     if (r !== 'none' && r !== null) {
       const col = RUNE_DEFS[r].color;
       ctx2d.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      ctx2d.fillText(RUNE_DEFS[r].name, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 58);
+      ctx2d.fillText(RUNE_DEFS[r].name, HUD_PAD + i * (SLOT_SIZE + SLOT_GAP), HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 70);
       ctx2d.fillStyle = '#fff';
     }
   }
   ctx2d.fillStyle = '#ffd';
-  ctx2d.fillText(`技能点: ${state.player.skillPoints ?? 0} (Ctrl+1..6 分配)`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 74);
+  ctx2d.fillText(`技能点: ${state.player.skillPoints ?? 0} (Ctrl+1..6 分配)`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 84);
+  ctx2d.fillText(`药水 1:×${state.player.potions?.hp ?? 0}  2:×${state.player.potions?.mp ?? 0}  翻滚${state.player.dodgeCd > 0 ? ` ${state.player.dodgeCd.toFixed(1)}s` : ' ✓'}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 100);
   ctx2d.fillStyle = '#fff';
   const nowSec = performance.now() / 1000;
   ctx2d.fillText(

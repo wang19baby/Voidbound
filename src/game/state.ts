@@ -29,6 +29,14 @@ export interface Player {
   combat: CombatStats;
   /** 可分配技能点 (击杀 +1, Ctrl+1..6 分配) */
   skillPoints: number;
+  /** 药水瓶 (F-CBT-002: 1=回血 2=回蓝, 击杀 12% 掉落) */
+  potions: { hp: number; mp: number };
+  potionCd: number;
+  /** 经验 (击杀 score×2) */
+  exp: number;
+  /** 翻滚无敌剩余秒 (Space) / 冷却 */
+  dodgeT: number;
+  dodgeCd: number;
 }
 
 export interface Fireball {

@@ -9,14 +9,14 @@ const invoke = tauriInvoke;
 import { buildRenderResources } from './render/resources';
 import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
-import { updatePlayer, castFireball } from './game/player';
+import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, WORLD_W, WORLD_H } from './game/state';
 import { getActiveWalls, type Wall } from './game/world';
 import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, getSkill, SKILL_SLOTS, type SkillSlot } from './game/skill';
-import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
+import { spawnThemeMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix } from './game/equipment';
 import { playBgmClient } from './ipc/sfx';
@@ -101,6 +101,11 @@ const state = {
     mp: 100,
     level: 1,
     skillPoints: 0,
+    exp: 0,
+    potions: { hp: 3, mp: 3 },
+    potionCd: 0,
+    dodgeT: 0,
+    dodgeCd: 0,
     facing: { x: 0, y: 0 },
     idleT: 0,
     flipDir: 'N' as 'L' | 'R' | 'N',
@@ -130,9 +135,7 @@ const state = {
 };
 
 // 初始 spawn 5 只怪物: 2 bat + 2 slime + 1 worm
-for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'bat'));
-for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'slime'));
-state.monsters.push(spawnMonster(state, 'worm'));
+for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 inf('world', `spawned ${state.monsters.length} monsters (2 bat + 2 slime + 1 worm)`);
 
 window.addEventListener('keydown', (e) => {
@@ -189,6 +192,20 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
+  // 药水 (F-CBT-002): 1 = HP, 2 = MP
+  if (e.key === '1' || e.key === '2') {
+    const ok = usePotion(state, e.key === '1' ? 'hp' : 'mp');
+    if (ok) playSfxClient('hit');
+    else wrn('skill', `potion ${e.key} failed (cd or empty)`);
+    return;
+  }
+  // 翻滚 (F-CBT-001): Space 无敌位移
+  if (e.code === 'Space' && !e.repeat) {
+    if (startDodge(state)) {
+      dbg('player', 'dodge roll (i-frame 0.2s)');
+    }
+    return;
+  }
   if (e.key === 'q' || e.key === 'Q') {
     const nowSec = performance.now() / 1000;
     // 技能方向 = 鼠标位置 - 玩家中心, 转换为世界方向
@@ -223,6 +240,7 @@ window.addEventListener('keydown', (e) => {
         name: eq.name,
         rarity: eq.rarity,
         affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+        setName: eq.setName,
       })),
       runes: SKILL_SLOTS.flatMap(slot => {
         const r = skillRune(slot);
@@ -255,6 +273,7 @@ window.addEventListener('keydown', (e) => {
             size: { w: 24, h: 24 },
             affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
             pickedUp: true,
+            setName: it.setName,
           });
         }
         recomputeCombat(state);
@@ -348,6 +367,10 @@ function loop(now: number) {
   updateEnemyProj(state, dt);
   updateDeathFx(state, dt);
   updateDamageNums(state, dt);
+  // CD 递减 (药水/翻滚)
+  if (state.player.potionCd > 0) state.player.potionCd -= dt;
+  if (state.player.dodgeT > 0) state.player.dodgeT -= dt;
+  if (state.player.dodgeCd > 0) state.player.dodgeCd -= dt;
   resolveFireballHits(state);
   resolveMeleeHits(state);
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);
@@ -366,10 +389,12 @@ function loop(now: number) {
       state.dying = false;
       state.fireballs.length = 0;
       state.score = 0;
+      state.player.potions = { hp: 3, mp: 3 };
+      state.player.potionCd = 0;
+      state.player.dodgeT = 0;
+      state.player.dodgeCd = 0;
       state.monsters.length = 0;
-      for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'bat'));
-      for (let i = 0; i < 2; i++) state.monsters.push(spawnMonster(state, 'slime'));
-      state.monsters.push(spawnMonster(state, 'worm'));
+      for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
       import('./game/state').then(({ resetPlayer }) => resetPlayer(state));
       inf('gl', 'respawned');
     }
@@ -377,9 +402,7 @@ function loop(now: number) {
 
   // 怪物被清空后重生 (保持地图始终有怪)
   if (state.monsters.length < 3) {
-    const pool: MonsterType[] = ['bat', 'bat', 'slime', 'slime', 'worm'];
-    const t = pool[Math.floor(Math.random() * pool.length)];
-    state.monsters.push(spawnMonster(state, t));
+    state.monsters.push(spawnThemeMonster(state));
     dbg('world', `respawn ${t}, total=${state.monsters.length}`);
   }
 
@@ -479,7 +502,8 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, m.pos);
     if (sp.x + m.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + m.size.h < 0 || sp.y > state.viewport.h) continue;
-    const color: [number, number, number] | undefined = m.hitFlash > 0 ? [1, 0.3, 0.3] : undefined;
+    const color: [number, number, number] | undefined =
+      m.hitFlash > 0 ? [1, 0.3, 0.3] : MONSTER_DEFS[m.type].tint;
     const monsterSprite = `${MONSTER_DEFS[m.type].sprite}_${m.walkFrame}`;
     drawSprite(gl, quad, res, sp, m.size, 'monsters', monsterSprite, { color });
     // HP 条

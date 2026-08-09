@@ -1,17 +1,20 @@
 // 怪物系统: AI (wander/chase) + 血量 + 死亡
 // 数据驱动: monster_defs 表, spawn 时按 type 选择
 
-import type { GameState } from './state';
+import type { GameState, Theme } from './state';
 import { aabbOverlap } from './world';
 import { inf, dbg } from '../util/log';
 import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
 import { dropLoot } from './equipment';
 import { spawnDamageNum } from './damageNum';
+import { gainExp } from './player';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
 import { skillDamageScale } from './skill';
 
-export type MonsterType = 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking';
+export type MonsterType =
+  | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
+  | 'direwolf' | 'plague_slime' | 'frost_worm' | 'wraith' | 'bloat_eye' | 'queen_bee' | 'giant_worm';
 
 export interface MonsterDef {
   type: MonsterType;
@@ -29,6 +32,8 @@ export interface MonsterDef {
   boss?: boolean;
   /** 各系抗性 (D-04, 缺省 = 0) */
   res?: Partial<Record<DamageType, number>>;
+  /** 精灵染色变体 (复用图集同 sprite) */
+  tint?: [number, number, number];
 }
 
 /** 技能基础伤害面板 (D-04; US-004 技能等级化后移入 SkillDef) */
@@ -44,7 +49,29 @@ export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
   bee:      { type: 'bee',      sprite: 'bee',      size: { w: 32, h: 32 }, hp: 25,  speed: 120, aggroRange: 250, attackRange: 22, contactDmg: 6,  score: 14, rangedCooldown: 1.5, res: { fire: -15 } },
   eyeball:  { type: 'eyeball',  sprite: 'eyeball',  size: { w: 32, h: 32 }, hp: 80,  speed: 50,  aggroRange: 200, attackRange: 32, contactDmg: 10, score: 25, rangedCooldown: 2.5, res: { fire: 20 } },
   pumpking: { type: 'pumpking', sprite: 'pumpking', size: { w: 64, h: 64 }, hp: 400, speed: 25,  aggroRange: 280, attackRange: 48, contactDmg: 20, score: 100, boss: true, rangedCooldown: 3.0, res: { fire: 40, physical: 25 } },
+  // === US-007 精英/变体 (复用 sprite + 染色, 主题池) ===
+  direwolf:    { type: 'direwolf',    sprite: 'ghost',    size: { w: 40, h: 40 }, hp: 70,  speed: 125, aggroRange: 260, attackRange: 30, contactDmg: 9,  score: 24, rangedCooldown: 2.2, res: { fire: -25 }, tint: [1, 0.45, 0.35] },
+  plague_slime:{ type: 'plague_slime', sprite: 'slime',    size: { w: 36, h: 36 }, hp: 90,  speed: 38,  aggroRange: 170, attackRange: 34, contactDmg: 10, score: 20, rangedCooldown: 2.8, res: { physical: 25 }, tint: [0.45, 0.9, 0.3] },
+  frost_worm:  { type: 'frost_worm',  sprite: 'worm',     size: { w: 38, h: 38 }, hp: 130, speed: 55,  aggroRange: 200, attackRange: 30, contactDmg: 12, score: 34, res: { physical: 35, fire: -15 }, tint: [0.45, 0.8, 1] },
+  wraith:      { type: 'wraith',      sprite: 'ghost',    size: { w: 32, h: 32 }, hp: 48,  speed: 115, aggroRange: 240, attackRange: 26, contactDmg: 8,  score: 26, rangedCooldown: 1.8, res: { physical: 45, fire: 30 }, tint: [0.75, 0.35, 1] },
+  bloat_eye:   { type: 'bloat_eye',   sprite: 'eyeball',  size: { w: 40, h: 40 }, hp: 160, speed: 32,  aggroRange: 210, attackRange: 36, contactDmg: 12, score: 46, rangedCooldown: 2.0, res: { fire: 30 }, tint: [1, 0.5, 0.7] },
+  queen_bee:   { type: 'queen_bee',   sprite: 'bee',      size: { w: 32, h: 32 }, hp: 50,  speed: 140, aggroRange: 270, attackRange: 26, contactDmg: 7,  score: 20, rangedCooldown: 1.1, res: { fire: -20 }, tint: [1, 0.85, 0.3] },
+  giant_worm:  { type: 'giant_worm',  sprite: 'worm',     size: { w: 48, h: 48 }, hp: 200, speed: 42,  aggroRange: 220, attackRange: 40, contactDmg: 16, score: 58, res: { physical: 35, fire: -10 }, tint: [0.75, 0.55, 0.25] },
 };
+
+/** 主题怪物池 (US-007: 4 主题不同怪, 初始 spawn 与重生共用) */
+export const THEME_MONSTER_POOL: Record<Theme, MonsterType[]> = {
+  forest: ['bat', 'slime', 'worm', 'ghost', 'plague_slime'],
+  desert: ['bee', 'eyeball', 'queen_bee', 'direwolf', 'giant_worm'],
+  ruin:   ['ghost', 'wraith', 'frost_worm', 'giant_worm', 'bloat_eye'],
+  void:   ['eyeball', 'wraith', 'bloat_eye', 'direwolf', 'queen_bee'],
+};
+
+/** 按当前主题随机 spawn 一只 (main 初始与重生调用) */
+export function spawnThemeMonster(state: GameState): Monster {
+  const pool = THEME_MONSTER_POOL[state.theme];
+  return spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
+}
 
 export interface Monster {
   id: number;
@@ -52,6 +79,10 @@ export interface Monster {
   pos: { x: number; y: number };
   vel: { x: number; y: number };
   hp: number;
+  /** 满血 (Boss 阶段阈值计算用) */
+  maxHp: number;
+  /** Boss 阶段 (1/2, 50% 进入狂暴) */
+  phase: 1 | 2;
   /** 直接抄自 def, 渲染/碰撞用 */
   size: { w: number; h: number };
   /** wander 状态的目标点 (世界坐标); 到达后重新选 */
@@ -92,6 +123,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       pos: { x, y },
       vel: { x: 0, y: 0 },
       hp: def.hp,
+      maxHp: def.hp,
+      phase: 1,
       size: { ...def.size },
       wanderTarget: pickWanderTarget(state, x, y, def.aggroRange * 2),
       wanderTimer: 3 + Math.random() * 2,
@@ -109,6 +142,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     pos: { x: state.player.pos.x, y: state.player.pos.y - 800 },
     vel: { x: 0, y: 0 },
     hp: def.hp,
+    maxHp: def.hp,
+    phase: 1,
     size: { w: 32, h: 32 },
     wanderTarget: { x: state.player.pos.x, y: state.player.pos.y - 1000 },
     wanderTimer: 3,
@@ -130,34 +165,8 @@ function pickWanderTarget(state: GameState, x: number, y: number, radius: number
   return { x, y };
 }
 
-/** AABB 滑移 (复用玩家逻辑), 沿未阻挡轴保留位移 */
+/** AABB 滑移: 沿最浅重叠轴推出 (最多 4 次迭代) */
 function slideAxis(rect: { x: number; y: number; w: number; h: number }, walls: ReadonlyArray<{ pos: { x: number; y: number }; size: { w: number; h: number } }>): { x: number; y: number } {
-  let nx = rect.x, ny = rect.y;
-  for (let iter = 0; iter < 4; iter++) {
-    let hit = false;
-    let minO = Infinity;
-    let axis: 'x' | 'y' = 'x';
-    let side = 0;
-    for (const w of walls) {
-      if (nx < w.pos.x + w.size.w && nx + rect.w > w.pos.x &&
-          ny < w.pos.y + w.size.h && ny + rect.h > w.pos.y) {
-        const oL = (nx + rect.w) - w.pos.x;
-        const oR = (w.pos.x + w.size.w) - nx;
-        const oT = (ny + rect.h) - w.pos.y;
-        const oB = (w.pos.y + w.size.h) - ny;
-        const m = Math.min(oL, oR, oT, oB);
-        if (m < minO) {
-          minO = m;
-          axis = (m === oL || m === oR) ? 'x' : 'y';
-          side = (m === oL || m === oT) ? -1 : 1;
-          hit = true;
-        }
-      }
-    }
-    if (!hit) break;
-    if (axis === 'x') nx = side < 0 ? (hit as never) === undefined as never : nx;  // placeholder removed below
-  }
-  // 简化版: 沿最浅推出轴位移
   let fx = rect.x, fy = rect.y;
   for (let iter = 0; iter < 4; iter++) {
     let hit = false;
@@ -212,18 +221,28 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.walkT = 0.3;
     }
 
-    // 远程攻击: 朝玩家发射投射物
-    if (def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
-      spawnEnemyProjectile(state, m, def.contactDmg);
-      m.attackCd = def.rangedCooldown;
+    // Boss 二阶段: 50% 血 → 狂暴 (提速 1.6x + 双发投射物)
+    if (def.boss && m.phase === 1 && m.hp <= m.maxHp * 0.5) {
+      m.phase = 2;
+      m.hitFlash = 0.4;
+      spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'PHASE 2!', '#ff9530');
+      inf('combat', `${m.type} enters PHASE 2 (狂暴)`);
     }
 
+    // 远程攻击: 朝玩家发射投射物 (二阶段双发)
+    if (def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
+      spawnEnemyProjectile(state, m, def.contactDmg);
+      if (m.phase === 2) spawnEnemyProjectile(state, m, def.contactDmg, 0.22);
+      m.attackCd = m.phase === 2 ? 1.6 : def.rangedCooldown;
+    }
+
+    const spd = def.speed * (m.phase === 2 ? 1.6 : 1);
     if (dist < def.aggroRange) {
       if (dist > 0.01) {
-        m.vel.x = (dx / dist) * def.speed;
-        m.vel.y = (dy / dist) * def.speed;
+        m.vel.x = (dx / dist) * spd;
+        m.vel.y = (dy / dist) * spd;
       }
-      if (dist < def.attackRange && m.attackCd <= 0) {
+      if (dist < def.attackRange && m.attackCd <= 0 && state.player.dodgeT <= 0) {
         state.player.hp -= def.contactDmg;
         m.attackCd = 1.0;
         dbg('monster', `${m.type} hit player for ${def.contactDmg} (hp=${state.player.hp.toFixed(0)})`);
@@ -275,6 +294,16 @@ export function damageMonster(
   if (m.hp <= 0) {
     state.score += def.score;
     state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
+    // 经验 (F-RPG-002, D-05): 击杀 score×2, 升级 +5 技能点 +5 attr
+    const ups = gainExp(state, def.score * 2);
+    if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
+    // 药水掉落 (F-CBT-002): 12%, 优先补满上限 3 的类型中没满的一瓶
+    if (Math.random() < 0.12) {
+      const kind: 'hp' | 'mp' = Math.random() < 0.6 ? 'hp' : 'mp';
+      const alt: 'hp' | 'mp' = kind === 'hp' ? 'mp' : 'hp';
+      if (state.player.potions[kind] < 3) state.player.potions[kind]++;
+      else if (state.player.potions[alt] < 3) state.player.potions[alt]++;
+    }
     spawnDeathFx(state, cx, cy);
     playSfxClient('die');
     dropLoot(state, cx, cy);
@@ -347,16 +376,18 @@ export interface EnemyProjectile {
 }
 
 let nextProjId = 1;
-function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number): void {
+function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle = 0): void {
   const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
   ext._enemyProj = ext._enemyProj ?? [];
   const dx = state.player.pos.x - m.pos.x;
   const dy = state.player.pos.y - m.pos.y;
   const len = Math.hypot(dx, dy) || 1;
+  // 基础方向 + 偏角 (二阶段双发错开)
+  const base = Math.atan2(dy, dx) + angle;
   const speed = 180;
   ext._enemyProj.push({
     pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
-    vel: { x: (dx / len) * speed, y: (dy / len) * speed },
+    vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
     size: { w: 12, h: 12 },
     dmg,
     life: 2.0,
@@ -378,8 +409,9 @@ export function updateEnemyProj(state: GameState, dt: number): void {
     p.pos.y += p.vel.y * dt;
     p.life -= dt;
     if (p.life <= 0) return false;
-    // 撞玩家 → 扣血 + 消失
-    if (aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h,
+    // 撞玩家 → 扣血 + 消失 (翻滚无敌免疫)
+    if (state.player.dodgeT <= 0 &&
+        aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h,
                     state.player.pos.x, state.player.pos.y,
                     state.player.size.w, state.player.size.h)) {
       state.player.hp -= p.dmg;

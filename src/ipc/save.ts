@@ -3,7 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { DamageType } from '../game/combat';
-import type { AffixStat, Rarity } from '../game/equipment';
+import type { AffixStat, Rarity, SetName } from '../game/equipment';
 import type { SkillSlot } from '../game/skill';
 import type { RuneId } from '../game/rune';
 import type { Theme } from '../game/state';
@@ -18,6 +18,7 @@ export interface SaveItem {
   name: string;
   rarity: Rarity;
   affixes: SaveAffix[];
+  setName?: SetName;
 }
 
 export interface SaveRune {

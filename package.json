@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
-    "test": "esbuild tests/combat.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/combat.test.cjs && node .tmp/combat.test.cjs && esbuild tests/equipment.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/equipment.test.cjs && node .tmp/equipment.test.cjs && esbuild tests/skill.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/skill.test.cjs && node .tmp/skill.test.cjs"
+    "test": "esbuild tests/combat.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/combat.test.cjs && node .tmp/combat.test.cjs && esbuild tests/equipment.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/equipment.test.cjs && node .tmp/equipment.test.cjs && esbuild tests/skill.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/skill.test.cjs && node .tmp/skill.test.cjs && esbuild tests/player.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/player.test.cjs && node .tmp/player.test.cjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

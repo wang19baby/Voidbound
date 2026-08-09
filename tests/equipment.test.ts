@@ -72,3 +72,21 @@ if (failures > 0) {
 }
 console.log('\nALL PASS');
 process.exit(0);
+// === US-010 套装加成 ===
+function makeSetItem(setName: 'shadow_set' | 'flame_set'): Equipment {
+  return { id: 1, name: setName, rarity: 'set', pos: { x: 0, y: 0 }, size: { w: 24, h: 24 }, affixes: [], pickedUp: true, setName };
+}
+
+// 2 件暗影套 → +15% elemPct
+const s2 = aggregateCombat([makeSetItem('shadow_set'), makeSetItem('shadow_set')]);
+eq('暗影套 2件 elemPct +15%', s2.elemPct, 0.15);
+// 3 件 → +elemPct 15% + critBonus 25
+const s3 = aggregateCombat([makeSetItem('shadow_set'), makeSetItem('shadow_set'), makeSetItem('shadow_set')]);
+eq('暗影套 3件 critBonus +25%', s3.critBonus, 25);
+// 烈焰套 3件 → shred +20, elemPct +12%
+const f3 = aggregateCombat([makeSetItem('flame_set'), makeSetItem('flame_set'), makeSetItem('flame_set')]);
+eq('烈焰套 3件 shred +20', f3.shred, 20);
+eq('烈焰套 3件 elemPct +12%', f3.elemPct, 0.12);
+// 混合套装独立计数
+const mix = aggregateCombat([makeSetItem('shadow_set'), makeSetItem('shadow_set'), makeSetItem('flame_set')]);
+eq('混搭: 暗影 2件生效, 烈焰 1件不生效', mix.elemPct, 0.15);

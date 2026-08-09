@@ -49,6 +49,15 @@ export interface Affix {
   element?: DamageType;
 }
 
+/** 套装 (US-010, F-ITEM-004): 同套装 >=req 件触发加成 */
+export interface SetBonusDef { req: number; stat: 'elemPct' | 'critBonus' | 'shred'; value: number; }
+export const SET_BONUSES: Record<string, { name: string; bonuses: SetBonusDef[] }> = {
+  shadow_set: { name: '暗影套', bonuses: [{ req: 2, stat: 'elemPct', value: 0.15 }, { req: 3, stat: 'critBonus', value: 25 }] },
+  flame_set:  { name: '烈焰套', bonuses: [{ req: 2, stat: 'elemPct', value: 0.12 }, { req: 3, stat: 'shred', value: 20 }] },
+};
+export type SetName = keyof typeof SET_BONUSES;
+const SET_KEYS = Object.keys(SET_BONUSES) as SetName[];
+
 export interface Equipment {
   id: number;
   name: string;
@@ -57,6 +66,8 @@ export interface Equipment {
   size: { w: number; h: number };
   affixes: Affix[];
   pickedUp: boolean;
+  /** 套装名 (仅 set 稀有度) */
+  setName?: SetName;
 }
 
 const ELEM_NAMES: Record<DamageType, string> = {
@@ -129,6 +140,20 @@ export function aggregateCombat(items: readonly Equipment[]): CombatStats {
       }
     }
   }
+  // 套装加成 (US-010): 同套装 ≥req 件触发
+  const setCount: Record<string, number> = {};
+  for (const eq of items) if (eq.setName) setCount[eq.setName] = (setCount[eq.setName] ?? 0) + 1;
+  for (const key of SET_KEYS) {
+    const n = setCount[key] ?? 0;
+    if (n <= 0) continue;
+    for (const b of SET_BONUSES[key].bonuses) {
+      if (n >= b.req) {
+        if (b.stat === 'elemPct') c.elemPct += b.value;
+        else if (b.stat === 'critBonus') c.critBonus += b.value;
+        else c.shred += b.value;
+      }
+    }
+  }
   return c;
 }
 
@@ -157,14 +182,17 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
   const affixes: Affix[] = [];
   for (let i = 0; i < n; i++) affixes.push(genAffix());
 
+  // set 稀有度: 必带套装名
+  const setName = chosen === 'set' ? SET_KEYS[Math.floor(Math.random() * SET_KEYS.length)] : undefined;
   const eq: Equipment = {
     id: nextEqId++,
-    name: genName(),
+    name: setName ? `${SET_BONUSES[setName].name} ${genName()}` : genName(),
     rarity: chosen,
     pos: { x, y },
     size: { w: 24, h: 24 },
     affixes,
     pickedUp: false,
+    setName,
   };
   ext._loot.push(eq);
   return eq;
