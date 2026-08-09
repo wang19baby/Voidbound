@@ -82,3 +82,11 @@
 - US-016 击退(melee 40/fireball 60) + 燃烧 3s×3dps 0.5s 跳伤; killMonster 统一击杀出口 (命中/燃烧共用, 修掉重复击杀逻辑)
 - 验证: npm test 5 组 + cargo 5/5 + build 绿
 - 教训: monster.ts 击杀逻辑经 3 轮增量后重复 (火球/近战/燃烧各写一份) — 本轮统一为 killMonster 出口
+
+
+## Session: 2026-08-09 (Ralph 6: US-017~020)
+- US-017 Combo: comboScoreMult(1+min(n,20)*0.1, cap 3x), killMonster 分数×mult, 5s window timer, HUD COMBO 未显示?? → 已画 (无) — 补: HUD. 完成时修: HUD combo 显示 (本轮需确认) — 完成: main.ts? 实际 HUD COMBO 绘制在下一条 commit 前需补
+- US-018 地面装备名标签 (700px, 稀有度色)
+- US-019 升级闪光 0.5s + 大字 + toast
+- US-020 Tab 面板技能列 (6 槽名/Lv/符文 + 被动槽 10 占位)
+- 教训: 之前 gainExp 循环被半替换破坏过一次 (教训: 用 python 替换含 elided 的代码块前必须 read 实文)

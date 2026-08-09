@@ -186,6 +186,47 @@
         "死亡/重生重置 burn; build+test 绿"
       ],
       "passes": true
+    },
+    {
+      "id": "US-017",
+      "title": "Combo 连击系统",
+      "description": "5s 窗口内连续击杀叠加连击数, 分数乘数 1+min(combo,20)*0.1 (上限 3x), HUD 连击显示, timer 归零重置",
+      "acceptanceCriteria": [
+        "comboScoreMult(count) 纯函数 + 单测 (0→1, 10→2, 20→3, 30→3)",
+        "killMonster 记 combo++ + 分数 ×mult; combo timer 递减归零重置",
+        "HUD 显示 COMBO xN (黄字), 消失后清除; build+test 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-018",
+      "title": "地面装备标签",
+      "description": "距玩家 700px 内地面装备显示名称标签 (Canvas2D overlay, 稀有度 hex 色, 小字)",
+      "acceptanceCriteria": [
+        "getLoot 每件在屏幕坐标上方 ~24px 绘制名字 (稀有度色), 距离过滤",
+        "drawHudOverlay 内绘制; build 绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-019",
+      "title": "升级特效",
+      "description": "升级时全屏金光 flash (0.5s) + 大字 LEVEL UP → n + toast",
+      "acceptanceCriteria": [
+        "gainExp ups>0 → state.levelUpFlash=0.5 + pushToast('升级到 Lv n')",
+        "drawHudOverlay 画金色全屏淡出 (globalAlpha) + 大字; 死亡不触发"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-020",
+      "title": "装备面板技能列",
+      "description": "Tab 面板右侧增技能区: 6 槽技能名/等级/符文 (skill registry), 被动槽提示 (10 槽占位)",
+      "acceptanceCriteria": [
+        "面板右列下段: SKILL_SLOTS 每槽: 名称 Lv 符文名(非 none)",
+        "提示行: 被动槽 10 (规划); build 绿"
+      ],
+      "passes": true
     }
   ]
 }
