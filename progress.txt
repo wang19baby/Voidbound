@@ -20,3 +20,19 @@
 
 ### Iteration log
 (updates as stories complete)
+
+## Session: 2026-08-09 (Ralph 2: M2 完善 - D-04 伤害公式地基)
+
+### 已完成 (prd.json 6 US 全 passes)
+- US-001 D-04 伤害公式引擎: src/game/combat.ts 纯函数 (物理/元素, 暴击1.5x, 抗性 clamp(-100,75), 易伤≤50%, 减抗先行); 7 怪物带各系 res; 火球=火伤/近战=物理/大招=影伤; 暴击橙字; tests/combat.test.ts
+- US-002 装备 5 阶稀有度 (normal/magic/rare/set/unique, F-ITEM-002) + 战斗词条聚合: aggregateCombat 纯函数 → pickupLoot → recomputeCombat; describeAffix 新文案
+- US-003 存档三层: SaveData 扩 level/owned/runes(按槽)/theme; rust 回环测试 x2; 旧档反序列化明确报错
+- US-004 技能等级+符文三选一: skill.ts 槽位 1-20 级 Ctrl+1..6 分配, 每级+10%; 10级触发三选一 overlay (1/2/3, Esc拒绝本局); 符文全量生效 (split/pierce 穿墙/homing 追踪/vampire 回血); 击杀+1技能点; MMB 切换移除
+- US-005 CHANGELOG D-27: 地图生成决策 (M1/M2 程序化分块 = 交付, WFC 留 M3)
+- US-006 设置菜单+启动画面: Esc 菜单 (1继续/2设置/P存档), +/-音量 (set_volume), F 全屏, 键位说明+ splash
+
+### 学习
+- 所有战斗数值以常数簇 在 monster.ts (FIREBALL_DAMAGE=25/MELEE=50/ULTIMATE=70) — 后续技能等级化已经 scale 层
+- 伤害数字颜色: type 色/CRIT 橙 (#ffaa00), KILL 金黄
+- 存档 bincode 无版本头: 结构变更 = 旧档不可读 (后续需 add version byte)
+- 符文机制从"全局循环切换"重构为"按技能槽绑定永久" — 与 D-01 语义一致

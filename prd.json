@@ -52,7 +52,7 @@
         "任意技能到 10 级→ 显示三选一面板，选中后 bindSkill 永久生效",
         "MMB 切换删除（或仅调试可用）"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-005",
@@ -61,7 +61,7 @@
       "acceptanceCriteria": [
         "CHANGELOG-v1.1.md 增加 D-26：地图生成 = 分块程序化（M1/M2）/ WFC (M3 计划)"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-006",
@@ -71,7 +71,7 @@
         "设置覆盖层：音量滑块（set_volume 真实生效）、全屏切换、按键说明",
         "启动时画布先显示 splash + loading 文案直至 6 atlas 加载完成"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }

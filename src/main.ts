@@ -54,6 +54,19 @@ document.body.appendChild(hudCanvas);
 const hudCtx = hudCanvas.getContext('2d');
 if (!hudCtx) throw new Error('Canvas2D 不可用 (HUD overlay)');
 
+// 启动画面: 图集加载前先显示 VOIDBOUND + 进度 (GAME_FLOW §1)
+hudCtx.fillStyle = '#0b0b12';
+hudCtx.fillRect(0, 0, VW, VH);
+hudCtx.textAlign = 'center';
+hudCtx.textBaseline = 'middle';
+hudCtx.fillStyle = '#c9aaff';
+hudCtx.font = 'bold 64px monospace';
+hudCtx.fillText('VOIDBOUND', VW / 2, VH / 2 - 40);
+hudCtx.fillStyle = '#888';
+hudCtx.font = '16px monospace';
+hudCtx.fillText('加载图集中…', VW / 2, VH / 2 + 20);
+hudCtx.textAlign = 'left';
+
 inf('gl', `WebGL2 init ${canvas.width}x${canvas.height}`);
 const gl = createContext(canvas);
 const quad = createQuadBuffer(gl, VERT, FRAG);
@@ -112,6 +125,8 @@ const state = {
   theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
   runeChoice: null,
   rejectedRunes: [],
+  settingsOpen: false,
+  volume: 0.8,
   resources: res,
 };
 
@@ -133,6 +148,38 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     return;
+  }
+  // 暂停/设置菜单: 阻断游戏按键
+  if (state.paused) {
+    const k = e.key.toLowerCase();
+    if (k === '1') { state.paused = false; inf('gl', 'resumed'); return; }
+    if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
+    if (state.settingsOpen) {
+      if (k === '+' || k === '=') {
+        state.volume = Math.min(1, state.volume + 0.05);
+        setVolumeClient(state.volume);
+        inf('audio', `volume → ${Math.round(state.volume * 100)}%`);
+        return;
+      }
+      if (k === '-' || k === '_') {
+        state.volume = Math.max(0, state.volume - 0.05);
+        setVolumeClient(state.volume);
+        inf('audio', `volume → ${Math.round(state.volume * 100)}%`);
+        return;
+      }
+      if (k === 'f') {
+        void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
+          getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs)));
+        return;
+      }
+    }
+    if (k === 'escape') {
+      if (state.settingsOpen) state.settingsOpen = false;
+      else state.paused = false;
+      inf('gl', state.paused ? 'paused' : 'resumed');
+      return;
+    }
+    return; // 暂停时忽略游戏按键
   }
   // Ctrl+1..6: 分配技能点 (LMB/RMB/Q/W/E/R)
   if (e.ctrlKey) {
@@ -160,10 +207,6 @@ window.addEventListener('keydown', (e) => {
     (window as unknown as { __lvl?: LogLevel }).__lvl = next;
     setLogLevel(next);
     inf('gl', `log level → ${next}`);
-  }
-  if (e.key === 'Escape') {
-    state.paused = !state.paused;
-    inf('gl', state.paused ? 'paused' : 'resumed');
   }
   if (e.key === 'p' || e.key === 'P') {
     saveGame({
@@ -480,13 +523,34 @@ function drawFrameToScreen() {
   if (state.paused) {
     hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = 'bold 48px monospace';
     hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2);
-    hudCtx.font = '20px monospace';
-    hudCtx.fillText('press ESC to resume', hudCanvas.width / 2, hudCanvas.height / 2 + 50);
+    if (!state.settingsOpen) {
+      hudCtx.fillStyle = '#fff';
+      hudCtx.font = 'bold 48px monospace';
+      hudCtx.textBaseline = 'middle';
+      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
+      hudCtx.font = '20px monospace';
+      hudCtx.fillStyle = '#ddd';
+      hudCtx.fillText('1 继续 · 2 设置 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillStyle = '#777';
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText('Ctrl+1..6 分配技能点 · Ctrl+Q 退出(未实现)', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
+    } else {
+      // 设置面板 (GAME_FLOW §12)
+      hudCtx.fillStyle = '#ffd';
+      hudCtx.font = 'bold 28px monospace';
+      hudCtx.textBaseline = 'middle';
+      hudCtx.fillText('设置', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
+      hudCtx.font = '18px monospace';
+      hudCtx.fillStyle = '#fff';
+      hudCtx.fillText(`音量: ${Math.round(state.volume * 100)}%   [+]/[-]`, hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+      hudCtx.fillText('全屏: [F] 切换', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillStyle = '#999';
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText('WASD 移动 · 鼠标左/右键 近战 · Q 火球  W 连发  E 回血  R 大招', hudCanvas.width / 2, hudCanvas.height / 2 + 46);
+      hudCtx.fillText('Ctrl+1..6 技能点 · P 存档 · R 读档 · T 主题 · L 日志级别', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
+      hudCtx.fillText('[Esc] 返回暂停菜单', hudCanvas.width / 2, hudCanvas.height / 2 + 100);
+    }
     hudCtx.textAlign = 'left';
   }
 
