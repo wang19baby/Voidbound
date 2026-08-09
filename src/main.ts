@@ -148,6 +148,7 @@ const state = {
   runeChoice: null,
   rejectedRunes: [],
   settingsOpen: false,
+  titleOpen: true,
   difficulty: 'normal' as Difficulty,
   bossKillTrigger: 0,
   equipmentOpen: false,
@@ -176,6 +177,17 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === '0') {
       rejectRune(state);
       return;
+    }
+    return;
+  }
+  // 标题画面 (GAME_FLOW §1.2): 1 开始 / 2 设置 / R 读档
+  if (state.titleOpen) {
+    const k = e.key.toLowerCase();
+    if (k === '1') { state.titleOpen = false; inf('ui', '新游戏开始'); }
+    else if (k === '2') { state.settingsOpen = true; }
+    else if (k === 'r') {
+      loadGame().then(() => { state.titleOpen = false; inf('save', '读档并继续'); })
+        .catch(err => wrn('save', `读档失败: ${err}`));
     }
     return;
   }
@@ -388,7 +400,11 @@ function loop(now: number) {
     invoke('js_log', { msg: '[boot] rAF loop started' }).catch(() => {});
   }
   try {
-    loopImpl(now);
+    if (state.titleOpen) {
+      drawTitle();
+    } else {
+      loopImpl(now);
+    }
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -402,7 +418,6 @@ function loop(now: number) {
 
 
 /** 首帧分段探针 (诊断: 定位第 1 帧卡死点) */
-let f1InfoLogged = false;
 function f1(now: number, tag: string): void {
   if (frameCount === 1) {
     const info = f1InfoLogged ? '' : ` vis=${document.visibilityState} hasFocus=${document.hasFocus()} size=${window.innerWidth}x${window.innerHeight}`;
@@ -422,7 +437,7 @@ setInterval(() => {
   hbLast = now2;
 }, 5000);
 function loopImpl(now: number) {
-  hbRaf++;
+
   const dt = Math.min((now - last) / 1000, 0.033);
   last = now;
   const nowSec = now / 1000;
@@ -434,9 +449,7 @@ function loopImpl(now: number) {
   }
 
   // 鼠标边沿 (本帧按下的按键)
-  f1(now, 'sync');
   mouse.sync();
-  f1(now, 'sync-done');
 
   // 暂停时: 跳过游戏逻辑更新, 但仍渲染当前帧 (让 PAUSED 文字画在最新画面上)
   if (state.paused) {
@@ -457,15 +470,11 @@ function loopImpl(now: number) {
   updatePlayer(state, dir, dt);
   state.player.idleT += dt;
   updateCamera(state);
-  f1(now, 'walls-begin');
   state.world.walls = getActiveWalls(state, 2);
-  f1(now, 'walls-done');
   updateFireballs(state, dt);
   updateSwings(state, dt);
-  f1(now, 'monsters-begin');
   updateMonsters(state, dt);
   updateEnemyProj(state, dt);
-  f1(now, 'monsters-done');
   updateDeathFx(state, dt);
   updateDamageNums(state, dt);
   updateToasts(state, dt);
@@ -478,10 +487,8 @@ function loopImpl(now: number) {
     if (state.combo.timer <= 0) state.combo.count = 0;
   }
   if (state.levelUpFlash > 0) state.levelUpFlash -= dt;
-  f1(now, 'resolve-begin');
   resolveFireballHits(state);
   resolveMeleeHits(state);
-  f1(now, 'resolve-done');
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);
   state.player.hp = Math.min(100, state.player.hp + 2 * dt);  // 被动回血
 
@@ -540,9 +547,32 @@ for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
   }
 
   drawFrame();
-  f1(now, 'draw-done');
   mouse.reset();
-  f1(now, 'frame-end');
+}
+
+/** 标题画面 (GAME_FLOW §1.2): 主菜单 */
+function drawTitle() {
+  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.fillStyle = '#0b0b12';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#c9aaff';
+  hudCtx.font = 'bold 72px monospace';
+  hudCtx.fillText('VOIDBOUND', hudCanvas.width / 2, hudCanvas.height / 2 - 140);
+  hudCtx.fillStyle = '#888';
+  hudCtx.font = '18px monospace';
+  hudCtx.fillText('虚空之缚 — 2D 随机地下城 ARPG', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
+  hudCtx.fillStyle = '#eee';
+  hudCtx.font = 'bold 22px monospace';
+  hudCtx.fillText('[1] 新游戏', hudCanvas.width / 2, hudCanvas.height / 2 - 10);
+  hudCtx.fillText('[2] 设置', hudCanvas.width / 2, hudCanvas.height / 2 + 30);
+  hudCtx.fillText('[R] 读取存档', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
+  hudCtx.fillStyle = '#666';
+  hudCtx.font = '14px monospace';
+  hudCtx.fillText('WASD 移动 · 左/右键 近战 · Q/W/E/R 技能 · Space 翻滚 · 1/2 药水 · Tab 装备 · Esc 暂停', hudCanvas.width / 2, hudCanvas.height / 2 + 140);
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
 }
 
 /** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */

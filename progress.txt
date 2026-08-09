@@ -105,3 +105,9 @@
 - 附带修复: drawFrame 用未声明 nowSec (点击必崩一帧) — performance.now()/1000
 - 验证: 心跳 raf≈1150/5s (240Hz 屏, 单链=rAF 自然上限), dur 稳定 5000ms, 无 loop-crash, 渲染 WS 115MB
 - 教训: 给循环加包装/重入时, 先审计函数内所有原注册点 — 包装器+内部 re-arm = 指数爆炸
+
+## Session: 2026-08-09 (Ralph 6d: 黑方块 + 主菜单)
+- 黑方块根因: WebGL 未 gl.enable(BLEND) → 贴图 alpha 作不透明黑盒 → createContext 补 BLEND+blendFunc+关闭 DEPTH/CULL
+- 主菜单: titleOpen 状态 + drawTitle (GAME_FLOW §1.2: 1 新游戏/2 设置/R 读档), loop 标题分支, keydown 门控
+- 清理: 移除 f1 分段探针 (保留 boot/js_log/loop-crash/hb 心跳)
+- 验证: 标题画面下 hb 每 5s 正常 (定时器健康), raf=0 静止预期; 无崩溃
