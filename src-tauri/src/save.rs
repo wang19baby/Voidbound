@@ -38,6 +38,7 @@ pub struct SaveData {
     // 角色层 (US-003)
     pub level: u32,
     pub owned: Vec<OwnedItem>,
+    pub gold: u32,
     // 永久层
     pub runes: Vec<(String, String)>,
     pub theme: String,
@@ -86,6 +87,7 @@ mod tests {
             facing_x: 1.0, facing_y: 0.0,
             score: 42, world_w: 20480.0, world_h: 11520.0,
             level: 3,
+            gold: 250,
             owned: vec![OwnedItem {
                 name: "烈焰之牙".into(),
                 rarity: "set".into(),
@@ -107,6 +109,7 @@ mod tests {
         let bytes = bincode::serialize(&data).expect("serialize");
         let back: SaveData = bincode::deserialize(&bytes).expect("deserialize");
         assert_eq!(data, back);
+        assert_eq!(back.gold, 250);
         assert_eq!(back.owned.len(), 1);
         assert_eq!(back.owned[0].affixes.len(), 2);
         assert_eq!(back.owned[0].set_name.as_deref(), Some("shadow_set"));

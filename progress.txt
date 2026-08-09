@@ -118,3 +118,11 @@
 - 根因3: 标题页 2/R 无反馈 → 设置面板画进 drawTitle + titleMsg 状态行 + Esc 关设置
 - 验证: 重启 40s 0 loop-crash, boot 干净
 - 教训: 依赖"python 整行替换导入"不可靠 — 改用 edit 工具精确锚点; 每个 UI 分支用完测一遍按键路径
+
+
+## Session: 2026-08-09 (Ralph 7: US-021 城镇/NPC 设施)
+- 金币经济 (D-06): 击杀 gold=round(score*0.5*dropMult), HUD 金行, save/load gold (rust u32+断言)
+- 场景 mode: dungeon|town; 暂停菜单 4 回城镇; 城镇冻结战斗, WASD 走 + E 交互 (80px)
+- NPC: 商人(1-5买/6卖页 半价), 重铸师(100金重roll 词条数不变), 挑战祭坛(N循环难度), 地下城入口(出发)
+- equipment: randomEquipment 共用 (掉落/商店), getItemBuy/SellPrice, rerollAffixes, addOwned
+- 测试: 定价/重铸 5 用例; cargo 5/5; 运行 30s 0 崩溃

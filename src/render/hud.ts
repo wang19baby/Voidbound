@@ -66,6 +66,9 @@ export function drawHudOverlay(
   ctx2d.fillText(`HP ${Math.round(state.player.hp)}/${MAX_HP}`, HUD_PAD, HUD_PAD + BAR_HEIGHT + 20);
   ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${MAX_MP}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 4);
   ctx2d.fillText(`SCORE ${state.score}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 16);
+  ctx2d.fillStyle = '#ffd64a';
+  ctx2d.fillText(`金 ${state.player.gold ?? 0}`, HUD_PAD + 120, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 16);
+  ctx2d.fillStyle = '#fff';
   ctx2d.fillText(`KILLS ${state.monsters.length}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 30);
   // COMBO (US-017): 连击 >1 时顶部醒目金色
   if (state.combo.count > 1 && state.combo.timer > 0) {

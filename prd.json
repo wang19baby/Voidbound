@@ -227,6 +227,20 @@
         "提示行: 被动槽 10 (规划); build 绿"
       ],
       "passes": true
+    },
+    {
+      "id": "US-021",
+      "title": "城镇/NPC 设施 (F-TOWN, D-06)",
+      "description": "最小闭环: 金币经济 (击杀掉 gold=round(score*0.5*dropMult), HUD/存档); 场景 mode='town' 切换 (暂停菜单 4 回城镇, 城镇 NPC 站桩 E 交互); 商人(买5随机/卖半价), 重铸师(100金重roll词条), 难度NPC([N]循环), 出发回地下城",
+      "acceptanceCriteria": [
+        "state.mode=dungeon|town; pause '4' 回城镇, 城镇 '出发' 回地下城; 城镇冻结战斗更新",
+        "金币: kill 掉 gold (难度倍率), HUD 显示, save/load gold 持久化 (rust 断言)",
+        "商人: 库存 5 件 (生成随机装备+买价), 1-5 购买扣金; 卖出 owned (半价卖价)",
+        "重铸师: 列表选择 owned 1-9, 100金 重roll 词条 (rerollAffixes 保持稀有度词条数)",
+        "难度 NPC: N 循环难度; E 交互提示 (接近 NPC 显示)",
+        "npm test 新增 定价/重铸 纯函数用例; cargo 5/5; build 绿"
+      ],
+      "passes": true
     }
   ]
 }

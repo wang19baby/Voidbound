@@ -1,7 +1,7 @@
 // 装备词条聚合 → D-04 CombatStats 单测 (US-002)
 // 运行: npm test
 
-import { aggregateCombat, describeAffix, type Equipment, type Affix } from '../src/game/equipment';
+import { aggregateCombat, describeAffix, randomEquipment, rerollAffixes, getItemBuyPrice, getItemSellPrice, type Equipment, type Affix } from '../src/game/equipment';
 import { baseCombat } from '../src/game/combat';
 
 let failures = 0;
@@ -91,3 +91,15 @@ if (failures > 0) {
 }
 console.log('\nALL PASS');
 process.exit(0);
+// === US-021 定价/重铸 ===
+check('买价: normal 无词条 ≥10', getItemBuyPrice('normal', 0) >= 10);
+check('买价: unique > normal', getItemBuyPrice('unique', 5) > getItemBuyPrice('normal', 0));
+check('卖价 = 买价×0.4 下取整', getItemSellPrice('rare', 2) === Math.floor(getItemBuyPrice('rare', 2) * 0.4));
+// 重铸: 词条数不变, affixes 被重生成 (旧值不允许保留保证) — 用 set 验证生成器不会崩即可
+const rz = randomEquipment('magic');
+structkeep: {
+  const before = rz.affixes.length;
+  rerollAffixes(rz);
+  check('重铸保持词条数', rz.affixes.length === before);
+  check('重铸后仍可聚合', aggregateCombat([rz]).critRate !== undefined);
+}

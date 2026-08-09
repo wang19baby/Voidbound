@@ -18,7 +18,8 @@ import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, getSkill, SKILL_SLOTS, type SkillSlot } from './game/skill';
 import { spawnThemeMonster, spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
-import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix } from './game/equipment';
+import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice } from './game/equipment';
+import { TOWN_NPCS, nearestNpc, genMerchantStock, buyItem, sellItem, rerollOwned, type TownPanel, type MerchantStock } from './game/town';
 import { playBgmClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, type Difficulty } from './game/difficulty';
@@ -119,6 +120,7 @@ const state = {
     mp: 100,
     level: 1,
     skillPoints: 0,
+    gold: 0,
     exp: 0,
     potions: { hp: 3, mp: 3 },
     potionCd: 0,
@@ -147,6 +149,9 @@ const state = {
   theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
   runeChoice: null,
   rejectedRunes: [],
+  mode: 'dungeon' as 'dungeon' | 'town',
+  townPanel: null as TownPanel | null,
+  townStock: null as MerchantStock[] | null,
   settingsOpen: false,
   titleOpen: true,
   titleMsg: '',
@@ -222,6 +227,18 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
+  // 城镇: E 交互 + 面板按键
+  if (state.mode === 'town') {
+    const k = e.key.toLowerCase();
+    if (state.townPanel) {
+      handleTownPanelKey(state, e, k);
+      return;
+    }
+    if (k === 'e') { interactTown(state); return; }
+    if (k === 'escape') { state.paused = true; inf('gl', 'paused'); return; }
+    if (k === '1' || k === '2' || k === '3' || k === '4') return; // 面板关闭时忽略数字
+    return; // 城镇阻断游戏键 (技能/药水等)
+  }
   // Esc (未暂停): 打开暂停菜单
   if (!state.paused && e.key === 'Escape') {
     state.paused = true;
@@ -239,6 +256,14 @@ window.addEventListener('keydown', (e) => {
       state.equipmentOpen = false;
       state.titleOpen = true;
       inf('ui', '返回主菜单');
+      return;
+    }
+    if (k === '4') {
+      state.paused = false;
+      state.settingsOpen = false;
+      state.equipmentOpen = false;
+      enterTown(state);
+      inf('ui', '进入城镇');
       return;
     }
     if (state.settingsOpen) {
@@ -340,6 +365,7 @@ window.addEventListener('keydown', (e) => {
       }),
       theme: state.theme,
       difficulty: state.difficulty,
+      gold: state.player.gold,
     }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
   }
   if (e.key === 'o' || e.key === 'O') {
@@ -353,6 +379,7 @@ window.addEventListener('keydown', (e) => {
         state.player.facing.x = d.facing_x;
         state.player.facing.y = d.facing_y;
         state.score = d.score;
+        state.player.gold = d.gold ?? 0;
         state.player.level = d.level ?? 1;
         // 装备层还原 (重建 id, 统一走拥有列表)
         const owned = getOwned(state);
@@ -491,6 +518,21 @@ function loopImpl(now: number) {
     return; // 包装器统一 rAF
   }
 
+  // 城镇场景: 只移动+绘制 (战斗全部冻结)
+  if (state.mode === 'town') {
+    const dir = keys.direction();
+    if (dir.x !== 0 || dir.y !== 0) state.player.facing = dir;
+    if (keys.isDown('d')) state.player.flipDir = 'R';
+    else if (keys.isDown('a')) state.player.flipDir = 'L';
+    else state.player.flipDir = 'N';
+    updatePlayer(state, dir, dt);
+    state.player.idleT += dt;
+    updateCamera(state);
+    drawTownFrame();
+    mouse.reset();
+    return; // 包装器统一 rAF
+  }
+
   const dir = keys.direction();
   // 仅在有方向输入时更新 facing; 松开按键保持最后一次方向 (解决默认朝右问题)
   if (dir.x !== 0 || dir.y !== 0) {
@@ -581,6 +623,154 @@ for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 
   drawFrame();
   mouse.reset();
+}
+
+
+/** 城镇: 进入 (商人库存刷新) */
+function enterTown(state: GameState) {
+  state.mode = 'town';
+  state.townPanel = null;
+  state.townStock = null;
+  state.player.pos = { x: 560, y: 500 };
+}
+
+/** 城镇: E 交互 */
+function interactTown(state: GameState) {
+  const npc = nearestNpc(state);
+  if (!npc) { wrn('ui', '没有可交互的 NPC (靠近一点)'); return; }
+  switch (npc.kind) {
+    case 'merchant':
+      state.townStock = genMerchantStock();
+      state.townPanel = 'merchant';
+      inf('ui', '商人: 1-5 购买, 6 卖出, Esc 离开');
+      break;
+    case 'smith':
+      state.townPanel = 'smith';
+      inf('ui', '重铸师: 1-9 选择装备重铸 (100金), Esc 离开');
+      break;
+    case 'difficulty':
+      state.difficulty = cycleDifficulty(state.difficulty);
+      inf('ui', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
+      break;
+    case 'exit':
+      state.mode = 'dungeon';
+      state.townPanel = null;
+      inf('ui', '出发 → 地下城');
+      break;
+  }
+}
+
+/** 城镇面板按键 (1-5 买 / 6 卖 / 1-9 卖选 / 1-9 重铸选 / B 返回 / Esc 关) */
+function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
+  if (k === 'escape' || k === 'b') { state.townPanel = null; state.townStock = null; return; }
+  const n = parseInt(k, 10);
+  if (state.townPanel === 'merchant' && state.townStock) {
+    if (n >= 1 && n <= 5) {
+      const st = state.townStock[n - 1];
+      if (buyItem(state, st)) inf('ui', `购入 ${st.item.name}`);
+      else wrn('ui', '金币不足');
+      return;
+    }
+    if (n === 6) { state.townPanel = 'sell'; inf('ui', '卖出: 1-9 选择装备 (半价)'); return; }
+    return;
+  }
+  if (state.townPanel === 'sell') {
+    const price = sellItem(state, n - 1);
+    if (price > 0) inf('ui', `卖出 +${price}金`);
+    return;
+  }
+  if (state.townPanel === 'smith') {
+    if (rerollOwned(state, n - 1)) inf('ui', '重铸完成');
+    else wrn('ui', '重铸失败 (金币不足或选择无效)');
+    return;
+  }
+}
+
+/** 城镇绘制: 背景/NPC/玩家/提示/面板 */
+function drawTownFrame() {
+  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  hudCtx.fillStyle = '#1a1d26';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'center';
+  hudCtx.fillStyle = '#9aa';
+  hudCtx.font = 'bold 26px monospace';
+  hudCtx.fillText('城镇', hudCanvas.width / 2, 40);
+  // NPC
+  for (const npc of TOWN_NPCS) {
+    const near = nearestNpc(state)?.kind === npc.kind;
+    hudCtx.fillStyle = near ? '#4a9' : '#334';
+    hudCtx.beginPath();
+    hudCtx.arc(npc.pos.x, npc.pos.y, 26, 0, Math.PI * 2);
+    hudCtx.fill();
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = 'bold 14px monospace';
+    hudCtx.fillText(npc.name, npc.pos.x, npc.pos.y - 30);
+    hudCtx.fillStyle = '#8aa';
+    hudCtx.font = '11px monospace';
+    hudCtx.fillText(npc.hint, npc.pos.x, npc.pos.y + 40);
+  }
+  // 交互提示
+  const npc = nearestNpc(state);
+  if (npc) {
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = 'bold 14px monospace';
+    hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y + 14);
+  }
+  // 玩家
+  const sprite = pickPlayerSprite(state, mouse.state().pos.x);
+  drawSprite(gl, quad, res, worldToScreen(state, state.player.pos), state.player.size, 'characters', sprite.name, { flip: { x: sprite.flipX ? -1 : 1, y: 1 }, rot: sprite.rot });
+  // HUD (金/技能点)
+  hudCtx.textAlign = 'left';
+  hudCtx.fillStyle = '#ffd64a';
+  hudCtx.font = 'bold 14px monospace';
+  hudCtx.fillText(`金: ${state.player.gold}`, 16, 30);
+  // 面板
+  if (state.townPanel) drawTownPanel();
+  mouse.reset();
+}
+
+/** 城镇面板内容 */
+function drawTownPanel() {
+  hudCtx.fillStyle = 'rgba(6,6,12,0.92)';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'left';
+  let y = 70;
+  hudCtx.fillStyle = '#ffd';
+  hudCtx.font = 'bold 20px monospace';
+  if (state.townPanel === 'merchant') {
+    hudCtx.fillText(`商人 (金:${state.player.gold})  [1-5] 购买  [6] 卖出  [Esc] 离开`, 40, y); y += 34;
+    const st = state.townStock ?? [];
+    st.forEach((s, i) => {
+      const col = RARITY_COLORS[s.item.rarity];
+      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText(`${i + 1}. ${s.item.name} (${s.price}金)`, 60, y); y += 24;
+      hudCtx.fillStyle = '#bbb';
+      hudCtx.fillText(`    ${s.item.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
+    });
+  } else if (state.townPanel === 'sell') {
+    hudCtx.fillText(`卖出 (金:${state.player.gold})  [1-9] 选择  [Esc] 返回`, 40, y); y += 34;
+    const owned = getOwned(state);
+    owned.forEach((eq, i) => {
+      if (i > 8) return;
+      const col = RARITY_COLORS[eq.rarity];
+      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText(`${i + 1}. ${eq.name} (+${getItemSellPrice(eq.rarity, eq.affixes.length)}金)`, 60, y); y += 24;
+    });
+  } else if (state.townPanel === 'smith') {
+    hudCtx.fillText(`重铸师 (金:${state.player.gold}, 100金/次)  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
+    const owned = getOwned(state);
+    owned.forEach((eq, i) => {
+      if (i > 8) return;
+      const col = RARITY_COLORS[eq.rarity];
+      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText(`${i + 1}. ${eq.name} — ${eq.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
+    });
+  }
+  hudCtx.fillStyle = '#fff';
 }
 
 /** 新开一局: 重置临时状态 (保留等级/装备/符文 = 本局永久), 重刷怪物到中心 */
@@ -796,7 +986,7 @@ function drawFrameToScreen() {
       hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
       hudCtx.font = '20px monospace';
       hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · P 存档 · O 读档', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · 4 城镇 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
       hudCtx.fillStyle = '#777';
       hudCtx.font = '14px monospace';
       hudCtx.fillText('Ctrl+1..6 分配技能点 · Ctrl+Q 退出(未实现)', hudCanvas.width / 2, hudCanvas.height / 2 + 34);

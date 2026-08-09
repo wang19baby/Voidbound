@@ -316,6 +316,8 @@ export function killMonster(state: GameState, m: Monster): void {
   // 连击 (US-017): 5s 窗口累积, 分数乘 1+min(combo,20)*0.1
   const combo = advanceCombo(state);
   state.score += Math.round(def.score * comboScoreMult(combo));
+  // 金币 (US-021, D-06): base = score*0.5 × 难度掉落倍率
+  state.player.gold = (state.player.gold ?? 0) + Math.max(1, Math.round(def.score * 0.5 * DIFFICULTY_MODS[state.difficulty].dropMult));
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
   state.bossKillTrigger = (state.bossKillTrigger ?? 0) + 1;
   const ups = gainExp(state, def.score * 2);

@@ -39,6 +39,7 @@ export interface SaveData {
   world_h: number;
   level: number;
   owned: SaveItem[];
+  gold: number;
   runes: SaveRune[];
   theme: Theme;
   difficulty: Difficulty;

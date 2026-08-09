@@ -30,6 +30,8 @@ export interface Player {
   combat: CombatStats;
   /** 可分配技能点 (击杀 +1, Ctrl+1..6 分配) */
   skillPoints: number;
+  /** 金币 (D-06): 击杀掉落, 商人/重铸消耗 */
+  gold: number;
   /** 药水瓶 (F-CBT-002: 1=回血 2=回蓝, 击杀 12% 掉落) */
   potions: { hp: number; mp: number };
   potionCd: number;
@@ -80,6 +82,8 @@ export interface GameState {
   difficulty: Difficulty;
   /** 连杀计数 (每 10 击杀召当前主题 Boss) */
   bossKillTrigger: number;
+  /** 场景: 地下城 / 城镇 (US-021) */
+  mode: 'dungeon' | 'town';
   /** 装备面板开关 (Tab, US-014) */
   equipmentOpen: boolean;
   /** 连击 (US-017) */

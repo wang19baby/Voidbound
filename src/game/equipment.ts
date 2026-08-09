@@ -165,6 +165,51 @@ export function recomputeCombat(state: GameState): void {
 
 // === 掉落 / 拾取 ===
 
+/** 生成一件随机装备 (给定稀有度; 供掉落/商店共用, US-021) */
+export function randomEquipment(chosen: Rarity): Equipment {
+  const [min, max] = RARITY_AFFIX_COUNT[chosen];
+  const n = Math.min(max, min + Math.floor(Math.random() * (max - min + 1)));
+  const affixes: Affix[] = [];
+  for (let i = 0; i < n; i++) affixes.push(genAffix());
+  const setName = chosen === 'set' ? SET_KEYS[Math.floor(Math.random() * SET_KEYS.length)] : undefined;
+  return {
+    id: nextEqId++,
+    name: setName ? `${SET_BONUSES[setName].name} ${genName()}` : genName(),
+    rarity: chosen,
+    pos: { x: 0, y: 0 },
+    size: { w: 24, h: 24 },
+    affixes,
+    pickedUp: false,
+    setName,
+  };
+}
+
+/** 买价 (US-021): 稀有度基价 × 词条加成 */
+export function getItemBuyPrice(rarity: Rarity, affixCount: number): number {
+  const base: Record<Rarity, number> = { normal: 10, magic: 40, rare: 120, set: 250, unique: 500 };
+  return Math.round(base[rarity] * (1 + affixCount * 0.35));
+}
+
+/** 卖价 (半价) */
+export function getItemSellPrice(rarity: Rarity, affixCount: number): number {
+  return Math.floor(getItemBuyPrice(rarity, affixCount) * 0.4);
+}
+
+/** 重铸词条 (US-021): 同稀有度同词条数, 全部重roll */
+export function rerollAffixes(eq: Equipment): void {
+  const n = eq.affixes.length;
+  eq.affixes.length = 0;
+  for (let i = 0; i < n; i++) eq.affixes.push(genAffix());
+}
+
+/** 入库 (商店购买/读档重建共用): push owned + 重算 combat */
+export function addOwned(state: GameState, eq: Equipment): void {
+  eq.pickedUp = true;
+  eq.pos = { x: 0, y: 0 };
+  getOwned(state).push(eq);
+  recomputeCombat(state);
+}
+
 /** 怪物死亡时按稀有度掉落率掉装备 */
 export function dropLoot(state: GameState, x: number, y: number): Equipment | null {
   const ext = state as GameState & { _loot?: Equipment[] };
@@ -182,23 +227,11 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
   }
   if (!chosen) return null;
 
-  const [min, max] = RARITY_AFFIX_COUNT[chosen];
-  const n = Math.min(max, min + Math.floor(Math.random() * (max - min + 1)) + mods.affixBonus);
-  const affixes: Affix[] = [];
-  for (let i = 0; i < n; i++) affixes.push(genAffix());
-
-  // set 稀有度: 必带套装名
-  const setName = chosen === 'set' ? SET_KEYS[Math.floor(Math.random() * SET_KEYS.length)] : undefined;
-  const eq: Equipment = {
-    id: nextEqId++,
-    name: setName ? `${SET_BONUSES[setName].name} ${genName()}` : genName(),
-    rarity: chosen,
-    pos: { x, y },
-    size: { w: 24, h: 24 },
-    affixes,
-    pickedUp: false,
-    setName,
-  };
+  const eq = randomEquipment(chosen);
+  eq.pos = { x, y };
+  // 难度词条加成 (D-03): 上限 6 条
+  const extra = Math.min(mods.affixBonus, 6 - eq.affixes.length);
+  for (let i = 0; i < extra; i++) eq.affixes.push(genAffix());
   ext._loot.push(eq);
   return eq;
 }
