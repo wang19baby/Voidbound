@@ -1,0 +1,74 @@
+// 装备词条聚合 → D-04 CombatStats 单测 (US-002)
+// 运行: npm test
+
+import { aggregateCombat, describeAffix, type Equipment, type Affix } from '../src/game/equipment';
+import { baseCombat } from '../src/game/combat';
+
+let failures = 0;
+function eq(name: string, got: number, want: number): void {
+  if (Math.abs(got - want) > 0.0001) {
+    console.error(`FAIL ${name}: got ${got}, want ${want}`);
+    failures++;
+  } else console.log(`ok  ${name}: ${got}`);
+}
+function check(name: string, cond: boolean): void {
+  if (!cond) { console.error(`FAIL ${name}`); failures++; }
+  else console.log(`ok  ${name}`);
+}
+
+function makeItem(affixes: Affix[]): Equipment {
+  return {
+    id: 1, name: '测试', rarity: 'rare',
+    pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
+    affixes, pickedUp: true,
+  };
+}
+
+// 空装备 → 基础属性
+const empty = aggregateCombat([]);
+eq('空聚合 = baseCrit 0.05', empty.critRate, baseCombat().critRate);
+eq('空聚合所有抗性 0', empty.res.fire, 0);
+
+// 单件: 物理/暴击/减抗/易伤/抗性
+const one = aggregateCombat([makeItem([
+  { stat: 'physPct', value: 0.5 },
+  { stat: 'critRate', value: 0.04 },   // 0.05 + 0.04 = 0.09
+  { stat: 'critBonus', value: 25 },
+  { stat: 'shred', value: 15 },
+  { stat: 'vuln', value: 10 },
+  { stat: 'res', value: 20, element: 'fire' },
+])]);
+eq('physPct 聚合', one.physPct, 0.5);
+eq('critRate 聚合 (0.05+0.04)', one.critRate, 0.09);
+eq('critBonus 聚合', one.critBonus, 25);
+eq('shred 聚合', one.shred, 15);
+eq('vuln 聚合', one.vuln, 10);
+eq('火抗聚合', one.res.fire, 20);
+eq('未指定元素抗不变', one.res.ice, 0);
+
+// 多件叠加
+const multi = aggregateCombat([
+  makeItem([{ stat: 'elemPct', value: 0.2 }]),
+  makeItem([{ stat: 'elemPct', value: 0.3 }]),
+]);
+eq('多件 elemPct 加法叠加', multi.elemPct, 0.5);
+
+// critRate 上限 1
+const capped = aggregateCombat([makeItem([{ stat: 'critRate', value: 0.99 }, { stat: 'critRate', value: 0.99 }])]);
+check('critRate 上限 1', capped.critRate === 1);
+
+// hp/mp/speed 不进入聚合 (即时效果)
+const instant = aggregateCombat([makeItem([{ stat: 'hp', value: 40 }, { stat: 'mp', value: 30 }, { stat: 'speed', value: 0.2 }])]);
+check('hp/mp/speed 不进聚合', instant.physPct === 0 && instant.critRate === baseCombat().critRate);
+
+// describeAffix 文案
+check('描述: 火抗', describeAffix({ stat: 'res', value: 15, element: 'fire' }) === '火抗 +15');
+check('描述: 暴击率', describeAffix({ stat: 'critRate', value: 0.04 }) === '暴击率 +4%');
+check('描述: 减抗', describeAffix({ stat: 'shred', value: 12 }) === '减抗 +12');
+
+if (failures > 0) {
+  console.error(`\n${failures} FAILED`);
+  process.exit(1);
+}
+console.log('\nALL PASS');
+process.exit(0);

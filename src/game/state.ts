@@ -4,6 +4,7 @@
 import type { RenderResources } from '../render/resources';
 import { WORLD_W, WORLD_H } from './world';
 import type { Monster } from './monster';
+import type { CombatStats } from './combat';
 
 export interface Camera {
   x: number;
@@ -16,11 +17,14 @@ export interface Player {
   speed: number;
   hp: number;
   mp: number;
+  level: number;
   /** 旧字段保留 (M1 兼容性), 但 sprite 不再用它; 技能用鼠标方向 */
   facing: { x: number; y: number };
   idleT: number;
   /** 角色水平朝向: 'L' (含 A 键) / 'R' (含 D 键) / 'N' (无, 保持默认 south) */
   flipDir: 'L' | 'R' | 'N';
+  /** D-04 战斗属性 (基础 + 装备聚合, US-002 后由 recomputeCombat 生成) */
+  combat: CombatStats;
 }
 
 export interface Fireball {

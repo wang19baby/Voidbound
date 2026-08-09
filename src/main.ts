@@ -18,9 +18,10 @@ import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, type SkillSlot } from './game/skill';
 import { spawnMonster, updateMonsters, resolveFireballHits, resolveMeleeHits, type MonsterType, MONSTER_DEFS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame } from './ipc/save';
-import { RUNE_DEFS, getActiveRune, cycleActiveRune } from './game/rune';
-import { pickupLoot, getLoot, RARITY_COLORS, describeAffix } from './game/equipment';
+import { RUNE_DEFS, getActiveRune, cycleActiveRune, setActiveRune, type RuneId } from './game/rune';
+import { pickupLoot, getLoot, getOwned, allocEquipmentId, recomputeCombat, RARITY_COLORS, describeAffix, type Rarity, type AffixStat } from './game/equipment';
 import { playBgmClient } from './ipc/sfx';
+import { baseCombat, type DamageType } from './game/combat';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
 import { getSkillCooldowns } from './game/cooldown';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
@@ -86,9 +87,11 @@ const state = {
     speed: 200,
     hp: 100,
     mp: 100,
+    level: 1,
     facing: { x: 0, y: 0 },
     idleT: 0,
     flipDir: 'N' as 'L' | 'R' | 'N',
+    combat: baseCombat(),
   },
   viewport: { w: VW, h: VH },
   world: {
@@ -149,6 +152,14 @@ window.addEventListener('keydown', (e) => {
       score: state.score,
       world_w: state.world.w,
       world_h: state.world.h,
+      level: state.player.level,
+      owned: getOwned(state).map(eq => ({
+        name: eq.name,
+        rarity: eq.rarity,
+        affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+      })),
+      rune: getActiveRune(),
+      theme: state.theme,
     }).then(msg => inf('save', `saved: ${msg}`)).catch(e => wrn('save', `save failed: ${e}`));
   }
   if (e.key === 'r' || e.key === 'R') {
@@ -162,7 +173,29 @@ window.addEventListener('keydown', (e) => {
         state.player.facing.x = d.facing_x;
         state.player.facing.y = d.facing_y;
         state.score = d.score;
-        inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)}`);
+        state.player.level = d.level ?? 1;
+        // 装备层还原 (重建 id, 统一走拥有列表)
+        const owned = getOwned(state);
+        owned.length = 0;
+        for (const it of d.owned) {
+          owned.push({
+            id: allocEquipmentId(),
+            name: it.name,
+            rarity: it.rarity,
+            pos: { x: 0, y: 0 },
+            size: { w: 24, h: 24 },
+            affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+            pickedUp: true,
+          });
+        }
+        recomputeCombat(state);
+        // 永久层: 符文/主题
+        setActiveRune(d.rune);
+        if (d.theme && d.theme !== state.theme) {
+          state.theme = d.theme;
+          playBgmClient(`bgm_${state.theme}`);
+        }
+        inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
       }).catch(e => wrn('save', `load failed: ${e}`));
     }
   }

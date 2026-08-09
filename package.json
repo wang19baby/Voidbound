@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "watch": "node esbuild.config.mjs --watch"
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "esbuild tests/combat.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/combat.test.cjs && node .tmp/combat.test.cjs && esbuild tests/equipment.test.ts --bundle --platform=node --format=cjs --outfile=.tmp/equipment.test.cjs && node .tmp/equipment.test.cjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

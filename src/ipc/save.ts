@@ -1,6 +1,23 @@
-// 客户端存档 wrapper
+// 客户端存档 wrapper (US-003 三层结构)
+// IPC 边界类型 = 反序列化契约 (serde_json 对应结构)
 
 import { invoke } from '@tauri-apps/api/core';
+import type { DamageType } from '../game/combat';
+import type { AffixStat, Rarity } from '../game/equipment';
+import type { RuneId } from '../game/rune';
+import type { Theme } from '../game/state';
+
+export interface SaveAffix {
+  stat: AffixStat;
+  value: number;
+  element?: DamageType;
+}
+
+export interface SaveItem {
+  name: string;
+  rarity: Rarity;
+  affixes: SaveAffix[];
+}
 
 export interface SaveData {
   player_x: number;
@@ -12,6 +29,10 @@ export interface SaveData {
   score: number;
   world_w: number;
   world_h: number;
+  level: number;
+  owned: SaveItem[];
+  rune: RuneId;
+  theme: Theme;
 }
 
 export function saveGame(data: SaveData): Promise<string> {

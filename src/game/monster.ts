@@ -8,6 +8,7 @@ import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
 import { dropLoot } from './equipment';
 import { spawnDamageNum } from './damageNum';
+import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
 
 export type MonsterType = 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking';
 
@@ -25,16 +26,23 @@ export interface MonsterDef {
   rangedCooldown?: number;
   /** boss 标记 (大血量, 慢速, 单独 spawn) */
   boss?: boolean;
+  /** 各系抗性 (D-04, 缺省 = 0) */
+  res?: Partial<Record<DamageType, number>>;
 }
 
+/** 技能基础伤害面板 (D-04; US-004 技能等级化后移入 SkillDef) */
+export const FIREBALL_DAMAGE = 25;   // 火
+export const MELEE_DAMAGE = 50;      // 物理
+export const ULTIMATE_DAMAGE = 70;   // 暗影
+
 export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
-  bat:      { type: 'bat',      sprite: 'bat',      size: { w: 32, h: 32 }, hp: 30,  speed: 80,  aggroRange: 200, attackRange: 28, contactDmg: 5,  score: 10 },
-  slime:    { type: 'slime',    sprite: 'slime',    size: { w: 32, h: 32 }, hp: 60,  speed: 40,  aggroRange: 160, attackRange: 30, contactDmg: 8,  score: 15 },
-  worm:     { type: 'worm',     sprite: 'worm',     size: { w: 32, h: 32 }, hp: 45,  speed: 60,  aggroRange: 180, attackRange: 28, contactDmg: 6,  score: 12 },
-  ghost:    { type: 'ghost',    sprite: 'ghost',    size: { w: 32, h: 32 }, hp: 35,  speed: 100, aggroRange: 220, attackRange: 24, contactDmg: 7,  score: 18, rangedCooldown: 2.0 },
-  bee:      { type: 'bee',      sprite: 'bee',      size: { w: 32, h: 32 }, hp: 25,  speed: 120, aggroRange: 250, attackRange: 22, contactDmg: 6,  score: 14, rangedCooldown: 1.5 },
-  eyeball:  { type: 'eyeball',  sprite: 'eyeball',  size: { w: 32, h: 32 }, hp: 80,  speed: 50,  aggroRange: 200, attackRange: 32, contactDmg: 10, score: 25, rangedCooldown: 2.5 },
-  pumpking: { type: 'pumpking', sprite: 'pumpking', size: { w: 64, h: 64 }, hp: 400, speed: 25,  aggroRange: 280, attackRange: 48, contactDmg: 20, score: 100, boss: true, rangedCooldown: 3.0 },
+  bat:      { type: 'bat',      sprite: 'bat',      size: { w: 32, h: 32 }, hp: 30,  speed: 80,  aggroRange: 200, attackRange: 28, contactDmg: 5,  score: 10, res: { fire: -20 } },
+  slime:    { type: 'slime',    sprite: 'slime',    size: { w: 32, h: 32 }, hp: 60,  speed: 40,  aggroRange: 160, attackRange: 30, contactDmg: 8,  score: 15, res: { physical: 10 } },
+  worm:     { type: 'worm',     sprite: 'worm',     size: { w: 32, h: 32 }, hp: 45,  speed: 60,  aggroRange: 180, attackRange: 28, contactDmg: 6,  score: 12, res: { physical: 20, fire: -10 } },
+  ghost:    { type: 'ghost',    sprite: 'ghost',    size: { w: 32, h: 32 }, hp: 35,  speed: 100, aggroRange: 220, attackRange: 24, contactDmg: 7,  score: 18, rangedCooldown: 2.0, res: { physical: 15 } },
+  bee:      { type: 'bee',      sprite: 'bee',      size: { w: 32, h: 32 }, hp: 25,  speed: 120, aggroRange: 250, attackRange: 22, contactDmg: 6,  score: 14, rangedCooldown: 1.5, res: { fire: -15 } },
+  eyeball:  { type: 'eyeball',  sprite: 'eyeball',  size: { w: 32, h: 32 }, hp: 80,  speed: 50,  aggroRange: 200, attackRange: 32, contactDmg: 10, score: 25, rangedCooldown: 2.5, res: { fire: 20 } },
+  pumpking: { type: 'pumpking', sprite: 'pumpking', size: { w: 64, h: 64 }, hp: 400, speed: 25,  aggroRange: 280, attackRange: 48, contactDmg: 20, score: 100, boss: true, rangedCooldown: 3.0, res: { fire: 40, physical: 25 } },
 };
 
 export interface Monster {
@@ -242,75 +250,76 @@ export function updateMonsters(state: GameState, dt: number): void {
   }
 }
 
-/** 检查所有火球与怪物的碰撞, 命中扣血 */
+/** 对怪物结算一次 D-04 伤害; 返回是否击杀 (死亡/掉落/分数/特效统一在此) */
+export function damageMonster(
+  state: GameState,
+  m: Monster,
+  spec: { base: number; type: DamageType },
+): { killed: boolean; damage: number; isCrit: boolean } {
+  const def = MONSTER_DEFS[m.type];
+  const targetRes = def.res?.[spec.type] ?? 0;
+  const { damage, isCrit } = calcDamage({
+    base: spec.base,
+    type: spec.type,
+    attacker: state.player.combat,
+    targetRes,
+  });
+  m.hp -= damage;
+  m.hitFlash = 0.15;
+  const cx = m.pos.x + m.size.w / 2;
+  const cy = m.pos.y + m.size.h / 2;
+  spawnDamageNum(state, cx, m.pos.y - 6, `-${damage}`, isCrit ? CRIT_COLOR : DAMAGE_TYPE_COLORS[spec.type]);
+  playSfxClient('hit');
+  dbg('combat', `${spec.type} hit ${m.type} for ${damage} (hp=${m.hp.toFixed(0)})${isCrit ? ' CRIT' : ''}`);
+  if (m.hp <= 0) {
+    state.score += def.score;
+    spawnDeathFx(state, cx, cy);
+    playSfxClient('die');
+    dropLoot(state, cx, cy);
+    spawnDamageNum(state, cx, m.pos.y, 'KILL!', '#ffaa00');
+    inf('combat', `${m.type} killed (+${def.score})`);
+    return { killed: true, damage, isCrit };
+  }
+  return { killed: false, damage, isCrit };
+}
+
+/** 检查所有火球与怪物的碰撞, 命中扣血 (火球 = 25 火伤) */
 export function resolveFireballHits(state: GameState): number {
   const fireballs = state.fireballs;
-  const monsters = state.monsters;
   let kills = 0;
-  const before = monsters.length;
-  state.monsters = monsters.filter(m => {
-    let alive = true;
+  state.monsters = state.monsters.filter(m => {
+    if (m.hp <= 0) return false;
     for (const f of fireballs) {
       if (aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
-        const def = MONSTER_DEFS[m.type];
-        m.hp -= 25;
-        m.hitFlash = 0.15;
-        dbg('combat', `fireball hit ${m.type} (hp=${m.hp.toFixed(0)})`);
-        // 移除火球
+        // 移除火球 (命中即消耗)
         const idx = fireballs.indexOf(f);
         if (idx >= 0) fireballs.splice(idx, 1);
-        if (m.hp <= 0) {
-          alive = false;
-          kills++;
-          state.score += def.score;
-          spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
-          playSfxClient('die');
-          dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
-          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'KILL!', '#ffaa00');
-          inf('combat', `${m.type} killed by fireball (+${def.score})`);
-          break;
-        } else {
-          playSfxClient('hit');
-          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '-25', '#ff5555');
-        }
+        const r = damageMonster(state, m, { base: FIREBALL_DAMAGE, type: 'fire' });
+        if (r.killed) { kills++; return false; }
+        // 同一目标可被多发命中 (W 扇形)
       }
     }
-    return alive;
+    return true;
   });
   return kills;
 }
 
-/** 检查所有挥击与怪物的碰撞 */
+/** 检查所有挥击与怪物的碰撞 (近战 = 50 物理) */
 export function resolveMeleeHits(state: GameState): number {
   // melees 存 state._swings
   const ext = state as GameState & { _swing?: import('./skill').MeleeSwing[] };
   const swings = ext._swing ?? [];
   let kills = 0;
   state.monsters = state.monsters.filter(m => {
-    let alive = true;
+    if (m.hp <= 0) return false;
     for (const s of swings) {
       if (aabbOverlap(s.pos.x, s.pos.y, s.size.w, s.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
-        const def = MONSTER_DEFS[m.type];
-        m.hp -= 50;
-        m.hitFlash = 0.15;
-        dbg('combat', `melee hit ${m.type} (hp=${m.hp.toFixed(0)})`);
-        if (m.hp <= 0) {
-          alive = false;
-          kills++;
-          state.score += def.score;
-          spawnDeathFx(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
-          playSfxClient('die');
-          dropLoot(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2);
-          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'KILL!', '#ffaa00');
-          inf('combat', `${m.type} killed by melee (+${def.score})`);
-          break;
-        } else {
-          playSfxClient('hit');
-          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '-50', '#ff5555');
-        }
+        const r = damageMonster(state, m, { base: MELEE_DAMAGE, type: 'physical' });
+        if (r.killed) { kills++; return false; }
+        // 一次挥击只结算一次
       }
     }
-    return alive;
+    return true;
   });
   return kills;
 }

@@ -1,13 +1,52 @@
-// 装备系统: 怪物掉 4 阶稀有度装备, 词条加成 HP/MP/dmg
-// 拾取即生效, 不需穿脱 (M1 简化)
+// 装备系统: 5 阶稀有度 (F-ITEM-002) + 词条聚合到 D-04 CombatStats (US-002)
+// 掉落: 怪物死亡概率掉装备; 拾取即"装备" (owned 列表), 实时重算 player.combat
+// hp/mp 词条: 拾取时即时回血/回蓝 (M1 行为保留); 其余词条进 D-04 公式
 
 import type { GameState } from './state';
+import { baseCombat, type CombatStats, type DamageType, DAMAGE_TYPES } from './combat';
+import { MAX_HP, MAX_MP } from './player';
 
-export type Rarity = 'white' | 'green' | 'blue' | 'purple';
+// === 5 阶稀有度 (F-ITEM-002: 普通/魔法/稀有/套装/传奇) ===
+
+export type Rarity = 'normal' | 'magic' | 'rare' | 'set' | 'unique';
+
+export const RARITY_COLORS: Record<Rarity, [number, number, number]> = {
+  normal: [0.95, 0.95, 0.95],   // 白
+  magic:  [0.30, 0.50, 1.00],   // 蓝
+  rare:   [1.00, 0.85, 0.30],   // 黄
+  set:    [0.30, 1.00, 0.30],   // 绿
+  unique: [1.00, 0.70, 0.10],   // 金 (暗金)
+};
+
+export const RARITY_DROP_RATE: Record<Rarity, number> = {
+  normal: 0.40,
+  magic:  0.25,
+  rare:   0.15,
+  set:    0.06,
+  unique: 0.02,
+};
+
+/** 每档词条数量范围 [min, max] */
+export const RARITY_AFFIX_COUNT: Record<Rarity, [number, number]> = {
+  normal: [0, 0],
+  magic:  [1, 2],
+  rare:   [2, 3],
+  set:    [3, 4],
+  unique: [4, 5],
+};
+
+// === 词条系统 ===
+
+export type AffixStat =
+  | 'hp' | 'mp' | 'speed'
+  | 'physPct' | 'elemPct' | 'critRate' | 'critBonus'
+  | 'shred' | 'vuln' | 'res';
 
 export interface Affix {
-  stat: 'hp' | 'mp' | 'dmg' | 'speed';
+  stat: AffixStat;
   value: number;
+  /** 仅 'res' 词条使用: 目标元素系 */
+  element?: DamageType;
 }
 
 export interface Equipment {
@@ -18,52 +57,89 @@ export interface Equipment {
   size: { w: number; h: number };
   affixes: Affix[];
   pickedUp: boolean;
-  /** 拾取后增加的 hp/mp (玩家基础) */
 }
 
-export const RARITY_COLORS: Record<Rarity, [number, number, number]> = {
-  white:  [0.95, 0.95, 0.95],
-  green:  [0.3,  1.0,  0.3],
-  blue:   [0.3,  0.5,  1.0],
-  purple: [0.7,  0.3,  1.0],
-};
-
-export const RARITY_DROP_RATE: Record<Rarity, number> = {
-  white:  0.4,
-  green:  0.25,
-  blue:   0.1,
-  purple: 0.03,
+const ELEM_NAMES: Record<DamageType, string> = {
+  physical: '物理', fire: '火', ice: '冰', lightning: '雷', poison: '毒', shadow: '暗', holy: '圣',
 };
 
 let nextEqId = 1;
 
+/** 分配新装备 id (读档重建使用) */
+export function allocEquipmentId(): number {
+  return nextEqId++;
+}
+
 const PREFIXES = ['暗影', '烈焰', '寒霜', '雷霆', '虚空', '圣光', '古龙', '深渊'];
 const SUFFIXES = ['之牙', '之心', '之手', '之眼', '之魂', '之怒', '之誓', '之拥'];
 
-/** 生成随机装备名 */
 function genName(): string {
   const p = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
   const s = SUFFIXES[Math.floor(Math.random() * SUFFIXES.length)];
   return `${p}${s}`;
 }
 
-const STAT_NAMES: Record<Affix['stat'], string> = {
-  hp: '生命',
-  mp: '法力',
-  dmg: '伤害',
-  speed: '速度',
-};
-
-/** 生成随机词条 */
-function genAffix(rarity: Rarity): Affix {
-  const stats: Affix['stat'][] = ['hp', 'mp', 'dmg', 'speed'];
-  const stat = stats[Math.floor(Math.random() * stats.length)];
-  const mul = rarity === 'white' ? 1 : rarity === 'green' ? 2 : rarity === 'blue' ? 4 : 8;
-  const value = (stat === 'hp' || stat === 'mp' ? 10 : stat === 'dmg' ? 2 : 10) * mul;
-  return { stat, value };
+/** 按词条类型滚数值 */
+function rollValue(stat: AffixStat): number {
+  switch (stat) {
+    case 'hp':       return Math.round(15 + Math.random() * 25);
+    case 'mp':       return Math.round(10 + Math.random() * 20);
+    case 'speed':    return Math.round((0.05 + Math.random() * 0.10) * 100) / 100;
+    case 'physPct':  return Math.round((0.10 + Math.random() * 0.20) * 100) / 100;
+    case 'elemPct':  return Math.round((0.10 + Math.random() * 0.17) * 100) / 100;
+    case 'critRate': return Math.round((0.02 + Math.random() * 0.04) * 100) / 100;
+    case 'critBonus':return Math.round(10 + Math.random() * 30);
+    case 'shred':    return Math.round(5 + Math.random() * 15);
+    case 'vuln':     return Math.round(5 + Math.random() * 10);
+    case 'res':      return Math.round(5 + Math.random() * 20);
+  }
 }
 
-/** 怪物死亡时按概率掉装备 */
+const AFFIX_POOL: AffixStat[] = [
+  'hp', 'mp', 'speed', 'physPct', 'elemPct', 'critRate', 'critBonus', 'shred', 'vuln', 'res',
+];
+
+/** 生成随机词条 (res 词条附带随机元素系) */
+function genAffix(): Affix {
+  const stat = AFFIX_POOL[Math.floor(Math.random() * AFFIX_POOL.length)];
+  const value = rollValue(stat);
+  const element = stat === 'res'
+    ? DAMAGE_TYPES[1 + Math.floor(Math.random() * (DAMAGE_TYPES.length - 1))]  // 元素系 (非 physical)
+    : undefined;
+  return { stat, value, element };
+}
+
+/** 聚合所有已装备词条 → CombatStats (纯函数, 供单测) */
+export function aggregateCombat(items: readonly Equipment[]): CombatStats {
+  const c = baseCombat();
+  for (const eq of items) {
+    for (const a of eq.affixes) {
+      switch (a.stat) {
+        case 'hp':
+        case 'mp':
+        case 'speed':
+          break; // 即时效果, 不进入战斗属性聚合
+        case 'physPct':   c.physPct += a.value; break;
+        case 'elemPct':   c.elemPct += a.value; break;
+        case 'critRate':  c.critRate = Math.min(1, c.critRate + a.value); break;
+        case 'critBonus': c.critBonus += a.value; break;
+        case 'shred':     c.shred += a.value; break;
+        case 'vuln':      c.vuln += a.value; break;
+        case 'res':       if (a.element) c.res[a.element] += a.value; break;
+      }
+    }
+  }
+  return c;
+}
+
+/** 从当前已持有装备重算 player.combat (拾取/读档后调用) */
+export function recomputeCombat(state: GameState): void {
+  state.player.combat = aggregateCombat(getOwned(state));
+}
+
+// === 掉落 / 拾取 ===
+
+/** 怪物死亡时按稀有度掉落率掉装备 */
 export function dropLoot(state: GameState, x: number, y: number): Equipment | null {
   const ext = state as GameState & { _loot?: Equipment[] };
   ext._loot = ext._loot ?? [];
@@ -75,20 +151,26 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
     if (r < cum) { chosen = rar; break; }
   }
   if (!chosen) return null;
+
+  const [min, max] = RARITY_AFFIX_COUNT[chosen];
+  const n = Math.min(max, min + Math.floor(Math.random() * (max - min + 1)));
+  const affixes: Affix[] = [];
+  for (let i = 0; i < n; i++) affixes.push(genAffix());
+
   const eq: Equipment = {
     id: nextEqId++,
     name: genName(),
     rarity: chosen,
     pos: { x, y },
     size: { w: 24, h: 24 },
-    affixes: [genAffix(chosen)],
+    affixes,
     pickedUp: false,
   };
   ext._loot.push(eq);
   return eq;
 }
 
-/** 检查拾取 + 应用词条 (拾取: 一次性, 仅玩家碰触) */
+/** 检查拾取: hp/mp 即时生效, 其余词条聚合进 combat */
 export function pickupLoot(state: GameState): Equipment[] {
   const ext = state as GameState & { _loot?: Equipment[] };
   if (!ext._loot) return [];
@@ -101,16 +183,16 @@ export function pickupLoot(state: GameState): Equipment[] {
         state.player.pos.y + state.player.size.h > eq.pos.y) {
       eq.pickedUp = true;
       picked.push(eq);
-      // 应用词条
+      getOwned(state).push(eq);
       for (const a of eq.affixes) {
-        if (a.stat === 'hp') state.player.hp = Math.min(100, state.player.hp + a.value);
-        else if (a.stat === 'mp') state.player.mp = Math.min(100, state.player.mp + a.value);
-        // dmg/speed 是 M2 的事, M1 简化只记
+        if (a.stat === 'hp') state.player.hp = Math.min(MAX_HP, state.player.hp + a.value);
+        else if (a.stat === 'mp') state.player.mp = Math.min(MAX_MP, state.player.mp + a.value);
       }
       return false;
     }
     return true;
   });
+  if (picked.length) recomputeCombat(state);
   return picked;
 }
 
@@ -119,7 +201,24 @@ export function getLoot(state: GameState): readonly Equipment[] {
   return ext._loot ?? [];
 }
 
+/** 已拾取(装备中)的列表 */
+export function getOwned(state: GameState): Equipment[] {
+  const ext = state as GameState & { _owned?: Equipment[] };
+  ext._owned = ext._owned ?? [];
+  return ext._owned;
+}
+
 export function describeAffix(a: Affix): string {
-  const sign = a.value > 0 ? '+' : '';
-  return `${STAT_NAMES[a.stat]} ${sign}${a.value}`;
+  switch (a.stat) {
+    case 'hp':       return `生命 +${a.value}`;
+    case 'mp':       return `法力 +${a.value}`;
+    case 'speed':    return `移速 +${Math.round(a.value * 100)}%`;
+    case 'physPct':  return `物理伤害 +${Math.round(a.value * 100)}%`;
+    case 'elemPct':  return `元素伤害 +${Math.round(a.value * 100)}%`;
+    case 'critRate': return `暴击率 +${Math.round(a.value * 100)}%`;
+    case 'critBonus':return `暴击伤害 +${a.value}%`;
+    case 'shred':    return `减抗 +${a.value}`;
+    case 'vuln':     return `易伤 +${a.value}%`;
+    case 'res':      return `${a.element ? ELEM_NAMES[a.element] : '元素'}抗 +${a.value}`;
+  }
 }

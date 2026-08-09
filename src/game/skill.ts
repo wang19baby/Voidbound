@@ -70,12 +70,16 @@ export const defaultSkills: Record<SkillSlot, SkillDef> = {
     cooldown: 8.0,
     mpCost: 60,
     cast: (state) => {
-      // 玩家周围 200px 内所有怪物扣 80 HP
+      // 玩家周围 200px 内所有怪物受 70 暗影伤害 (D-04 结算)
       for (const m of state.monsters) {
         const dx = m.pos.x - state.player.pos.x;
         const dy = m.pos.y - state.player.pos.y;
-        if (dx * dx + dy * dy < 200 * 200) m.hp -= 80;
+        if (dx * dx + dy * dy < 200 * 200) {
+          damageMonster(state, m, { base: ULTIMATE_DAMAGE, type: 'shadow' });
+        }
       }
+      // 清理本帧被击杀的尸体 (下一帧 resolveMonster 会再过滤)
+      state.monsters = state.monsters.filter(m => m.hp > 0);
     },
   },
 };
@@ -125,6 +129,7 @@ import type { Fireball } from './state';
 import type { Wall } from './world';
 import { aabbOverlap } from './world';
 import { dbg, inf } from '../util/log';
+import { damageMonster, ULTIMATE_DAMAGE } from './monster';
 
 export interface MeleeSwing {
   pos: { x: number; y: number };

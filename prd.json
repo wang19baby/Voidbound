@@ -1,101 +1,77 @@
 {
-  "name": "Voidbound M1 polish + production build",
-  "description": "Complete remaining M1 features: hit feedback visuals, monster death effects, walk animations, audio system, pause/death UI, save system, production build.",
+  "name": "Voidbound M2 完善 - 伤害公式地基优先",
+  "description": "整理开发计划并按 ROI 实施：先落地 D-04 伤害公式引擎（所有内容系统返工地基），再接线装备词条、存档 3 层、技能等级+符文三选一、地图决策、设置/启动画面。",
   "userStories": [
     {
       "id": "US-001",
-      "title": "受击 hitFlash 视觉",
-      "description": "怪物受击时(m.hitFlash > 0)用纯红色覆盖sprite渲染, 0.15s 闪烁反馈",
+      "title": "D-04 伤害公式引擎",
+      "description": "新建 src/game/combat.ts 纯函数引擎：物理/7 系元素伤害、暴击 1.5x(与暴击伤害%按乘叠加)、抗性 clamp(-100,75) 后减成、易伤上限 50%、减抗先于抗性计算。火球=火伤(25)、近战=物理(50)、大招=暗影(70)；怪物 defs 增加每系抗性表；命中伤害数字显示实际数值+暴击橙色。",
       "acceptanceCriteria": [
-        "src/game/monster.ts 中 m.hitFlash 字段被 reduce per frame",
-        "src/main.ts 渲染怪物时, 当 m.hitFlash > 0 用红色 tint (通过 GL blend 或 覆盖 sprite)",
-        "可见效果: 火球命中后怪物 0.15s 内变红闪烁"
+        "src/game/combat.ts 存在，calcDamage 为纯函数（可注入 random）",
+        "物理公式 = base × (1+attr/100+physPct) × crit × res × vuln",
+        "元素公式 = base × (1+attr/100) × (1+elemPct) × crit × res × vuln",
+        "暴击倍率 = 1.5 × (1+critBonus/100)，critRate 注入可测",
+        "有效抗性 = clamp(抗性-减抗, -100, 75)；易伤上限 50%；伤害最小 1",
+        "monster.ts 7 种怪物 defs 带 res 表（fire/physical 等）",
+        "火球/近战/大招通过公式结算，伤害数字显示实际值+暴击橙色",
+        "tests/combat.test.ts 覆盖上述公式边界并通过（npm test）"
       ],
       "passes": true
     },
     {
       "id": "US-002",
-      "title": "怪物死亡粒子爆裂",
-      "description": "怪物死亡时 spawn 6-8 个 particles 飞散, 1s 后消失",
+      "title": "装备 5 阶稀有度 + 词条接入公式",
+      "description": "装备系统从 4 档升级为 F-ITEM-002 的 5 档（白/蓝/黄/绿/金），词条池扩展为战斗属性：+物理%/+元素%/+暴击率/+暴击伤害/+各系抗性/+减抗（减抗作用于目标）；拾取装备实时重算玩家 combat 属性并作用于 D-04 公式；掉落/渲染/描述按 5 档。",
       "acceptanceCriteria": [
-        "src/game/deathFx.ts 新模块, 维护 state.deathFx: Array<{pos, vel, life}>",
-        "死亡时 spawn 6-8 个 particles 随机方向",
-        "update per frame: pos += vel*dt, life -= dt; life<=0 移除",
-        "src/main.ts 渲染: drawSprite(particles/slash_02) at each fx.pos, size 8x8"
+        "Rarity = normal/magic/rare/set/unique 5 档，颜色与掉落率符合 F-ITEM-002",
+        "词条 enum 扩展：physPct/elemPct/critRate/critBonus/res(shred) 映射到 CombatStats",
+        "拾取后 recomputeCombat(state) 汇总所有装备到 player.combat，伤害反馈不同",
+        "describeAffix 显示新词条",
+        "新词条在 tests 有覆盖（装备→combat 聚合函数单测）"
       ],
       "passes": true
     },
     {
       "id": "US-003",
-      "title": "怪物 walk 循环动画",
-      "description": "怪物每 0.3s 切换 walk frame 0/1, 视觉上看起来在走",
+      "title": "存档 3 层化",
+      "description": "存档从位置/HP/MP/分数扩展为 F-SAVE-001 三层：角色（等级/属性/装备快照）、永久（解锁符文/主题）、本次运行（地图 seed/怪物/符文绑定/难度）。save.rs/SaveData 扩字段，前端 load 完整还原 combat+装备。",
       "acceptanceCriteria": [
-        "monster.ts 添加 walkFrame (0|1) 和 walkT (累加 dt)",
-        "walkT > 0.3s 时 walkFrame = 1 - walkFrame; walkT = 0",
-        "src/main.ts 渲染时根据 monster.type + walkFrame 选 sprite (e.g. bat_0, bat_1)",
-        "为 bat/slime/worm 各自生成 walk 帧 (裁剪 LPC 原图 row 0 col 0/1)"
+        "SaveData 扩展：playerLevel/combat/equipmentSnapshot/activeRune/theme 字段",
+        "save_game 序列化新字段，load_game 完整还原 player.combat 与装备",
+        "重启后加载存档能恢复战斗属性",
+        "bincode 前后兼容处理（旧存档可读或报错明确）"
       ],
       "passes": true
     },
     {
       "id": "US-004",
-      "title": "音效系统 (SFX)",
-      "description": "用 rodio 播 OpenGameArt CC0 SFX (fireball, hit, melee swing, monster death); Tauri Rust 端管理 audio",
+      "title": "技能等级 + 符文 10 级三选一（D-01 最小闭环）",
+      "description": "技能带等级(1-20，击杀获得可分配技能点)，达到 10 级时触发第一符文三选一 UI（三个随机 RUNE_DEFS），选中后本局技能永久绑定 1 符文（不再 MMB 切换）；D-01 规则的最小可玩闭环。",
       "acceptanceCriteria": [
-        "src-tauri/Cargo.toml 添加 rodio = 0.19",
-        "src-tauri/src/audio.rs 模块, Tauri command play_sfx(name) 在后台线程播",
-        "assets/sfx/ 目录含 fireball.ogg, hit.ogg, swing.ogg, die.ogg (CC0 资源)",
-        "src/main.ts: invoke play_sfx('fireball') 在 Q 火球发射时; invoke play_sfx('hit') 命中时; invoke play_sfx('die') 死亡时; invoke play_sfx('swing') LMB/RMB 挥击时"
+        "SkillDef 带 level 字段，技能点分配 UI（HUD）",
+        "任意技能到 10 级→ 显示三选一面板，选中后 bindSkill 永久生效",
+        "MMB 切换删除（或仅调试可用）"
       ],
-      "passes": true
+      "passes": false
     },
     {
       "id": "US-005",
-      "title": "暂停菜单",
-      "description": "按 ESC 暂停/恢复游戏, 暂停时屏幕覆盖半透明 + 显示菜单文字",
+      "title": "地图生成决策记录（D-26）",
+      "description": "ROADMAP 明确 WFC(fast-wfc v3, D-23) 是 M3 阶段三目标；当前程序化分块是 M1-M2 交付形式。在 CHANGELOG-v1.1.md 追加 D-26 决策记录，防止后续误解为缺失。",
       "acceptanceCriteria": [
-        "state.paused: boolean 字段",
-        "main.ts: 按 ESC 切换 paused",
-        "paused 时: rAF 不更新游戏逻辑 (但保持渲染以便重绘)",
-        "hud.ts 渲染: 当 paused 时叠加 RGBA(0,0,0,0.7) + 居中文字 'PAUSED - press ESC'"
+        "CHANGELOG-v1.1.md 增加 D-26：地图生成 = 分块程序化（M1/M2）/ WFC (M3 计划)"
       ],
-      "passes": true
+      "passes": false
     },
     {
       "id": "US-006",
-      "title": "死亡屏 + 重开",
-      "description": "玩家 HP <= 0 时进入死亡屏, 2 秒后自动重开 (重置到世界中心, HP 满, 清怪)",
+      "title": "设置菜单 + 启动画面",
+      "description": "GAME_FLOW §12 设置界面（音量/全屏/分辨率/按键信息）落地为 ESC 内菜单，音频命令已存在（set_volume/play_bgm）；主菜单/启动画面按 §1（Voidbound 遮罩+加载 atlas 进度）。",
       "acceptanceCriteria": [
-        "main.ts 每帧检查 player.hp <= 0, 触发 death state",
-        "death state 持续 2 秒后自动 reset: player.pos = 世界中心, hp=100, mp=100, score=0, monsters=重新生成 5 只",
-        "死亡期间 hud 渲染 'YOU DIED - score: N' 居中文字",
-        "死亡期间 monsters 不更新, 火球清空"
+        "设置覆盖层：音量滑块（set_volume 真实生效）、全屏切换、按键说明",
+        "启动时画布先显示 splash + loading 文案直至 6 atlas 加载完成"
       ],
-      "passes": true
-    },
-    {
-      "id": "US-007",
-      "title": "存档系统",
-      "description": "bincode 序列化 (player pos, hp, mp, score, monsters 列表) 到 save.bin; 按 P 键手动存档, R 键读档",
-      "acceptanceCriteria": [
-        "src-tauri/Cargo.toml 添加 bincode = 1.3, dirs = 5",
-        "src-tauri/src/save.rs 模块, 2 个 commands: save_game(state) / load_game() -> Result<state>",
-        "存档目录: dirs::data_local_dir()/voidbound/save.bin",
-        "src/main.ts: P 键调 invoke save_game; R 键调 invoke load_game (用返回值重置 state)"
-      ],
-      "passes": true
-    },
-    {
-      "id": "US-008",
-      "title": "生产构建 (Tauri build)",
-      "description": "运行 cargo tauri build 产出 .exe 安装器; 修复所有 build 错误",
-      "acceptanceCriteria": [
-        "src-tauri/tauri.conf.json: bundle.active=true, bundle.targets=['nsis'] 或 'msi'",
-        "cargo tauri build 成功 (无 error)",
-        "产出物在 src-tauri/target/release/bundle/{nsis,msi}/*.exe 或 .msi",
-        "产出 .exe 启动后 Tauri 窗口正常弹出, 所有 6 个 atlas 加载"
-      ],
-      "passes": true
+      "passes": false
     }
   ]
 }
