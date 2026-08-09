@@ -71,13 +71,25 @@ hudCtx.fillStyle = '#888';
 hudCtx.font = '16px monospace';
 hudCtx.fillText('加载图集中…', VW / 2, VH / 2 + 20);
 hudCtx.textAlign = 'left';
+  invoke('js_log', { msg: '[boot] splash drawn' }).catch(() => {});
+
 
 inf('gl', `WebGL2 init ${canvas.width}x${canvas.height}`);
 const gl = createContext(canvas);
+// WebGL 上下文丢失探针 (通过 js_log 上报, 排查渲染冻结)
+canvas.addEventListener('webglcontextlost', (ev) => {
+  ev.preventDefault();
+  invoke('js_log', { msg: '[gl] CONTEXT LOST' }).catch(() => {});
+});
+canvas.addEventListener('webglcontextrestored', () => {
+  invoke('js_log', { msg: '[gl] CONTEXT RESTORED' }).catch(() => {});
+});
 const quad = createQuadBuffer(gl, VERT, FRAG);
 inf('gl', 'shader program + quad VAO ready');
 
 inf('atlas', 'loading 6 atlases...');
+  invoke('js_log', { msg: '[boot] loading atlases' }).catch(() => {});
+
 const [characters, particles, ui, icons, world, monsters] = await Promise.all([
   loadAtlas('characters'),
   loadAtlas('particles'),
@@ -89,8 +101,11 @@ const [characters, particles, ui, icons, world, monsters] = await Promise.all([
 inf('atlas', `loaded: ${[characters, particles, ui, icons, world, monsters].map(a => `${a.name}(${a.width}x${a.height},${a.sprites.length})`).join(' ')}`);
 const res = await buildRenderResources(gl, [characters, particles, ui, icons, world, monsters]);
 inf('atlas', 'PNG decoded + textures uploaded');
+  invoke('js_log', { msg: '[boot] atlases done' }).catch(() => {});
+
 
 const keys = attachKeyboard(window);
+  invoke('js_log', { msg: '[boot] keyboard attached' }).catch(() => {});
 const mouse = attachMouse(canvas) as MouseHandle & { sync: () => void; reset: () => void };
 inf('input', 'mouse attached (LMB/RMB/MMB + position)');
 
@@ -143,10 +158,13 @@ const state = {
 };
 
 // 初始 spawn 5 只怪物 (当前主题池随机, US-007)
+  invoke('js_log', { msg: '[boot] spawning 5' }).catch(() => {});
 for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
 inf('world', `spawned ${state.monsters.length} monsters (theme=${state.theme} pool, US-007)`);
 inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
 playBgmClient(`bgm_${state.theme}`);
+  invoke('js_log', { msg: '[boot] bgm set' }).catch(() => {});
+
 
 window.addEventListener('keydown', (e) => {
   // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
@@ -315,6 +333,8 @@ window.addEventListener('keydown', (e) => {
         if (d.theme && d.theme !== state.theme) {
           state.theme = d.theme;
           playBgmClient(`bgm_${state.theme}`);
+  invoke('js_log', { msg: '[boot] bgm set' }).catch(() => {});
+
         }
         if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
@@ -328,6 +348,8 @@ window.addEventListener('keydown', (e) => {
     state.theme = themes[(i + 1) % themes.length];
     inf('world', `theme → ${state.theme}`);
     playBgmClient(`bgm_${state.theme}`);
+  invoke('js_log', { msg: '[boot] bgm set' }).catch(() => {});
+
   }
 });
 
@@ -357,7 +379,50 @@ inf('loop', 'main loop start');
 let last = performance.now();
 let frameCount = 0;
 let lastFpsT = performance.now();
+let loopStartedLogged = false;
+let loopCrashCooldown = 0;
 function loop(now: number) {
+  // 心跳 (每帧可被 js_log 确认): 首帧 + 崩溃转发, 防止 rAF 内异常静默冻结
+  if (!loopStartedLogged) {
+    loopStartedLogged = true;
+    invoke('js_log', { msg: '[boot] rAF loop started' }).catch(() => {});
+  }
+  try {
+    loopImpl(now);
+  } catch (e) {
+    if (now - loopCrashCooldown > 500) {
+      loopCrashCooldown = now;
+      const msg = `[loop-crash] ${(e as Error)?.message ?? String(e)}\n${(e as Error)?.stack ?? ''}`;
+      err('loop', msg.split('\n')[0]);
+      invoke('js_log', { msg }).catch(() => {});
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+
+/** 首帧分段探针 (诊断: 定位第 1 帧卡死点) */
+let f1InfoLogged = false;
+function f1(now: number, tag: string): void {
+  if (frameCount === 1) {
+    const info = f1InfoLogged ? '' : ` vis=${document.visibilityState} hasFocus=${document.hasFocus()} size=${window.innerWidth}x${window.innerHeight}`;
+    f1InfoLogged = true;
+    invoke('js_log', { msg: `[f1] ${tag} @+${Math.round(now - lastFpsT)}ms${info}` }).catch(() => {});
+  }
+}
+
+// rAF 心跳统计: 每 5s 汇报给 Rust (区分: 主线程冻结 vs rAF 节流 vs 60fps 正常)
+let hbRaf = 0;
+let hbLast = performance.now();
+setInterval(() => {
+  const now2 = performance.now();
+  const dur = now2 - hbLast;
+  invoke('js_log', { msg: `[hb] t=${Math.round(now2)} raf=${hbRaf} dur=${Math.round(dur)} vis=${document.visibilityState}` }).catch(() => {});
+  hbRaf = 0;
+  hbLast = now2;
+}, 5000);
+function loopImpl(now: number) {
+  hbRaf++;
   const dt = Math.min((now - last) / 1000, 0.033);
   last = now;
   const nowSec = now / 1000;
@@ -369,14 +434,15 @@ function loop(now: number) {
   }
 
   // 鼠标边沿 (本帧按下的按键)
+  f1(now, 'sync');
   mouse.sync();
+  f1(now, 'sync-done');
 
   // 暂停时: 跳过游戏逻辑更新, 但仍渲染当前帧 (让 PAUSED 文字画在最新画面上)
   if (state.paused) {
     drawFrame();
     mouse.reset();
-    requestAnimationFrame(loop);
-    return;
+    return; // 包装器统一 rAF
   }
 
   const dir = keys.direction();
@@ -391,11 +457,15 @@ function loop(now: number) {
   updatePlayer(state, dir, dt);
   state.player.idleT += dt;
   updateCamera(state);
+  f1(now, 'walls-begin');
   state.world.walls = getActiveWalls(state, 2);
+  f1(now, 'walls-done');
   updateFireballs(state, dt);
   updateSwings(state, dt);
+  f1(now, 'monsters-begin');
   updateMonsters(state, dt);
   updateEnemyProj(state, dt);
+  f1(now, 'monsters-done');
   updateDeathFx(state, dt);
   updateDamageNums(state, dt);
   updateToasts(state, dt);
@@ -408,8 +478,10 @@ function loop(now: number) {
     if (state.combo.timer <= 0) state.combo.count = 0;
   }
   if (state.levelUpFlash > 0) state.levelUpFlash -= dt;
+  f1(now, 'resolve-begin');
   resolveFireballHits(state);
   resolveMeleeHits(state);
+  f1(now, 'resolve-done');
   state.player.mp = Math.min(100, state.player.mp + 10 * dt);
   state.player.hp = Math.min(100, state.player.hp + 2 * dt);  // 被动回血
 
@@ -448,7 +520,8 @@ function loop(now: number) {
         inf('game', 'HARDCORE: 永久死亡, 进度已清空 (重新开始)');
       }
       state.monsters.length = 0;
-      for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
+        invoke('js_log', { msg: '[boot] spawning 5' }).catch(() => {});
+for (let i = 0; i < 5; i++) state.monsters.push(spawnThemeMonster(state));
       import('./game/state').then(({ resetPlayer }) => resetPlayer(state));
       inf('gl', 'respawned');
     }
@@ -467,12 +540,15 @@ function loop(now: number) {
   }
 
   drawFrame();
+  f1(now, 'draw-done');
   mouse.reset();
-  requestAnimationFrame(loop);
+  f1(now, 'frame-end');
 }
 
 /** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */
 function drawFrame() {
+  // 技能 CD 时间基准 (drawFrame 独立作用域, 不能引用 loopImpl 的 nowSec)
+  const nowSec = performance.now() / 1000;
 
   // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
   const aimDir = mouseAimDirection(state, mouse.state());
@@ -492,10 +568,9 @@ function drawFrame() {
   }
   // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
 
-  // 暂停时: 跳过游戏逻辑 (但仍画当前帧 + pause 遮罩)
+  // 暂停时: 跳过游戏逻辑 (包装器统一 rAF, 这里只画)
   if (state.paused) {
     mouse.reset();
-    requestAnimationFrame(loop);
     return;
   }
 
@@ -666,7 +741,6 @@ function drawFrameToScreen() {
   }
 
   mouse.reset();
-  requestAnimationFrame(loop);
 }
 
 requestAnimationFrame(loop);

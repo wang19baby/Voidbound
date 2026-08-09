@@ -82,6 +82,17 @@ pub fn run() {
                 log::warn!("audio init failed: {e}");
             }
 
+            // 窗口探针 (诊断: 窗口是否创建/可见; eval 标题翻转确认 JS 引擎可达)
+            match app.get_webview_window("main") {
+                Some(w) => {
+                    log::info!("window 'main' created: visible={} title={:?}", w.is_visible().unwrap_or(false), w.title().unwrap_or_default());
+                    let _ = w.eval("document.title = 'BOOTED'");
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    log::info!("title after eval probe: {:?}", w.title().unwrap_or_default());
+                }
+                None => log::error!("window 'main' NOT created"),
+            }
+
             app.handle().listen_any("tauri://close_requested", |_| {
                 log::info!("Voidbound closing...");
             });
