@@ -68,3 +68,9 @@
 - 难度=全局倍率表 (monster spawn/b 伤害/掉落) 放独立模块, 避免散落 magic number
 - Boss 阶段机制已在 pumpking 通用化, 新 Boss 只需 boss:true + defs
 - 教训: 用 python 批量 replace 时 count=1 会命中首个出现 (init spawn), 必须锚定上下文; 上一轮 t 未定义 bug 因此存活
+
+## Session: 2026-08-09 (Ralph 4 补充: 评审修复)
+- P0: DifficultyMods.name 未定义 (接口缺字段 → 面板/log undefined) — 补 name (普通/噩梦/地狱)
+- P0: N 键难度循环原锁在 settingsOpen 内 → 移到暂停层, 暂停即可切换
+- P2: hell dmgMult 1.8→1.5 (评审 P2 平衡); 死亡时立即 reset bossKillTrigger; HUD 显示难度
+- 教训: 数据结构变更 (接口加字段) 时必须同步检查所有使用点 — DIFFICULTY_MODS[...].name 是引用未声名字段; 评审的 schema 违规把内容丢进 data 字段, 用 hub send await 请求重发即可
