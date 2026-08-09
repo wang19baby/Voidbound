@@ -5,7 +5,9 @@ export type Difficulty = 'normal' | 'nightmare' | 'hell';
 export const DIFFICULTIES = ['normal', 'nightmare', 'hell'] as const;
 
 export interface DifficultyMods {
-  /** 怪物血量倍率 (spawn 时) */
+  /** 显示名 */
+  name: string;
+  /** 数量级倍率 (spawn 时) */
   hpMult: number;
   /** 怪物接触伤害倍率 */
   dmgMult: number;
@@ -18,9 +20,9 @@ export interface DifficultyMods {
 }
 
 export const DIFFICULTY_MODS: Record<Difficulty, DifficultyMods> = {
-  normal:   { hpMult: 1.0, dmgMult: 1.0, projMult: 1.0, dropMult: 1.0,  affixBonus: 0 },
-  nightmare:{ hpMult: 1.8, dmgMult: 1.4, projMult: 1.2, dropMult: 1.25, affixBonus: 1 },
-  hell:     { hpMult: 2.8, dmgMult: 1.8, projMult: 1.5, dropMult: 1.5,  affixBonus: 2 },
+  normal:   { name: '普通',   hpMult: 1.0, dmgMult: 1.0, projMult: 1.0, dropMult: 1.0,  affixBonus: 0 },
+  nightmare:{ name: '噩梦',   hpMult: 1.8, dmgMult: 1.4, projMult: 1.2, dropMult: 1.25, affixBonus: 1 },
+  hell:     { name: '地狱',   hpMult: 2.8, dmgMult: 1.5, projMult: 1.5, dropMult: 1.5,  affixBonus: 2 },
 };
 
 export function cycleDifficulty(d: Difficulty): Difficulty {

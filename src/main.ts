@@ -178,11 +178,11 @@ window.addEventListener('keydown', (e) => {
           getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs)));
         return;
       }
-      if (k === 'n') {
-        state.difficulty = cycleDifficulty(state.difficulty);
-        inf('game', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
-        return;
-      }
+    }
+    if (k === 'n') {
+      state.difficulty = cycleDifficulty(state.difficulty);
+      inf('game', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
+      return;
     }
     if (k === 'escape') {
       if (state.settingsOpen) state.settingsOpen = false;
@@ -391,6 +391,7 @@ function loop(now: number) {
   // 死亡检测
   if (state.player.hp <= 0 && !state.dying) {
     state.dying = true;
+    state.bossKillTrigger = 0;
     state.deathTimer = 2.0;  // 2s 后重开
     inf('combat', 'YOU DIED (score=' + state.score + ')');
   }

@@ -10,6 +10,7 @@ import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
 import { getSkillCooldowns, skillLevel, skillRune } from '../game/skill';
 import { expNext } from '../game/player';
+import { DIFFICULTY_MODS } from '../game/difficulty';
 import { worldToScreen } from '../game/state';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
@@ -88,7 +89,7 @@ export function drawHudOverlay(
   }
   ctx2d.fillStyle = '#ffd';
   ctx2d.fillText(`技能点: ${state.player.skillPoints ?? 0} (Ctrl+1..6 分配)`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 84);
-  ctx2d.fillText(`药水 1:×${state.player.potions?.hp ?? 0}  2:×${state.player.potions?.mp ?? 0}  翻滚${state.player.dodgeCd > 0 ? ` ${state.player.dodgeCd.toFixed(1)}s` : ' ✓'}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 100);
+  ctx2d.fillText(`药水 1:×${state.player.potions?.hp ?? 0}  2:×${state.player.potions?.mp ?? 0}  翻滚${state.player.dodgeCd > 0 ? ` ${state.player.dodgeCd.toFixed(1)}s` : ' ✓'}  难度:${DIFFICULTY_MODS[state.difficulty].name}`, HUD_PAD, HUD_PAD + (BAR_HEIGHT + 4) * 2 + 8 + SLOT_SIZE + 100);
   ctx2d.fillStyle = '#fff';
   const nowSec = performance.now() / 1000;
   ctx2d.fillText(
