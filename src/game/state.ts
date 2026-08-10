@@ -48,6 +48,13 @@ export interface Player {
   dodgeCd: number;
   /** 原地复活无敌剩余秒 (OPT-011, B1 选项) */
   reviveInvuln: number;
+  /** 被动技能等级 (M5 非目标收尾: 10 被动槽同时生效) */
+  passives: Partial<Record<import('./passive').PassiveId, number>>;
+  /** 被动生效后的上限/恢复/移速 (recomputePassives 写) */
+  hpMax: number;
+  mpMax: number;
+  mpRegen: number;
+  speedMult: number;
 }
 
 export interface Fireball {

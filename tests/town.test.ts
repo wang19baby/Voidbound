@@ -156,28 +156,28 @@ function mkRerollState(gold: number, iron: number, eq: Equipment): import('../sr
   return s;
 }
 {
-  const eq = mkEq('金轨剑', 'weapon'); eq.rarity = 'rare';
-  const s = mkRerollState(100, 0, eq);
-  const before = eq.affixes.slice();
+  const item = mkEq('金轨剑', 'weapon'); item.rarity = 'rare';
+  const s = mkRerollState(100, 0, item);
+  const before = item.affixes.slice();
   check('100金 重铸成功', rerollOwned(s, 0) === 'gold');
   eq('金扣 100-100=0', s.player.gold, 0);
-  check('词条已重roll (引用变化或值变化)', eq.affixes.length === before.length);
+  check('词条已重roll (引用变化或值变化)', item.affixes.length === before.length);
 }
 {
-  const eq = mkEq('灵铁轨戒', 'ring'); eq.rarity = 'set';
-  const s = mkRerollState(0, 30, eq);
+  const item = mkEq('灵铁轨戒', 'ring'); item.rarity = 'set';
+  const s = mkRerollState(0, 30, item);
   check('灵铁重铸 (set 20 需 20, 有 30)', rerollOwned(s, 0) === 'iron');
   eq('灵铁剩 10', s.materials['iron_shard'], 10);
 }
 {
-  const eq = mkEq('不足件', 'weapon'); eq.rarity = 'unique';
-  const s = mkRerollState(0, 10, eq);
+  const item = mkEq('不足件', 'weapon'); item.rarity = 'unique';
+  const s = mkRerollState(0, 10, item);
   check('unique 需 40 灵铁, 10 不足 → null', rerollOwned(s, 0) === null);
   eq('不足不扣', s.materials['iron_shard'], 10);
 }
 {
-  const eq = mkEq('普通件', 'weapon'); eq.rarity = 'normal';
-  const s = mkRerollState(0, 100, eq);
+  const item = mkEq('普通件', 'weapon'); item.rarity = 'normal';
+  const s = mkRerollState(0, 100, item);
   check('普通无灵铁轨 → null (金也不足)', rerollOwned(s, 0) === null);
 }
 

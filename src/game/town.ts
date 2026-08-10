@@ -4,7 +4,7 @@
 // W3: 3 城镇表 TOWN_DEFS + 解锁链 (森林→商业城, 沙漠+废墟→圣城) + 传送师 + 神秘商人/训练师
 
 import type { GameState } from './state';
-import { randomEquipment, getItemSellPrice, getItemBuyPrice, addOwned, rerollAffixes, getOwned, BACKPACK_CAP, materialCount, spendMaterial, rerollCostOption, REROLL_IRON_COST, IRON_SHARD_PRICE, type Equipment, type Rarity, type MaterialId } from './equipment';
+import { randomEquipment, getItemSellPrice, getItemBuyPrice, addOwned, rerollAffixes, getOwned, BACKPACK_CAP, materialCount, spendMaterial, rerollCostOption, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, type Equipment, type Rarity, type MaterialId } from './equipment';
 
 export type NpcKind = 'merchant' | 'smith' | 'difficulty' | 'exit' | 'warehouse' | 'teleport' | 'mystery' | 'trainer' | 'forge';
 
@@ -182,7 +182,7 @@ export function buyPotion(state: PotionBuySrc, kind: 'hp' | 'mp'): boolean {
 }
 
 /** 城镇面板状态 (存 GameState 内部) */
-export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | 'forge' | null;
+export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | 'forge' | 'trainer' | null;
 
 /** 仓库容量 (C-503, 拍板 J5=b): 账号层共享 20 格 */
 export const WAREHOUSE_CAP = 20;

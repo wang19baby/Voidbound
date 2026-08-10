@@ -32,6 +32,7 @@ import { deathSummary, deathGoldPenalty, type DeathSummary } from './game/deathS
 import { moveSelection, ngResolve, ngDefault, themeUnlocked, type NewgameSel } from './game/newgame';
 import { bindClass, CLASS_DEFS, CLASS_IDS, type ClassId } from './game/class';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
+import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint, recomputePassives, type PassiveId } from './game/passive';
 import { getSkillCooldowns } from './game/cooldown';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
@@ -139,6 +140,11 @@ const state = {
     combat: baseCombat(),
     equipped: {},
     classId: 'barbarian',
+    passives: {},
+    hpMax: 100,
+    mpMax: 100,
+    mpRegen: 0,
+    speedMult: 1,
   },
   viewport: { w: VW, h: VH },
   world: {
@@ -169,6 +175,10 @@ const state = {
   /** 传送过场 (C-302): 目标镇 + 倒计时秒 */
   teleportTo: null as TownId | null,
   teleportT: 0,
+  /** 训练师被动面板选中索引 (M5 非目标收尾) */
+  trainerSel: 0,
+  /** 仓库操作闪光 (C-503 动画): 存取成功后 0.3s 高亮面板 */
+  whFlash: 0,
   settingsOpen: false,
   screen: 'title' as Screen,
   pauseFrom: 'dungeon' as Screen,
@@ -197,6 +207,10 @@ const state = {
   charSel: 0,
   charCreating: false,
   charConfirmDel: false,
+  /** 文本输入 (M5 非目标收尾): 角色命名手输 */
+  charNaming: false,
+  charNameInput: '',
+  charNamingClass: 'barbarian' as ClassId,
   // C-503 仓库: 账号层共享 (跨角色)
   warehouse: [] as Equipment[],
   // M5 W4 C-401 材料: 独立计数
@@ -313,6 +327,7 @@ window.addEventListener('keydown', (e) => {
         bindClass(state, (d.class as ClassId) ?? 'barbarian');
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
+        restorePassives(d);  // v9 被动技能树
         return loadAccount();
       }).then(a => {
         state.cleared = a.cleared ?? [];
@@ -359,25 +374,47 @@ window.addEventListener('keydown', (e) => {
       }
       return;
     }
-    if (state.charCreating) {
-      // 新建流程: 1-6 选职业 → 自动命名 "职业_序号" → 直接开局 (职业/难度/主题走 newgame 屏)
-      const ci = parseInt(k, 10);
-      if (ci >= 1 && ci <= 6) {
-        const cls = CLASS_IDS[ci - 1];
+    if (state.charNaming) {
+      // 文本输入 (M5 非目标收尾): 键入字符追加, Backspace 删除, Enter 确认, Esc 取消
+      if (k === 'enter') {
+        let name = state.charNameInput.trim();
+        if (name.length === 0) name = `char_${state.charList.length}`;
+        // 安全化: 只留字母数字下划线, 防存档路径穿越
+        name = name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
+        if (name.length === 0) name = `char_${state.charList.length}`;
         const used = new Set(state.charList.map(c => c.id));
-        let n = 0;
-        let id = `${cls}_${n}`;
-        while (used.has(id)) { n++; id = `${cls}_${n}`; }
-        state.currentChar = id;
+        if (used.has(name)) { state.titleMsg = `角色名 ${name} 已存在`; return; }
+        state.currentChar = name;
         state.charList = [...state.charList, {
-          id, class: cls, level: 1, difficulty: 'normal', theme: 'forest',
+          id: name, class: state.charNamingClass as ClassId, level: 1, difficulty: 'normal', theme: 'forest',
         }];
+        state.charNaming = false;
         state.charCreating = false;
-        state.ngSel = { classIdx: CLASS_IDS.indexOf(cls), diffIdx: 0, themeIdx: 0 };
+        state.charNameInput = '';
+        state.ngSel = { classIdx: CLASS_IDS.indexOf(state.charNamingClass as ClassId), diffIdx: 0, themeIdx: 0 };
         setScreen(state, 'newgame');
         state.titleMsg = '';
-        pushToast(state, `新建角色: ${id} (${CLASS_DEFS[cls].name})`, '#9cf');
-        inf('ui', `新建角色 ${id} → 新局选择屏`);
+        pushToast(state, `新建角色: ${name}`, '#9cf');
+        inf('ui', `新建角色 ${name} → 新局选择屏`);
+        return;
+      }
+      if (k === 'backspace') { state.charNameInput = state.charNameInput.slice(0, -1); return; }
+      if (k === 'escape') { state.charNaming = false; state.charNameInput = ''; return; }
+      // 单字符追加 (字母数字下划线), 忽略功能键
+      if (/^[a-zA-Z0-9_]$/.test(e.key)) {
+        if (state.charNameInput.length < 24) state.charNameInput += e.key;
+      }
+      return;
+    }
+    if (state.charCreating) {
+      // 新建流程: 1-6 选职业 → 命名 (手输, 不再自动"职业_序号")
+      const ci = parseInt(k, 10);
+      if (ci >= 1 && ci <= 6) {
+        state.charNamingClass = CLASS_IDS[ci - 1];
+        state.charNaming = true;
+        state.charNameInput = `${CLASS_IDS[ci - 1]}_`;
+        state.titleMsg = '';
+        inf('ui', `选择职业 ${CLASS_DEFS[CLASS_IDS[ci - 1]].name} → 输入角色名`);
         return;
       }
       if (k === 'escape') { state.charCreating = false; return; }
@@ -434,6 +471,7 @@ window.addEventListener('keydown', (e) => {
         if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
+        restorePassives(d);  // v9 被动技能树
         for (const sl of d.skill_levels ?? []) {
           const sk = getSkill(sl.slot);
           if (sk) sk.level = sl.level;
@@ -766,6 +804,7 @@ window.addEventListener('keydown', (e) => {
         bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
+        restorePassives(d);  // v9 被动技能树
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
         ensureDungeonRun(state);
         return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
@@ -997,8 +1036,8 @@ function loopImpl(now: number) {
   resolveFireballHits(state);
   resolveMeleeHits(state);
   cullLoot(state, nowSec);  // OPT-032: 60s 后地面装备消失
-  state.player.mp = Math.min(100, state.player.mp + 2 * dt);  // 回蓝 2/s (OPT-016: MP 成为资源, 药水有价值)
-  state.player.hp = Math.min(100, state.player.hp + 2 * dt);  // 被动回血
+  state.player.mp = Math.min(state.player.mpMax ?? 100, state.player.mp + (2 + (state.player.mpRegen ?? 0)) * dt);  // 回蓝 2/s + 被动 (OPT-016)
+  state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + 2 * dt);  // 被动回血
 
   // 死亡检测 (OPT-011, B1): 进入死亡结算屏, 由玩家选择 (不再 2s 强制原地复活)
   if (state.player.hp <= 0 && !state.dying && state.screen === 'dungeon') {
@@ -1124,8 +1163,8 @@ function interactTown(state: GameState) {
       inf('ui', '神秘商人: 1-4 购买传奇 (500-2000金), Esc 离开');
       break;
     case 'trainer':
-      pushToast(state, '训练师: 技能树开发中', '#9cf');
-      inf('ui', '训练师: 技能树开发中 (占位)');
+      state.townPanel = 'trainer';
+      inf('ui', '训练师: 1-0 选择被动技能, Enter 升级 (1 技能点/级), Esc 离开');
       break;
     case 'teleport': {
       const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
@@ -1196,12 +1235,12 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
     if (k === 's') { state.townPanel = 'warehouseTake'; inf('ui', '存入: 1-9 选择背包装备, Esc 返回'); return; }
     if (k === 'b') { state.townPanel = 'warehouse'; return; }
     if (state.townPanel === 'warehouse' && n >= 1 && n <= 9) {
-      if (warehouseTake(state, n - 1)) { playSfxClient('ui_click'); inf('ui', '取回仓库装备'); }
+      if (warehouseTake(state, n - 1)) { playSfxClient('ui_click'); state.whFlash = 0.3; inf('ui', '取回仓库装备'); }
       else wrn('ui', '取回失败 (背包满或选择无效)');
       return;
     }
     if (state.townPanel === 'warehouseTake' && n >= 1 && n <= 9) {
-      if (warehouseStore(state, n - 1)) { playSfxClient('ui_click'); inf('ui', '存入仓库'); }
+      if (warehouseStore(state, n - 1)) { playSfxClient('ui_click'); state.whFlash = 0.3; inf('ui', '存入仓库'); }
       else wrn('ui', '存入失败 (仓库满或选择无效)');
       return;
     }
@@ -1229,6 +1268,7 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
   }
   if (state.townPanel === 'forge') {
     // C-403: 选已变异技能槽 → 扣材料 → 触发符文三选一 (复用 runeChoice)
+    // C-403: 选已变异技能槽 → 扣材料 → 触发符文三选一 (复用 runeChoice)
     const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
     const slot = mutated[n - 1];
     if (slot && n >= 1 && n <= mutated.length) {
@@ -1253,22 +1293,56 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
     }
     return;
   }
+  if (state.townPanel === 'trainer') {
+    // 被动技能树: 1-9,0 选 / ↑↓ 移动 / Enter·空格 升级 (1 技能点/级)
+    if (k === 'arrowup' || k === 'w') { state.trainerSel = Math.max(0, state.trainerSel - 1); return; }
+    if (k === 'arrowdown' || k === 's') { state.trainerSel = Math.min(PASSIVE_IDS.length - 1, state.trainerSel + 1); return; }
+    if (n >= 1 && n <= 10) { state.trainerSel = n - 1; return; }
+    if (k === 'enter' || k === ' ') {
+      const id = PASSIVE_IDS[state.trainerSel];
+      if (!id) return;
+      const errMsg = assignPassivePoint(state, id);
+      if (errMsg) { pushToast(state, errMsg, '#f66'); wrn('ui', `trainer ${id}: ${errMsg}`); }
+      else { playSfxClient('ui_click'); inf('ui', `被动 ${PASSIVE_DEFS[id].name} → Lv ${passiveLevel(state, id)}`); }
+      return;
+    }
+    return;
+  }
 }
 
-/** C-302 传送过场绘制: 黑屏 + 目标镇文字 (1s) */
+/** C-302 传送过场绘制: 黑屏 + 扩散光圈 + 目标镇文字 (1s) */
 function drawTeleportTransition() {
+  const t = state.teleportTo;
+  const remain = Math.max(0, state.teleportT);
+  const progress = 1 - remain;  // 0→1
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.fillStyle = '#000';
+  // 深空背景 (渐入)
+  const fade = Math.min(1, progress * 2);
+  hudCtx.fillStyle = `rgba(4,6,12,${fade})`;
   hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  // 扩散光圈 (中心 → 全屏)
+  const cx = hudCanvas.width / 2;
+  const cy = hudCanvas.height / 2;
+  const maxR = Math.hypot(cx, cy);
+  const ringR = 30 + progress * maxR;
+  hudCtx.beginPath();
+  hudCtx.arc(cx, cy, ringR, 0, Math.PI * 2);
+  hudCtx.strokeStyle = `rgba(160, 220, 255, ${0.7 * (1 - progress)})`;
+  hudCtx.lineWidth = 3;
+  hudCtx.stroke();
+  hudCtx.beginPath();
+  hudCtx.arc(cx, cy, Math.max(4, ringR * 0.6), 0, Math.PI * 2);
+  hudCtx.strokeStyle = `rgba(120, 180, 255, ${0.5 * (1 - progress)})`;
+  hudCtx.lineWidth = 2;
+  hudCtx.stroke();
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#cfe8ff';
+  hudCtx.fillStyle = `rgba(207, 232, 255, ${fade})`;
   hudCtx.font = 'bold 30px monospace';
-  const t = state.teleportTo;
-  hudCtx.fillText(`传送中… ${t && TOWN_DEFS[t] ? TOWN_DEFS[t].name : ''}`, hudCanvas.width / 2, hudCanvas.height / 2);
+  hudCtx.fillText(`传送中… ${t && TOWN_DEFS[t] ? TOWN_DEFS[t].name : ''}`, hudCanvas.width / 2, hudCanvas.height / 2 + 40);
   hudCtx.fillStyle = '#668';
   hudCtx.font = '14px monospace';
-  hudCtx.fillText(`[${Math.ceil(Math.max(0, state.teleportT))}s]`, hudCanvas.width / 2, hudCanvas.height / 2 + 40);
+  hudCtx.fillText(`[${Math.ceil(remain)}s]`, hudCanvas.width / 2, hudCanvas.height / 2 + 74);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
 }
@@ -1322,6 +1396,7 @@ function drawTownFrame() {
   hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}`, 16, 44);
   // 面板
   if (state.townPanel) drawTownPanel();
+  if (state.whFlash > 0) state.whFlash = Math.max(0, state.whFlash - 1 / 60);
   mouse.reset();
 }
 
@@ -1382,6 +1457,12 @@ function drawTownPanel() {
         ? `仓库 (${state.warehouse.length}/${WAREHOUSE_CAP})  [1-9] 取回  [S] 存入  [Esc] 离开`
         : `存入 (背包 ${getOwned(state).length}/20)  [1-9] 选择  [B] 返回仓库`,
       40, y);
+    // C-503 动画: 存取成功后边框闪光
+    if (state.whFlash > 0) {
+      hudCtx.strokeStyle = `rgba(120, 255, 180, ${Math.min(1, state.whFlash * 3)})`;
+      hudCtx.lineWidth = 4;
+      hudCtx.strokeRect(4, 4, hudCanvas.width - 8, hudCanvas.height - 8);
+    }
     y += 34;
     const list = taking ? state.warehouse : getOwned(state);
     list.forEach((eq, i) => {
@@ -1434,6 +1515,22 @@ function drawTownPanel() {
         hudCtx.fillText(`   ${r ? RUNE_DEFS[r].desc : ''}`, 60, y); y += 26;
       });
     }
+  } else if (state.townPanel === 'trainer') {
+    hudCtx.fillText(`训练师 (技能点:${state.player.skillPoints})  [1-9,0] 选 · [Enter] 升级  [Esc] 离开`, 40, y); y += 34;
+    hudCtx.fillStyle = '#889';
+    hudCtx.font = '12px monospace';
+    hudCtx.fillText('被动技能树 — 10 槽同时生效, 每级 1 技能点 (最多 20 级)', 40, y); y += 24;
+    PASSIVE_IDS.forEach((id, i) => {
+      const def = PASSIVE_DEFS[id];
+      const lv = passiveLevel(state, id);
+      const sel = i === state.trainerSel;
+      hudCtx.fillStyle = sel ? '#ffd64a' : '#ccc';
+      hudCtx.font = 'bold 14px monospace';
+      hudCtx.fillText(`${i + 1}. ${def.name}  Lv ${lv}${lv >= def.maxLevel ? ' (满)' : ''}  ${sel ? '◀' : ''}`, 60, y); y += 22;
+      hudCtx.fillStyle = sel ? '#fda' : '#889';
+      hudCtx.font = '12px monospace';
+      hudCtx.fillText(`   ${def.desc} · ${def.perLv}`, 60, y); y += 22;
+    });
   }
   hudCtx.fillStyle = '#fff';
 }
@@ -1654,8 +1751,32 @@ function drawCharacters() {
   hudCtx.fillText('角色管理', hudCanvas.width / 2, 80);
   const cx = hudCanvas.width / 2;
 
+  if (state.charNaming) {
+    // 文本输入 (M5 非目标收尾): 显示输入框 + 光标
+    const def = CLASS_DEFS[state.charNamingClass];
+    hudCtx.fillStyle = def.color;
+    hudCtx.font = 'bold 20px monospace';
+    hudCtx.fillText(`职业: ${def.name} — 输入角色名`, cx, 160);
+    hudCtx.fillStyle = '#0b0b12';
+    hudCtx.fillRect(cx - 220, 200, 440, 56);
+    hudCtx.strokeStyle = '#9cf';
+    hudCtx.lineWidth = 2;
+    hudCtx.strokeRect(cx - 220, 200, 440, 56);
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = 'bold 26px monospace';
+    hudCtx.textAlign = 'center';
+    const shown = state.charNameInput + '▌';
+    hudCtx.fillText(shown, cx, 230);
+    hudCtx.fillStyle = '#889';
+    hudCtx.font = '14px monospace';
+    hudCtx.fillText('[Enter] 确认 · [Backspace] 删除 · [Esc] 取消', cx, 290);
+    hudCtx.textAlign = 'left';
+    hudCtx.textBaseline = 'top';
+    return;
+  }
+
   if (state.charCreating) {
-    // 新建: 1-6 选职业 (自动命名 职业_序号)
+    // 新建: 1-6 选职业 (选中后进入命名)
     hudCtx.fillStyle = '#9cf';
     hudCtx.font = 'bold 20px monospace';
     hudCtx.fillText('选择职业 [1-6] · [Esc] 取消', cx, 150);
@@ -2069,6 +2190,7 @@ function buildSavePayload(state: GameState): SaveData {
     class: state.player.classId,  // M5 C-104
     town: state.townId,  // M5 W3 C-302
     materials: MATERIAL_IDS.filter(id => (state.materials[id] ?? 0) > 0).map(id => [id, state.materials[id] ?? 0]),
+    passives: PASSIVE_IDS.filter(id => (state.player.passives[id] ?? 0) > 0).map(id => [id, state.player.passives[id] ?? 0]),
     skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: state.player.skillPoints ?? 0,
     exp: state.player.exp ?? 0,
@@ -2081,6 +2203,15 @@ function restoreMaterials(d: { materials?: Array<[string, number]> }): void {
   for (const [id, n] of d.materials ?? []) {
     if (MATERIAL_IDS.includes(id as MaterialId)) state.materials[id as MaterialId] = n;
   }
+}
+
+/** 读档还原被动技能树 (v9) */
+function restorePassives(d: { passives?: Array<[string, number]> }): void {
+  state.player.passives = {};
+  for (const [id, n] of d.passives ?? []) {
+    if (PASSIVE_IDS.includes(id as PassiveId)) state.player.passives[id as PassiveId] = n;
+  }
+  recomputePassives(state);
 }
 
 /** 异步保存 (OPT-002/029): 角色档 + 账号层双写; 失败 toast 提示, 不阻塞 */
@@ -2149,6 +2280,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
             bindClass(state, (d.class as ClassId) ?? 'barbarian');
             if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
+        restorePassives(d);  // v9 被动技能树
             return loadAccount();
           }).then(a => {
             state.cleared = a.cleared ?? [];
@@ -2269,19 +2401,11 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
       if (state.charCreating) {
         for (let i = 0; i < CLASS_IDS.length; i++) {
           if (inRect(mx, my, cx - 200, 210 + i * 40 - 16, 400, 38)) {
-            const cls = CLASS_IDS[i];
-            const used = new Set(state.charList.map(c => c.id));
-            let n = 0;
-            let id = `${cls}_${n}`;
-            while (used.has(id)) { n++; id = `${cls}_${n}`; }
-            state.currentChar = id;
-            state.charList = [...state.charList, { id, class: cls, level: 1, difficulty: 'normal', theme: 'forest' }];
-            state.charCreating = false;
-            state.ngSel = { classIdx: i, diffIdx: 0, themeIdx: 0 };
-            setScreen(state, 'newgame');
+            state.charNamingClass = CLASS_IDS[i];
+            state.charNaming = true;
+            state.charNameInput = `${CLASS_IDS[i]}_`;
             state.titleMsg = '';
-            pushToast(state, `新建角色: ${id} (${CLASS_DEFS[cls].name})`, '#9cf');
-            inf('ui', `新建角色 ${id} → 新局选择屏`);
+            inf('ui', `选择职业 ${CLASS_DEFS[CLASS_IDS[i]].name} → 输入角色名`);
             return true;
           }
         }
@@ -2340,6 +2464,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
             if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
             if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
+        restorePassives(d);  // v9 被动技能树
             for (const sl of d.skill_levels ?? []) { const sk = getSkill(sl.slot); if (sk) sk.level = sl.level; }
             ensureDungeonRun(state);
             setScreen(state, 'dungeon');
@@ -2432,6 +2557,8 @@ function hardcoreWipe(state: GameState): void {
   state.player.exp = 0;
   state.player.skillPoints = 0;
   state.materials = emptyMaterials();  // M5 W4 C-401: 硬核清档含材料
+  state.player.passives = {};
+  recomputePassives(state);  // v9: 硬核清档含被动
   for (const slot of SKILL_SLOTS) {
     const sk = getSkill(slot);
     sk.level = 1;

@@ -68,6 +68,8 @@ export interface SaveData {
   town: string;
   /** 材料计数 (v8, C-401): [id, count][] */
   materials: Array<[string, number]>;
+  /** 被动技能等级 (v9): [id, level][] */
+  passives: Array<[string, number]>;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

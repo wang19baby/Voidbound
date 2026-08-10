@@ -169,3 +169,15 @@
 ### 验证
 - npm test 15 套 571 例全绿 (equipment +6 材料/重铸轨, town +9 双轨/锻造, balance +10 基线); cargo 17/17 (v8 往返/迁移); build + 冒烟 0 crash, 关窗确认链完整 (save_game 237B 含材料)
 - 教训: 测试里 emptyMaterials() 返回裸 record, 而 MaterialSrc 接口要 {materials: record} — 语义不对称; 用对象包装或改接口二选一, 不能两边都裸用
+
+## Session: 2026-08-10 (Ralph 11: M5 非目标收尾 — 技能树/文本输入/仓库动画)
+
+### 已完成
+- **技能树 (被动系统)**: 新增 src/game/passive.ts — 10 被动槽同时生效 (生命/法力+回蓝/全抗/暴击率/暴伤/吸血/移速/物理%/元素%/闪避减伤), 每被动 1-20 级; 训练师 NPC 面板 (原占位) 分配技能点 (1 点/级, Enter/空格升级, 1-9,0 或 ↑↓ 选); recomputePassives 幂等 (存 passiveSnap 基线先减旧再加新, 修复 double-add + res 只遍历已有键的 bug); 存档 v9 + 硬核清档含被动; player hpMax/mpMax/mpRegen/speedMult
+- **文本输入**: 角色新建改为手输命名 — 选职业 → 输入框 (字母数字下划线实时过滤, Backspace, Enter 确认, Esc 取消, 自动前缀 "职业_"); 重名拒绝; 存档 id 安全化 (24 字符上限防路径穿越); 键盘+鼠标双路径
+- **仓库动画**: 传送过场从静态黑屏升级为扩散光圈+渐入动画 (1s); 仓库存取成功 0.3s 面板绿色边框闪光 (whFlash)
+
+### 验证
+- npm test 16 套 597 例全绿 (passive 新套 24 例: 快照/升级/满级/幂等; town 修复 eq 变量遮蔽 bug — const eq 遮蔽模块 eq() 函数导致块内调用变对象调用); cargo 18/18 (v9 往返/迁移); build + 冒烟 75s 0 crash 0 JS error
+- 教训: 测试块内 `const eq = mkEq(...)` 遮蔽了外层 eq() 断言函数 — esbuild 重命名后块内 "eq(...)" 变成调用 Equipment 对象; 局部变量名避开辅助函数名
+- 教训: 被动效果必须幂等 — 直接 "每次调用加快照" 会在多次 recompute 时重复累加; 存上次快照基线, 先减后加

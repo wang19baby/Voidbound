@@ -1,5 +1,6 @@
 // 角色存档: bincode 序列化到 saves/char_0.bin (US-003 + OPT-014/015/003/029 + M5)
-// 格式: 首字节 = SAVE_FORMAT_VERSION (8), 其后 bincode(SaveData)
+// 格式: 首字节 = SAVE_FORMAT_VERSION (9), 其后 bincode(SaveData)
+// v9 [M5 非目标收尾]: + passives (被动技能树等级: id, level)
 // v8 [M5 W4 C-401]: + materials (材料计数: iron_shard/arcane_core/void_fragment)
 // v7 [M5 W3 C-302]: + town (当前城镇, 读档 enterTown 还原)
 // v6 [M5 C-104]: + class (职业, 读档 bindClass 还原)
@@ -13,7 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_FORMAT_VERSION: u8 = 8;
+pub const SAVE_FORMAT_VERSION: u8 = 9;
 
 /// 当前角色 ID (OPT-029: 多角色 UI 前固定单角色)
 const CURRENT_CHAR: &str = "char_0";
@@ -186,6 +187,35 @@ pub struct SaveData {
     pub town: String,
     // v8 (M5 W4 C-401): 材料计数 (id, count)
     pub materials: Vec<(String, u32)>,
+    // v9 (M5 非目标收尾): 被动技能树等级 (id, level)
+    pub passives: Vec<(String, u32)>,
+}
+
+/// v8 兼容结构 (无 passives 字段)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+struct SaveDataV8 {
+    pub player_x: f32,
+    pub player_y: f32,
+    pub player_hp: f32,
+    pub player_mp: f32,
+    pub facing_x: f32,
+    pub facing_y: f32,
+    pub score: u32,
+    pub world_w: f32,
+    pub world_h: f32,
+    pub level: u32,
+    pub owned: Vec<OwnedItem>,
+    pub gold: u32,
+    pub runes: Vec<RuneSlot>,
+    pub theme: String,
+    pub difficulty: String,
+    pub equipped: Vec<EquippedItem>,
+    pub skill_levels: Vec<SkillLevel>,
+    pub skill_points: u32,
+    pub exp: u32,
+    pub class: String,
+    pub town: String,
+    pub materials: Vec<(String, u32)>,
 }
 
 /// v7 兼容结构 (无 materials 字段)
@@ -334,6 +364,7 @@ fn migrate_v1(v1: SaveDataV1) -> SaveData {
         class: "barbarian".into(),
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -361,6 +392,7 @@ fn migrate_v2(v2: SaveDataV2) -> SaveData {
         class: "barbarian".into(),
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -388,6 +420,7 @@ fn migrate_v3(v3: SaveDataV3) -> SaveData {
         class: "barbarian".into(),
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -418,6 +451,7 @@ fn migrate_v5(v5: SaveDataV5) -> SaveData {
         class: "barbarian".into(),
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -445,6 +479,7 @@ fn migrate_v4(v4: SaveDataV4) -> SaveData {
         class: "barbarian".into(),
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -473,6 +508,7 @@ fn migrate_v6(v6: SaveDataV6) -> SaveData {
         class: v6.class,
         town: "greenwing".into(),
         materials: Vec::new(),
+        passives: Vec::new(),
     }
 }
 
@@ -501,6 +537,36 @@ fn migrate_v7(v7: SaveDataV7) -> SaveData {
         class: v7.class,
         town: v7.town,
         materials: Vec::new(),
+        passives: Vec::new(),
+    }
+}
+
+/// v8 → v9: 补 passives 空
+fn migrate_v8(v8: SaveDataV8) -> SaveData {
+    SaveData {
+        player_x: v8.player_x,
+        player_y: v8.player_y,
+        player_hp: v8.player_hp,
+        player_mp: v8.player_mp,
+        facing_x: v8.facing_x,
+        facing_y: v8.facing_y,
+        score: v8.score,
+        world_w: v8.world_w,
+        world_h: v8.world_h,
+        level: v8.level,
+        owned: v8.owned,
+        gold: v8.gold,
+        runes: v8.runes,
+        theme: v8.theme,
+        difficulty: v8.difficulty,
+        equipped: v8.equipped,
+        skill_levels: v8.skill_levels,
+        skill_points: v8.skill_points,
+        exp: v8.exp,
+        class: v8.class,
+        town: v8.town,
+        materials: v8.materials,
+        passives: Vec::new(),
     }
 }
 
@@ -669,9 +735,13 @@ fn decode_save(bytes: &[u8]) -> Result<(SaveData, Option<crate::account::Account
     match bytes[0] {
         SAVE_FORMAT_VERSION => {
             let data: SaveData = bincode::deserialize(&bytes[1..])
-                .map_err(|e| format!("v8 deserialize failed: {e}"))?;
+                .map_err(|e| format!("v9 deserialize failed: {e}"))?;
             Ok((data, None))
         }
+        8 => match bincode::deserialize::<SaveDataV8>(&bytes[1..]) {
+            Ok(v8) => Ok((migrate_v8(v8), None)),
+            Err(e) => Err(format!("v8 deserialize failed: {e}")),
+        },
         7 => match bincode::deserialize::<SaveDataV7>(&bytes[1..]) {
             Ok(v7) => Ok((migrate_v7(v7), None)),
             Err(e) => Err(format!("v7 deserialize failed: {e}")),
@@ -763,6 +833,7 @@ mod tests {
             class: "mage".into(),
             town: "harbor".into(),
             materials: vec![("iron_shard".into(), 3), ("arcane_core".into(), 1)],
+            passives: vec![("critRate".into(), 4), ("speed".into(), 2)],
         }
     }
 
@@ -798,7 +869,7 @@ mod tests {
         let data = sample_v5();
         let mut bytes = vec![SAVE_FORMAT_VERSION];
         bytes.extend(bincode::serialize(&data).expect("serialize"));
-        assert_eq!(bytes[0], 8, "版本头必须为 8");
+        assert_eq!(bytes[0], 9, "版本头必须为 9");
         let back: SaveData = bincode::deserialize(&bytes[1..]).expect("deserialize");
         assert_eq!(data, back);
         assert_eq!(back.skill_levels[0].level, 12);
@@ -807,6 +878,7 @@ mod tests {
         assert_eq!(back.class, "mage", "职业字段 v6 往返");
         assert_eq!(back.town, "harbor", "城镇字段 v7 往返");
         assert_eq!(back.materials[0], ("iron_shard".into(), 3), "材料字段 v8 往返");
+        assert_eq!(back.passives[0], ("critRate".into(), 4), "被动字段 v9 往返");
     }
 
     #[test]
@@ -905,6 +977,42 @@ mod tests {
         assert_eq!(out.town, "harbor", "v7 → v8 保留城镇");
         assert_eq!(out.class, "mage", "v7 → v8 保留职业");
         assert!(out.materials.is_empty(), "v7 → v8 材料默认空");
+        assert!(account.is_none());
+    }
+
+    #[test]
+    fn migrate_v8_to_v9_defaults_passives() {
+        let v9 = sample_v5();
+        let v8 = SaveDataV8 {
+            player_x: v9.player_x,
+            player_y: v9.player_y,
+            player_hp: v9.player_hp,
+            player_mp: v9.player_mp,
+            facing_x: v9.facing_x,
+            facing_y: v9.facing_y,
+            score: v9.score,
+            world_w: v9.world_w,
+            world_h: v9.world_h,
+            level: v9.level,
+            owned: v9.owned,
+            gold: v9.gold,
+            runes: v9.runes,
+            theme: v9.theme,
+            difficulty: v9.difficulty,
+            equipped: v9.equipped,
+            skill_levels: v9.skill_levels,
+            skill_points: v9.skill_points,
+            exp: v9.exp,
+            class: v9.class,
+            town: v9.town,
+            materials: v9.materials,
+        };
+        let mut v8_bytes = vec![8u8];
+        v8_bytes.extend(bincode::serialize(&v8).unwrap());
+        let (out, account) = decode_save(&v8_bytes).unwrap();
+        assert_eq!(out.town, "harbor", "v8 → v9 保留城镇");
+        assert_eq!(out.materials[0], ("iron_shard".into(), 3), "v8 → v9 保留材料");
+        assert!(out.passives.is_empty(), "v8 → v9 被动默认空");
         assert!(account.is_none());
     }
 

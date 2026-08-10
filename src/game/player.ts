@@ -71,7 +71,7 @@ export function updatePlayer(
   dt: number,
 ): void {
   const p = state.player;
-  const spd = p.speed * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1);
+  const spd = p.speed * (p.speedMult ?? 1) * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1);
   const nx = p.pos.x + dir.x * spd * dt;
   const ny = p.pos.y + dir.y * spd * dt;
   const maxX = Math.max(0, state.world.w - p.size.w);
