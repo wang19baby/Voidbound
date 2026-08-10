@@ -5,6 +5,8 @@ import { aabbOverlap, findPlayerWallHit } from './world';
 import { dbg } from '../util/log';
 import { isHardcore } from './difficulty';
 import { pushToast } from './toast';
+import { playSfxClient } from '../ipc/sfx';
+import { classAttrWeight } from './class';
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;
@@ -30,13 +32,14 @@ export function gainExp(state: GameState, amount: number): number {
     p.exp -= expNext(p.level);
     p.level++;
     p.skillPoints += 5;
-    p.combat.attr += EXP_PER_LEVEL_ATTR;
+    p.combat.attr += Math.round(EXP_PER_LEVEL_ATTR * classAttrWeight(p.classId));  // C-105 按职业权重
     p.hp = MAX_HP;
     ups++;
   }
   if (ups > 0) {
     state.levelUpFlash = 0.5;
     pushToast(state, `升级到 Lv ${p.level}`, '#ffd64a');
+    playSfxClient('levelup');  // OPT-025
   }
   return ups;
 }

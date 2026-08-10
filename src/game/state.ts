@@ -4,10 +4,12 @@
 import type { RenderResources } from '../render/resources';
 import { WORLD_W, WORLD_H } from './world';
 import { FIREBALL_DAMAGE, type Monster } from './monster';
-import type { CombatStats } from './combat';
+import type { CombatStats, DamageType } from './combat';
 import type { RuneId } from './rune';
 import type { SkillSlot } from './skill';
 import type { Difficulty } from './difficulty';
+import type { Equipment, EquipType } from './equipment';
+import type { ClassId } from './class';
 
 export interface Camera {
   x: number;
@@ -28,6 +30,10 @@ export interface Player {
   flipDir: 'L' | 'R' | 'N';
   /** D-04 战斗属性 (基础 + 装备聚合, US-002 后由 recomputeCombat 生成) */
   combat: CombatStats;
+  /** 职业 (M5 C-102): 决定 6 槽技能配置 + 属性倾向 */
+  classId: ClassId;
+  /** 穿戴槽 (OPT-014, A1): 仅穿戴属性进战斗聚合 */
+  equipped: Partial<Record<EquipType, Equipment>>;
   /** 可分配技能点 (击杀 +1, Ctrl+1..6 分配) */
   skillPoints: number;
   /** 金币 (D-06): 击杀掉落, 商人/重铸消耗 */
@@ -40,6 +46,8 @@ export interface Player {
   /** 翻滚无敌剩余秒 (Space) / 冷却 */
   dodgeT: number;
   dodgeCd: number;
+  /** 原地复活无敌剩余秒 (OPT-011, B1 选项) */
+  reviveInvuln: number;
 }
 
 export interface Fireball {
@@ -51,11 +59,128 @@ export interface Fireball {
   dmg: number;
   /** 发射时的符文 (pierce/vampire/homing 生效) */
   rune: RuneId;
+  /** 伤害类型 (M5 C-101): 火球/暗影箭/圣光弹/毒镖等投射物共用) */
+  dmgType: DamageType;
 }
 
 export interface RuneChoice {
   slot: SkillSlot;
   options: RuneId[];
+}
+
+/** 屏幕状态机 (OPT-010): 平铺旗标 → 单一 screen + 子状态 */
+export type Screen =
+  | 'title' | 'newgame'          // 外层
+  | 'characters'                 // 角色管理 (C-202): 列表/新建/删除/切换
+  | 'dungeon'                    // 战斗
+  | 'town'                       // 城镇 (子面板: townPanel)
+  | 'equipment'                  // Tab 装备面板 (覆盖在 dungeon 上)
+  | 'pause'                      // Esc 菜单 (覆盖 dungeon/town 上; settingsOpen 为子状态)
+  | 'death' | 'victory';         // 结算 (OPT-011/012 接入)
+
+/** 状态机最小接口 (setScreen 只依赖这些字段; GameState 结构满足) */
+export interface ScreenMachine {
+  screen: Screen;
+  mode: 'dungeon' | 'town';
+  pauseFrom: Screen;
+}
+
+/** 集中切换屏: 同步 mode; pauseFrom 只在进 pause 前由调用方设置 */
+export function setScreen(s: ScreenMachine, next: Screen): void {
+  s.screen = next;
+  if (next === 'dungeon' || next === 'town') s.mode = next;
+}
+
+/** 暂停恢复目标 (pauseFrom='town' → town, 否则 dungeon) */
+export function resumeScreen(s: ScreenMachine): Screen {
+  return s.pauseFrom === 'town' ? 'town' : 'dungeon';
+}
+
+/**
+ * 纯函数键位迁移表 (OPT-010 单测): 只覆盖无副作用导航键;
+ * 带副作用的键 (title 1 新游戏、pause 1/2 继续/设置、runeChoice、攻击键) 由 main.ts handler 处理。
+ * 注意: pause 的 '1'/'escape' 恢复目标依赖 pauseFrom, 表中返回默认 'dungeon', handler 用 resumeScreen。
+ */
+export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
+  const k = key.toLowerCase();
+  switch (screen) {
+    case 'dungeon':
+      if (k === 'escape') return 'pause';
+      if (k === 'tab') return 'equipment';
+      return null;
+    case 'town':
+      if (k === 'escape') return 'pause';
+      return null;
+    case 'equipment':
+      if (k === 'escape' || k === 'tab') return 'dungeon';
+      return null;
+    case 'pause':
+      if (k === '3') return 'title';
+      if (k === '4') return 'town';
+      if (k === 'escape' || k === '1') return 'dungeon';
+      return null;
+    case 'title':
+      if (k === '1') return 'newgame';
+      if (k === 'r') return 'characters';
+      return null;
+    case 'characters':
+      if (k === 'escape') return 'title';
+      return null;
+    case 'newgame':
+      if (k === 'escape') return 'title';
+      if (k === 'enter') return 'dungeon';
+      return null;
+    case 'death':
+      if (k === '1') return 'town';
+      if (k === '2' || k === '3') return 'dungeon';
+      return null;
+    case 'victory':
+      if (k === '1') return 'dungeon';
+      if (k === '2') return 'town';
+      return null;
+  }
+}
+
+/** 单层地牢跑局状态 (OPT-012): 清图 → 召 Boss → 通关结算; Boss 不计入 alive */
+export interface RunState {
+  theme: Theme;
+  /** 本局小怪总数 / 存活 (非 Boss) */
+  total: number;
+  alive: number;
+  /** 主题 Boss 是否在场 */
+  bossAlive: boolean;
+  /** 主题 Boss 是否已击败 (通关条件) */
+  bossKilled: boolean;
+  /** 通关结算是否已展示 (防重复触发) */
+  victoryShown: boolean;
+  /** 进入时刻 (performance.now, ms) */
+  t0: number;
+  /** 本次通关耗时秒 (胜利时记录) */
+  timeSec: number;
+  /** 本局击杀数 */
+  kills: number;
+  /** 通关时收集的地上掉落数 (M5 实测修复: 胜利屏显示) */
+  collectedLoot: number;
+  /** 各难度最佳通关秒数 (账号层, OPT-015 持久化) */
+  best: Partial<Record<Difficulty, number>>;
+}
+
+export type RunPhase = 'clearing' | 'boss' | 'won';
+
+/** 跑局阶段纯判定: Boss 已杀 → won; 小怪清完且 Boss 未在场 → boss; 其余 → clearing */
+export function runPhase(alive: number, bossAlive: boolean, bossKilled: boolean): RunPhase {
+  if (bossKilled) return 'won';
+  if (alive <= 0 && !bossAlive) return 'boss';
+  return 'clearing';
+}
+
+/** 空跑局 (初始/读档前) */
+export function emptyRun(theme: Theme): RunState {
+  return {
+    theme, total: 0, alive: 0,
+    bossAlive: false, bossKilled: false, victoryShown: false,
+    t0: performance.now(), timeSec: 0, kills: 0, best: {}, collectedLoot: 0,
+  };
 }
 
 export interface GameState {
@@ -73,31 +198,47 @@ export interface GameState {
   fireballSize: number;
   monsters: Monster[];
   score: number;
-  paused: boolean;
+  /** 屏幕状态机 (OPT-010) */
+  screen: Screen;
+  /** 暂停来源 (dungeon/town, 恢复用) */
+  pauseFrom: Screen;
   dying: boolean;
-  deathTimer: number;
   theme: 'forest' | 'desert' | 'ruin' | 'void';
   resources: RenderResources;
   /** 难度 (US-011, F-DIFF) */
   difficulty: Difficulty;
-  /** 连杀计数 (每 10 击杀召当前主题 Boss) */
-  bossKillTrigger: number;
+  /** 跑局状态 (OPT-012) */
+  run: RunState;
   /** 累计击杀 (HUD 显示) */
   killsTotal: number;
   /** 场景: 地下城 / 城镇 (US-021) */
   mode: 'dungeon' | 'town';
   /** 进入城镇前的地下城坐标 (出发时还原) */
   townReturn: { x: number; y: number } | null;
-  /** 装备面板开关 (Tab, US-014) */
-  equipmentOpen: boolean;
   /** 连击 (US-017) */
   combo: { count: number; timer: number };
   /** 升级全屏闪光剩余秒 (US-019) */
   levelUpFlash: number;
+  /** 装备面板: 选中背包索引 / 当前页 (C-502 网格分页) */
+  equipSel: number;
+  equipPage: number;
   /** 活跃的符文三选一 (10 级触发) */
   runeChoice: RuneChoice | null;
   /** 已拒绝变异的槽 (本局不再触发) */
   rejectedRunes: SkillSlot[];
+  /** 施法失败红闪 (OPT-007): 技能槽 + 倒计时秒 */
+  castFailFlash: { slot: SkillSlot; t: number } | null;
+  /** 屏幕震动幅度 (OPT-026): 受击/Boss 二阶段触发, 每帧衰减 */
+  cameraShake: number;
+  /** 最近一次伤害来源 (内容扩充): 死亡结算显示击杀者 */
+  lastKiller: string | null;
+  /** 环境粒子 (OPT-027): 主题氛围微尘 */
+  envFx: Array<{ x: number; y: number; vx: number; vy: number; t: number; life: number }>;
+  /** 已通关主题 (OPT-015, C1): 解锁难度与主题 */
+  cleared: string[];
+  /** 硬核二段确认 (OPT-006/015) */
+  confirmHardcore: boolean;
+  pendingDifficulty: Difficulty | null;
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
@@ -173,7 +314,7 @@ export function updateFireballs(state: GameState, dt: number): void {
   state.fireballs = next;
 }
 
-export function spawnFireball(state: GameState, dir: { x: number; y: number }, spread = 0, rune: RuneId = 'none', dmg = FIREBALL_DAMAGE): void {
+export function spawnFireball(state: GameState, dir: { x: number; y: number }, spread = 0, rune: RuneId = 'none', dmg = FIREBALL_DAMAGE, dmgType: DamageType = 'fire'): void {
   // 按 spread 弧度旋转方向
   const cos = Math.cos(spread);
   const sin = Math.sin(spread);
@@ -195,8 +336,9 @@ export function spawnFireball(state: GameState, dir: { x: number; y: number }, s
     life: rune === 'pierce' ? 3.0 : 1.5,
     dmg,
     rune,
+    dmgType,
   });
-  void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)}) rune=${rune} dmg=${dmg}`));
+  void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)}) rune=${rune} dmg=${dmg} type=${dmgType}`));
 }
 
 export interface PlayerSprite {

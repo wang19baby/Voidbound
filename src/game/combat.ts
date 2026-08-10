@@ -57,6 +57,8 @@ export interface CombatStats {
   shred: number;
   /** 易伤加成 (施加给目标, 上限 VULN_CAP) */
   vuln: number;
+  /** 吸血% (OPT-020 补完: unique 独占词条, 命中回复 damage×lifesteal/100) */
+  lifesteal: number;
   /** 各系防御抗性 (玩家被击中时用) */
   res: Record<DamageType, number>;
 }
@@ -76,6 +78,7 @@ export function baseCombat(): CombatStats {
     critBonus: 0,
     shred: 0,
     vuln: 0,
+    lifesteal: 0,
     res: emptyRes(),
   };
 }

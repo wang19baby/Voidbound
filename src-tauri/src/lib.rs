@@ -18,10 +18,12 @@ pub mod game {
 pub mod render;
 pub mod save;
 pub mod audio;
+pub mod account;
 
 use std::sync::Arc;
+use tauri::Emitter;
 
-use tauri::{Listener, Manager, State};
+use tauri::{Manager, State};
 
 use crate::render::atlas::{AtlasLoadError, AtlasRegistry, LoadedAtlas};
 
@@ -73,6 +75,14 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        // 关窗保存 (OPT-002): 拦截关闭 → 通知 JS 先存 → JS 再 destroy
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                log::info!("Voidbound close requested: notifying JS to save");
+                let _ = window.emit("close-requested", ());
+            }
+        })
         .setup(move |app| {
             app.manage(AppState {
                 atlases: Arc::clone(&atlases),
@@ -93,14 +103,10 @@ pub fn run() {
                 None => log::error!("window 'main' NOT created"),
             }
 
-            app.handle().listen_any("tauri://close_requested", |_| {
-                log::info!("Voidbound closing...");
-            });
-
             log::info!("Voidbound ready (M1 MVP scaffold)");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas, audio::play_sfx, audio::set_volume, audio::play_bgm, audio::stop_bgm, save::save_game, save::load_game, js_log])
+        .invoke_handler(tauri::generate_handler![ping, list_atlases, load_atlas, audio::play_sfx, audio::set_volume, audio::play_bgm, audio::stop_bgm, save::save_game, save::load_game, save::list_characters, save::delete_character, account::save_account, account::load_account, js_log])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

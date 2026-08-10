@@ -13,13 +13,15 @@ import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
-import { getOwned, getLoot, RARITY_COLORS, describeAffix } from '../game/equipment';
-import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS } from '../game/skill';
+import { getOwned, getLoot, EQUIP_SLOTS, EQUIP_NAMES, itemPowerDelta, BACKPACK_CAP, RARITY_COLORS, describeAffix } from '../game/equipment';
+import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS, slotDisplay } from '../game/skill';
 import { expNext } from '../game/player';
 import { itemPower } from '../game/equipment';
 import { DAMAGE_TYPES } from '../game/combat';
 import { DIFFICULTY_MODS } from '../game/difficulty';
+import { MONSTER_DEFS } from '../game/monster';
 import { worldToScreen } from '../game/state';
+import { pageCount, pageOf, cellIndex, cellRects, slotRects, inRect, EQ_LAYOUT } from '../game/uigrid';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
 let mouseX = 0;
@@ -50,6 +52,8 @@ export function drawHud(
 
   // 技能槽 (左下)
   const sy = slotY(state.viewport.h);
+  // 槽位→条索引 (SKILL_KEYS = Q/F/E/R, 对应 SkillSlot Q/W/E/R)
+  const SLOT_FLASH_IDX: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
     drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'icons', SKILL_ICONS[i]);
@@ -57,6 +61,11 @@ export function drawHud(
     const cds = getSkillCooldowns(nowSec);
     if ((cds[SKILL_KEYS[i]] ?? 0) > 0) {
       drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'ui', 'slide_horizontal_grey');
+    }
+    // 施法失败红闪 (OPT-007)
+    const fl = state.castFailFlash;
+    if (fl && SLOT_FLASH_IDX[fl.slot] === i) {
+      drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'ui', 'slide_horizontal_color', { color: [1, 0.25, 0.25] });
     }
   }
 
@@ -107,6 +116,74 @@ export function drawHudOverlay(
   ctx2d.fillText(`击杀 ${state.killsTotal ?? 0}`, rx, HUD_PAD + 40);
   ctx2d.fillStyle = '#9cc';
   ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, rx, HUD_PAD + 58);
+  // 跑局进度 (OPT-012): 剩余小怪数
+  if (state.screen === 'dungeon') {
+    ctx2d.fillStyle = '#aaf';
+    ctx2d.fillText(`剩余 ${state.run.alive} 怪`, rx, HUD_PAD + 76);
+  }
+  // 小地图 (OPT-024): 战斗场景右上, 现有 walls/monsters 降采样
+  if (state.screen === 'dungeon') {
+    const mw = 140;
+    const mh = Math.round((mw * state.world.h) / state.world.w);
+    const mx = rx - mw;
+    const my = HUD_PAD + 100;
+    ctx2d.fillStyle = 'rgba(8, 8, 16, 0.6)';
+    ctx2d.fillRect(mx, my, mw, mh);
+    const sx = mw / state.world.w;
+    const sy = mh / state.world.h;
+    ctx2d.fillStyle = '#5a5a6a';
+    for (const w of state.world.walls) {
+      ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
+    }
+    for (const m of state.monsters) {
+      ctx2d.fillStyle = MONSTER_DEFS[m.type].boss ? '#f80' : '#f55';
+      ctx2d.fillRect(mx + m.pos.x * sx, my + m.pos.y * sy, 2, 2);
+    }
+    ctx2d.fillStyle = '#fff';
+    ctx2d.fillRect(mx + state.player.pos.x * sx - 2, my + state.player.pos.y * sy - 2, 5, 5);
+  }
+  // 低血量红晕 (OPT-026): HP < 25% 时边缘渐红
+  if (state.screen === 'dungeon' && state.player.hp / MAX_HP < 0.25) {
+    const g = ctx2d.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.3, vw / 2, vh / 2, Math.max(vw, vh) * 0.7);
+    g.addColorStop(0, 'rgba(180, 0, 0, 0)');
+    g.addColorStop(1, 'rgba(180, 0, 0, 0.35)');
+    ctx2d.fillStyle = g;
+    ctx2d.fillRect(0, 0, vw, vh);
+  }
+  // 精英名牌 (内容扩充)
+  if (state.screen === 'dungeon') {
+    for (const m of state.monsters) {
+      if (!m.elite) continue;
+      const sp = worldToScreen(state, m.pos);
+      ctx2d.fillStyle = '#ffd64a';
+      ctx2d.font = 'bold 11px monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText(`精英·${MONSTER_DEFS[m.type].type}`, sp.x + m.size.w / 2, sp.y - 12);
+      ctx2d.textAlign = 'left';
+    }
+  }
+  // Boss 顶栏血条 (内容补): 顶部居中 + 二阶段狂暴预告
+  if (state.screen === 'dungeon') {
+    const boss = state.monsters.find(m => MONSTER_DEFS[m.type].boss);
+    if (boss) {
+      const bw = 360;
+      const bh = 14;
+      const bx = vw / 2 - bw / 2;
+      const by = 12;
+      ctx2d.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx2d.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+      const frac = Math.max(0, boss.hp) / boss.maxHp;
+      ctx2d.fillStyle = '#b03030';
+      ctx2d.fillRect(bx, by, bw * frac, bh);
+      ctx2d.fillStyle = '#333';
+      ctx2d.fillRect(bx + bw * frac, by, bw * (1 - frac), bh);
+      ctx2d.fillStyle = '#fff';
+      ctx2d.font = 'bold 12px monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText(`${MONSTER_DEFS[boss.type].type}  ${Math.ceil(boss.hp)}/${boss.maxHp}${boss.phase === 2 ? '  [狂暴]' : ''}`, vw / 2, by - 8);
+      ctx2d.textAlign = 'left';
+    }
+  }
   ctx2d.textAlign = 'left';
 
   // === 左下: 技能簇 ===
@@ -194,7 +271,7 @@ export function drawHudOverlay(
     ctx2d.textAlign = 'center';
     ctx2d.font = 'bold 18px monospace';
     ctx2d.fillStyle = '#ffd';
-    ctx2d.fillText(`${choice.slot} 达到 Lv10 — 选择符文变异`, vw / 2, y0 - 34);
+    ctx2d.fillText(`${slotDisplay(choice.slot)} 达到 Lv10 — 选择符文变异`, vw / 2, y0 - 34);
     ctx2d.font = '12px monospace';
     ctx2d.fillStyle = '#aaa';
     ctx2d.fillText('按 1/2/3 选择 · Esc 拒绝(本局不再触发)', vw / 2, y0 - 14);
@@ -255,30 +332,108 @@ export function drawHudOverlay(
     ctx2d.textAlign = 'left';
   }
 
-  // 装备面板 (US-014)
-  if (state.equipmentOpen) {
+  // 装备面板 (OPT-014, A1): 左穿戴槽 + 中背包(滚动/选择/对比) + 右聚合属性
+  if (state.screen === 'equipment') {
     const owned = getOwned(state);
-    ctx2d.fillStyle = 'rgba(8, 8, 14, 0.93)';
+    ctx2d.fillStyle = 'rgba(8, 8, 14, 0.94)';
     ctx2d.fillRect(0, 0, vw, vh);
     ctx2d.font = 'bold 20px monospace';
     ctx2d.fillStyle = '#ffd';
     ctx2d.textAlign = 'left';
-    ctx2d.fillText(`装备 (${owned.length} 件)  —  [Tab/Esc] 关闭`, 32, 40);
-    ctx2d.font = '13px monospace';
-    let py = 68;
-    const shown = Math.min(owned.length, 20);
-    for (let i = 0; i < shown; i++) {
-      const eq = owned[i];
-      const col = RARITY_COLORS[eq.rarity];
-      ctx2d.fillStyle = `rgb(${col.map(v => Math.round(v * 255)).join(',')})`;
-      ctx2d.fillText(`${i + 1}. ${eq.name}`, 40, py);
-      ctx2d.fillStyle = '#bbb';
-      ctx2d.fillText(`战力+${itemPower(eq)}  ${eq.affixes.map(describeAffix).join('  ')}`, 320, py);
-      py += 20;
+    ctx2d.fillText(`装备 — 背包 ${owned.length}/${BACKPACK_CAP}  [Tab/Esc] 关闭`, 32, 40);
+
+    // 左: 穿戴 4 槽 (可视化, C-504)
+    ctx2d.font = 'bold 14px monospace';
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.fillText('穿戴', EQ_LAYOUT.slotX, EQ_LAYOUT.slotY - 12);
+    const slotR = slotRects();
+    for (let i = 0; i < EQUIP_SLOTS.length; i++) {
+      const t = EQUIP_SLOTS[i];
+      const s = slotR[i];
+      const eq = state.player.equipped[t];
+      const col = eq ? RARITY_COLORS[eq.rarity] : null;
+      ctx2d.setLineDash(col ? [] : [4, 3]);
+      ctx2d.strokeStyle = col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556';
+      ctx2d.lineWidth = col ? 3 : 1.5;
+      ctx2d.strokeRect(s.x, s.y, EQ_LAYOUT.slotSize, EQ_LAYOUT.slotSize);
+      ctx2d.setLineDash([]);
+      ctx2d.fillStyle = col ? `rgb(${col.map(v => Math.round(v * 255 * 0.35)).join(',')})` : '#232330';
+      ctx2d.fillRect(s.x + 2, s.y + 2, EQ_LAYOUT.slotSize - 4, EQ_LAYOUT.slotSize - 4);
+      ctx2d.fillStyle = '#fff';
+      ctx2d.font = 'bold 24px monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText(EQUIP_NAMES[t][0], s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize / 2 + 8);
+      ctx2d.font = '11px monospace';
+      ctx2d.fillStyle = col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556';
+      ctx2d.fillText(eq ? `战力+${itemPower(eq)}` : '(空)', s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize + 14);
+      ctx2d.textAlign = 'left';
     }
-    if (owned.length > shown) {
-      ctx2d.fillStyle = '#777';
-      ctx2d.fillText(`…还有 ${owned.length - shown} 件`, 40, py);
+
+    // 中: 背包 4×5 网格 + 分页 (C-502)
+    ctx2d.font = 'bold 14px monospace';
+    ctx2d.fillStyle = '#ffd';
+    ctx2d.fillText('背包', EQ_LAYOUT.gridX, EQ_LAYOUT.gridY - 12);
+    const pc = pageCount(owned.length);
+    const curPage = Math.min(pageOf(state.equipSel), pc - 1);
+    const cells = cellRects();
+    for (let i = 0; i < cells.length; i++) {
+      const c2 = cells[i];
+      const idx = cellIndex(c2.col, c2.row, curPage, owned.length);
+      const eq = idx !== null ? owned[idx] : undefined;
+      const sel = idx === state.equipSel;
+      const hv = inRect(mouseX, mouseY, c2.x, c2.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize);
+      ctx2d.fillStyle = eq ? `rgb(${RARITY_COLORS[eq.rarity].map(v => Math.round(v * 255 * 0.45)).join(',')})` : 'rgba(18,18,28,0.85)';
+      ctx2d.fillRect(c2.x, c2.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize);
+      ctx2d.strokeStyle = sel ? '#ffd64a' : hv ? '#9cf' : '#3a3a48';
+      ctx2d.lineWidth = sel ? 3 : hv ? 2 : 1;
+      ctx2d.strokeRect(c2.x, c2.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize);
+      if (eq) {
+        ctx2d.fillStyle = '#fff';
+        ctx2d.font = 'bold 14px monospace';
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText(eq.name.slice(0, 2), c2.x + EQ_LAYOUT.cellSize / 2, c2.y + EQ_LAYOUT.cellSize / 2 + 5);
+        ctx2d.textAlign = 'left';
+      }
+    }
+    // 分页指示
+    ctx2d.fillStyle = '#889';
+    ctx2d.font = '12px monospace';
+    ctx2d.fillText(`第 ${curPage + 1}/${pc} 页 · 滚轮 / PageUp·PageDown 翻页 · 方向键选格 · 点击选格`, EQ_LAYOUT.gridX, EQ_LAYOUT.btnY - 18);
+    // 按钮 (C-501 鼠标路径)
+    const btns: Array<{ r: { x: number; y: number; w: number; h: number }; label: string; color: string }> = [
+      { r: EQ_LAYOUT.btnEquip, label: '[A] 装备', color: '#2a6a3a' },
+      { r: EQ_LAYOUT.btnUnequip, label: '[U] 卸下', color: '#7a2a2a' },
+    ];
+    for (const b of btns) {
+      const hv2 = inRect(mouseX, mouseY, b.r.x, b.r.y, b.r.w, b.r.h);
+      ctx2d.fillStyle = hv2 ? '#c9aaff' : b.color;
+      ctx2d.fillRect(b.r.x, b.r.y, b.r.w, b.r.h);
+      ctx2d.fillStyle = '#fff';
+      ctx2d.font = 'bold 13px monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText(b.label, b.r.x + b.r.w / 2, b.r.y + b.r.h / 2 + 4);
+      ctx2d.textAlign = 'left';
+    }
+    // tooltip: 选中物品详情 (C-502)
+    const selEq = owned[state.equipSel];
+    if (selEq) {
+      ctx2d.fillStyle = '#10141c';
+      ctx2d.fillRect(EQ_LAYOUT.gridX, EQ_LAYOUT.tipY, 460, 46);
+      ctx2d.fillStyle = `rgb(${RARITY_COLORS[selEq.rarity].map(v => Math.round(v * 255)).join(',')})`;
+      ctx2d.font = 'bold 13px monospace';
+      ctx2d.fillText(selEq.name, EQ_LAYOUT.gridX + 8, EQ_LAYOUT.tipY + 16);
+      ctx2d.fillStyle = '#bbb';
+      ctx2d.font = '12px monospace';
+      ctx2d.fillText(selEq.affixes.map(describeAffix).join('  ').slice(0, 64), EQ_LAYOUT.gridX + 8, EQ_LAYOUT.tipY + 32);
+      const old = state.player.equipped[selEq.type];
+      if (old) {
+        const delta = itemPowerDelta(selEq, old);
+        ctx2d.fillStyle = delta > 0 ? '#4f4' : delta < 0 ? '#f66' : '#aaa';
+        ctx2d.fillText(`战力+${itemPower(selEq)} vs ${old.name} ${delta > 0 ? '+' : ''}${delta}`, EQ_LAYOUT.gridX + 300, EQ_LAYOUT.tipY + 16);
+      } else {
+        ctx2d.fillStyle = '#89a';
+        ctx2d.fillText(`战力+${itemPower(selEq)}`, EQ_LAYOUT.gridX + 300, EQ_LAYOUT.tipY + 16);
+      }
     }
     // 聚合战斗属性 (右列)
     const c = state.player.combat;
@@ -316,7 +471,7 @@ export function drawHudOverlay(
     for (const slot of SKILL_SLOTS) {
       const sk = getSkill(slot);
       ctx2d.fillStyle = '#aaa';
-      ctx2d.fillText(`${slot} ${sk.name}`, rx, ry);
+      ctx2d.fillText(`${slotDisplay(slot)} ${sk.name}`, rx, ry);
       ctx2d.fillStyle = '#eee';
       ctx2d.fillText(`Lv${sk.level}${sk.rune && sk.rune !== 'none' ? '  ' + RUNE_DEFS[sk.rune].name : ''}`, rx + 160, ry);
       ry += 18;
@@ -329,7 +484,8 @@ export function drawHudOverlay(
 }
 
 function drawLogPanel(ctx2d: CanvasRenderingContext2D, vw: number, vh: number) {
-  const logs = getLogs();
+  // 玩家侧只显示 WRN/ERR (OPT-009): 调试 INF/DBG 不进玩家面板 (L 键切 console 级别保留)
+  const logs = getLogs().filter(e => e.level === 'WRN' || e.level === 'ERR');
   const lines = logs.slice(-LOG_LINES);
   const x = vw - 380;
   const y = vh - LOG_LINES * 15 - 14;

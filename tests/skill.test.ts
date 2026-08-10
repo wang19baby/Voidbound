@@ -36,6 +36,19 @@ eq('combo 10 → 2.0', comboScoreMult(10), 2.0);
 eq('combo 20 → 3.0 (上限)', comboScoreMult(20), 3.0);
 eq('combo 30 → 3.0 (封顶)', comboScoreMult(30), 3.0);
 
+// === OPT-023 符文分族 ===
+import { RUNE_FAMILIES } from '../src/game/rune';
+check('火球池有 4 个选项', RUNE_FAMILIES.fireball.length >= 3);
+check('nova 符文定义存在', !!RUNE_DEFS.nova);
+check('nova 属于火球族', RUNE_FAMILIES.fireball.includes('nova'));
+// 家族池抽样: 近战槽三选一不得出现火球专属符文
+for (let i = 0; i < 20; i++) {
+  const meleeOpts = pickRuneOptions('LMB', 3);
+  check(`近战池选项 ∈ {cleave,steal,vampire}: ${meleeOpts.join(',')}`, meleeOpts.every(r => RUNE_FAMILIES.melee.includes(r)));
+  const fbOpts = pickRuneOptions('Q', 3);
+  check(`火球池选项 ∈ 火球家族: ${fbOpts.join(',')}`, fbOpts.every(r => RUNE_FAMILIES.fireball.includes(r)));
+}
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);

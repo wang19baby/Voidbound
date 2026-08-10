@@ -126,3 +126,19 @@
 - NPC: 商人(1-5买/6卖页 半价), 重铸师(100金重roll 词条数不变), 挑战祭坛(N循环难度), 地下城入口(出发)
 - equipment: randomEquipment 共用 (掉落/商店), getItemBuy/SellPrice, rerollAffixes, addOwned
 - 测试: 定价/重铸 5 用例; cargo 5/5; 运行 30s 0 崩溃
+
+## Session: 2026-08-10 (Ralph 8: M5 W2 多角色 + 仓库)
+
+### 背景
+- 前置迭代已落地: OPT-001~015 (失焦暂停/关窗保存/技能存档/版本头/文案/Screen 状态机/死亡结算/单层地牢/新局选择屏/装备穿戴/进度解锁) + C-101~105 (技能库 id 化/6 职业/选择屏/存档 v6/属性倾向) + C-501/502/504 (鼠标层/格子背包/槽位可视化) + balance 基线; 495 TS + 11 cargo 全绿
+- 本轮契约: M5 波次调整后 W2 = C-201~203 (多角色) + C-503 (仓库)
+
+### 已完成
+- **C-201 多档读写**: save.rs `save_game/load_game(char_id: Option)` (默认 'char_0') + `sanitize_char_id` (字母数字下划线白名单, 防路径穿越) + `list_characters()` 返回 CharacterSummary (id/职业/等级/难度/主题); TS `saveGame/loadGame(listCharacters)` + lib.rs 注册; cargo 用例: sanitize 过滤/多角色互不覆盖/未知版本报错
+- **C-202 角色管理屏**: Screen 加 'characters'; 标题 [R] 进入; ↑/↓ 选择, Enter 进入/切换 (存当前→读目标; 无档新角色自动开新局兜底), N 新建 (1-6 选职业 → 自动命名 `职业_序号` → 进 newgame 屏), D 删除 (Y 二次确认, `delete_character` 删档+剔账号层); 全程鼠标等价路径 (handleUiClick case 'characters')
+- **C-203 继续入口**: 标题 [O] / 鼠标按钮 → loadAccount 取 last_char → loadGame(该角色); account.rs 加 `last_char`; persistNow 写 last_char
+- **C-503 仓库**: account.rs `warehouse: Vec<OwnedItem>` (账号层共享); 城镇新增 仓库管理员 NPC (780,400, 挑战祭坛右移); 面板 [1-9] 取回 / [S] 存入 / [B] 返回, WAREHOUSE_CAP=20 两端上限; town.ts 纯函数 warehouseStore/warehouseTake + 6 用例 (存取/满拒/无效索引); 存档 v6 同批 (account.json 新字段, 旧 JSON 缺字段 serde 默认兼容)
+
+### 验证
+- npm test 515 例全绿 (screen +4, town +6 仓库存取); cargo 15/15 (sanitize/多档/删除/未知版本); build 262.5kb; 冒烟: 启动 2min, [boot] 干净, hb 每 5s 稳定, 0 loop-crash, list_characters 实机调用成功
+- 教训: Tauri 命令参数 Option<String> 时 TS 传 undefined 即可 (invoke 不传字段); warehouse 用 export interface SaveItem 直接经 serde_json 对齐 rust OwnedItem
