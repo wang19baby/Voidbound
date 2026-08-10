@@ -143,7 +143,7 @@ export interface Decor {
 
 /** 主题 → 装饰配置 (复用 world 图集: grass / wall_alt) */
 export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: [number, number, number] }> = {
-  forest: { sprite: 'grass', count: 8 },
+  forest: { sprite: 'wall_alt', count: 6, tint: [0.8, 0.96, 0.8] }, // grass 与地板同纹 → 换暗石当苔石
   desert: { sprite: 'wall_alt', count: 6 },
   ruin:   { sprite: 'wall_alt', count: 5, tint: [0.72, 0.74, 0.86] },
   void:   { sprite: 'wall_alt', count: 4, tint: [0.55, 0.4, 0.85] },
