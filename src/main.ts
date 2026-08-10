@@ -12,7 +12,7 @@ import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { getActiveWalls, type Wall } from './game/world';
-import { drawSprite } from './render/draw';
+import { drawSprite, setViewportUniform } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
@@ -26,7 +26,7 @@ import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
-import { moveGridSel, flipPage, pageStart, pageOf, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
+import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
 import { pushToast, getToasts, updateToasts } from './game/toast';
 import { deathSummary, deathGoldPenalty, type DeathSummary } from './game/deathSettle';
 import { moveSelection, ngResolve, ngDefault, themeUnlocked, type NewgameSel } from './game/newgame';
@@ -94,6 +94,7 @@ canvas.addEventListener('webglcontextrestored', () => {
   invoke('js_log', { msg: '[gl] CONTEXT RESTORED' }).catch(() => {});
 });
 const quad = createQuadBuffer(gl, VERT, FRAG);
+setViewportUniform(gl, quad, VW, VH);
 inf('gl', 'shader program + quad VAO ready');
 
 inf('atlas', 'loading 6 atlases...');
@@ -198,6 +199,7 @@ const state = {
   pendingDifficulty: null,
   castFailFlash: null,
   cameraShake: 0,
+  hitStop: 0,
   lastKiller: null,
   envFx: [],
   resources: res,
@@ -843,6 +845,7 @@ window.addEventListener('resize', () => {
   state.viewport.w = w;
   state.viewport.h = h;
   gl.viewport(0, 0, w, h);
+  setViewportUniform(gl, quad, w, h); // V0: shader clip 用实际视口
 });
 
 gl.viewport(0, 0, VW, VH);
@@ -998,6 +1001,14 @@ function loopImpl(now: number) {
     state.player.pos.x = Math.max(0, Math.min(state.viewport.w - state.player.size.w, state.player.pos.x));
     state.player.pos.y = Math.max(0, Math.min(state.viewport.h - state.player.size.h, state.player.pos.y));
     drawTownFrame();
+    mouse.reset();
+    return; // 包装器统一 rAF
+  }
+
+  // V0 命中停顿: 冻结世界模拟 (输入/怪物/弹幕/回血), 仍渲染 — 暴击时 ~0.1s 的打击感
+  if (state.hitStop > 0) {
+    state.hitStop = Math.max(0, state.hitStop - dt);
+    drawFrame();
     mouse.reset();
     return; // 包装器统一 rAF
   }
@@ -1897,20 +1908,20 @@ function drawFrameToScreen() {
   const envColor = THEME_ENV_COLOR[state.theme];
   for (const p of state.envFx) {
     const sp = worldToScreen(state, p);
-    drawSprite(gl, quad, res, sp, { w: 6, h: 6 }, 'particles', 'spark_03', { color: envColor });
+    drawSprite(gl, quad, res, sp, { w: 6, h: 6 }, 'particles', 'spark_03', { color: envColor, blend: 'add' });
   }
 
   // 近战挥击 (slash particle, 在玩家前)
   for (const s of getSwings(state)) {
     const sp = worldToScreen(state, s.pos);
     if (sp.x + s.size.w < 0 || sp.x > state.viewport.w) continue;
-    drawSprite(gl, quad, res, sp, s.size, 'particles', 'slash_01');
+    drawSprite(gl, quad, res, sp, s.size, 'particles', 'slash_01', { blend: 'add' });
   }
 
   for (const f of state.fireballs) {
     const sp = worldToScreen(state, f.pos);
     const rc = f.rune && f.rune !== 'none' ? RUNE_DEFS[f.rune].color : hexToRgb01(DAMAGE_TYPE_COLORS[f.dmgType]);
-    drawSprite(gl, quad, res, sp, f.size, 'particles', 'magic_01', { color: rc });
+    drawSprite(gl, quad, res, sp, f.size, 'particles', 'magic_01', { color: rc, blend: 'add' });
   }
 
   // 怪物远程投射物 (红色小点)
@@ -1918,7 +1929,7 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, p.pos);
     if (sp.x + p.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + p.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, p.size, 'particles', 'magic_05', { color: [1, 0.3, 0.3] });
+    drawSprite(gl, quad, res, sp, p.size, 'particles', 'magic_05', { color: [1, 0.3, 0.3], blend: 'add' });
   }
 
   // 死亡粒子 (在世界图层之后, 怪物之前)
@@ -1929,7 +1940,7 @@ function drawFrameToScreen() {
     const lifeFrac = Math.max(0, fx.life / fx.maxLife);
     // 后期变小
     const sz = fx.size.w * (0.4 + 0.6 * lifeFrac);
-    drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: sz, h: sz }, 'particles', 'slash_02', { rot: fx.rot });
+    drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: sz, h: sz }, 'particles', 'slash_02', { rot: fx.rot, blend: 'add' });
   }
 
   // 怪物 (受击时变红闪烁, 复用 color tint)
@@ -1957,7 +1968,7 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, eq.pos);
     if (sp.x + eq.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + eq.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, eq.size, 'particles', 'spark_03', { color: RARITY_COLORS[eq.rarity] });
+    drawSprite(gl, quad, res, sp, eq.size, 'particles', 'spark_03', { color: RARITY_COLORS[eq.rarity], blend: 'add' });
   }
   const picked = pickupLoot(state);
   for (const eq of picked) {

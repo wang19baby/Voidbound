@@ -11,6 +11,8 @@ uniform vec2 u_size;
 uniform vec4 u_uv;
 uniform vec2 u_flip;
 uniform float u_rot;
+// V0 画质: 视口尺寸 uniform, 替代硬编码 1280x720 (窗口缩放后 clip 仍正确)
+uniform vec2 u_viewport;
 out vec2 v_uv;
 void main() {
   vec2 c = a_pos - vec2(0.5);
@@ -19,7 +21,7 @@ void main() {
   vec2 rotated = vec2(c.x * co - c.y * s, c.x * s + c.y * co) + vec2(0.5);
   vec2 flipped = mix(rotated, vec2(1.0) - rotated, lessThan(u_flip, vec2(0.0)));
   vec2 world = flipped * u_size + u_pos;
-  vec2 clip = world / vec2(1280.0, 720.0) * 2.0 - 1.0;
+  vec2 clip = world / u_viewport * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
   v_uv = a_uv * u_uv.zw + u_uv.xy;
 }

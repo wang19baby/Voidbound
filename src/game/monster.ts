@@ -480,6 +480,8 @@ export function damageMonster(
   const cy = m.pos.y + m.size.h / 2;
   spawnDamageNum(state, cx, m.pos.y - 6, `-${damage}`, isCrit ? CRIT_COLOR : DAMAGE_TYPE_COLORS[spec.type]);
   playSfxClient(isCrit ? 'crit' : 'hit');  // OPT-025: 暴击专属音
+  // V0 命中停顿: 暴击 0.1s / 普通命中 0.04s 冻结世界 (打击感)
+  state.hitStop = Math.max(state.hitStop ?? 0, isCrit ? 0.1 : 0.04);
   dbg('combat', `${spec.type} hit ${m.type} for ${damage} (hp=${m.hp.toFixed(0)})${isCrit ? ' CRIT' : ''}`);
   // 击退: 从玩家推离 (US-016), 随后沿墙滑移防穿墙
   if (spec.knockback) {

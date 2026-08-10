@@ -7,11 +7,23 @@
 import type { RenderResources } from './resources';
 import { spriteUv } from './resources';
 import type { QuadResources } from './gl/resources';
+import { setBlend, type BlendMode } from './gl/context';
 
 export interface DrawOpts {
   flip?: { x: 1 | -1; y: 1 | -1 };
   rot?: number;
   color?: [number, number, number];
+  /** V0 画质: 'add' = additive 发光 (ONE, ONE), 默认 'alpha' 标准混合 */
+  blend?: BlendMode;
+}
+
+/** 上次混合模式缓存: 避免同模式重复切换 blendFunc */
+let lastBlend: BlendMode = 'alpha';
+
+/** V0 画质: 设置 u_viewport (视口尺寸, 替代 shader 硬编码 1280x720) */
+export function setViewportUniform(gl: WebGL2RenderingContext, q: QuadResources, w: number, h: number): void {
+  gl.useProgram(q.program);
+  gl.uniform2f(q.uViewport, w, h);
 }
 
 export function drawSprite(
@@ -32,6 +44,12 @@ export function drawSprite(
   const flip = opts.flip ?? { x: 1, y: 1 };
   const rot = opts.rot ?? 0;
   const color = opts.color ?? [1, 1, 1];
+  const blend = opts.blend ?? 'alpha';
+  // V0 画质: additive 发光按需切换混合状态 (缓存避免重复切换)
+  if (blend !== lastBlend) {
+    setBlend(gl, blend);
+    lastBlend = blend;
+  }
 
   gl.useProgram(q.program);
   gl.bindVertexArray(q.vao);

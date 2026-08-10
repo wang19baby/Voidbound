@@ -237,6 +237,8 @@ export interface GameState {
   castFailFlash: { slot: SkillSlot; t: number } | null;
   /** 屏幕震动幅度 (OPT-026): 受击/Boss 二阶段触发, 每帧衰减 */
   cameraShake: number;
+  /** 命中停顿 (V0 画质): >0 时冻结世界模拟, 仅渲染; 暴击触发 ~0.1s */
+  hitStop: number;
   /** 最近一次伤害来源 (内容扩充): 死亡结算显示击杀者 */
   lastKiller: string | null;
   /** 环境粒子 (OPT-027): 主题氛围微尘 */
