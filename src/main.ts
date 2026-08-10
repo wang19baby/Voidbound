@@ -11,7 +11,7 @@ import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
-import { getActiveWalls, type Wall } from './game/world';
+import { getActiveWalls, getActiveDecor, type Wall } from './game/world';
 import { drawSprite, setViewportUniform } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
@@ -151,8 +151,7 @@ const state = {
   world: {
     w: WORLD_W, h: WORLD_H,
     walls: [] as Wall[],
-    floorPos: { x: 0, y: 0 },
-    floorSize: { w: WORLD_W, h: WORLD_H },
+    decor: [],
   },
   camera: { x: 0, y: 0 },
   fireballs: [] as import('./game/state').Fireball[],
@@ -1026,6 +1025,7 @@ function loopImpl(now: number) {
   state.player.idleT += dt;
   updateCamera(state);
   state.world.walls = getActiveWalls(state, 2);
+  state.world.decor = getActiveDecor(state, 2); // V1 画质: 装饰随相机刷新
   updateFireballs(state, dt);
   updateSwings(state, dt);
   updateMonsters(state, dt);
@@ -1890,18 +1890,34 @@ function drawFrameToScreen() {
   // 设置 reticle 位置给 drawHud 用
   setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
 
-  drawSprite(
-    gl, quad, res,
-    { x: -state.camera.x + state.world.floorPos.x, y: -state.camera.y + state.world.floorPos.y },
-    state.world.floorSize,
-    'world', `floor_${state.theme}`,
-  );
+  // V1 地板瓦片: 16x16 贴图按 64px 世界格平铺 (旧实现拉伸 16x16 到全图 → 糊成一片)
+  const TILE = 64;
+  const t0x = Math.max(0, Math.floor(state.camera.x / TILE));
+  const t0y = Math.max(0, Math.floor(state.camera.y / TILE));
+  const t1x = Math.min(Math.floor(WORLD_W / TILE), Math.ceil((state.camera.x + state.viewport.w) / TILE));
+  const t1y = Math.min(Math.floor(WORLD_H / TILE), Math.ceil((state.camera.y + state.viewport.h) / TILE));
+  const floorBase = `floor_${state.theme}`;
+  for (let ty = t0y; ty < t1y; ty++) {
+    for (let tx = t0x; tx < t1x; tx++) {
+      // 轻微棋盘变化破单调: 每 7 格插一块基础地板
+      const name = (tx * 31 + ty * 17) % 7 === 3 ? 'floor' : floorBase;
+      drawSprite(gl, quad, res, { x: tx * TILE - state.camera.x, y: ty * TILE - state.camera.y }, { w: TILE, h: TILE }, 'world', name);
+    }
+  }
 
   for (const w of state.world.walls) {
     const sp = worldToScreen(state, w.pos);
     if (sp.x + w.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + w.size.h < 0 || sp.y > state.viewport.h) continue;
     drawSprite(gl, quad, res, sp, w.size, 'world', `wall_${state.theme}`);
+  }
+
+  // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞), 墙与地板之间
+  for (const d of state.world.decor) {
+    const sp = worldToScreen(state, d.pos);
+    if (sp.x + 32 < 0 || sp.x > state.viewport.w) continue;
+    if (sp.y + 32 < 0 || sp.y > state.viewport.h) continue;
+    drawSprite(gl, quad, res, sp, { w: 32, h: 32 }, 'world', d.sprite, d.tint ? { color: d.tint } : {});
   }
 
   // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上
@@ -1948,14 +1964,32 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, m.pos);
     if (sp.x + m.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + m.size.h < 0 || sp.y > state.viewport.h) continue;
+    const def = MONSTER_DEFS[m.type];
     const color: [number, number, number] | undefined =
       m.elite ? [1, 0.85, 0.25]
       : m.hitFlash > 0 ? [1, 0.3, 0.3]
-      : MONSTER_DEFS[m.type].tint;
-    const monsterSprite = `${MONSTER_DEFS[m.type].sprite}_${m.walkFrame}`;
-    drawSprite(gl, quad, res, sp, m.size, 'monsters', monsterSprite, { color });
+      : def.tint;
+    // V1 动画: 2 帧 + 正弦挤压 (移动时 4 步行走感, 静止时轻微呼吸)
+    const moving = Math.hypot(m.vel.x, m.vel.y) > 1;
+    const bob = Math.sin(m.walkT * (Math.PI * 2) / 0.6) * (moving ? 1 : 0.25);
+    // V1 攻击前摇: 远程怪开火尾窗 / Boss 二阶段技能尾窗 → 放大 + 亮色 + 蓄力条 (可读性=反制)
+    const dist = Math.hypot(state.player.pos.x - m.pos.x, state.player.pos.y - m.pos.y);
+    const rangedWind = !!def.rangedCooldown && m.attackCd > 0 && m.attackCd <= 0.35 && dist <= def.aggroRange;
+    const bossWind = !!def.boss && m.phase === 2 && m.aiCd > 0 && m.aiCd <= 0.6;
+    const charging = rangedWind || bossWind;
+    const bobW = m.size.w * (1 + bob * 0.06);
+    const bobH = m.size.h * (1 - bob * 0.08);
+    const sz = charging ? { w: bobW * 1.15, h: bobH * 1.15 } : { w: bobW, h: bobH };
+    const drawColor: [number, number, number] | undefined = charging ? [1.5, 1.25, 1.0] : color;
+    const monsterSprite = `${def.sprite}_${m.walkFrame}`;
+    drawSprite(gl, quad, res, sp, sz, 'monsters', monsterSprite, { color: drawColor });
+    // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
+    if (charging) {
+      const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;
+      drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 8 }, { w: m.size.w * windFrac, h: 3 }, 'ui', 'slide_horizontal_color');
+      drawSprite(gl, quad, res, { x: sp.x + m.size.w * windFrac, y: sp.y - 8 }, { w: m.size.w * (1 - windFrac), h: 3 }, 'ui', 'slide_horizontal_grey');
+    }
     // HP 条
-    const def = MONSTER_DEFS[m.type];
     const frac = Math.max(0, m.hp) / def.hp;
     const barW = m.size.w;
     const barH = 3;

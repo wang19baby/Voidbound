@@ -1,7 +1,7 @@
 // 程序化世界: chunk-based 分块生成, 让玩家感觉地图"无边界"
 // 每个 1024x1024 chunk 用独立种子生成 8x8 block 布局, 中间 2x2 走廊确保连通
 
-import type { GameState } from './state';
+import type { GameState, Theme } from './state';
 
 export interface Wall {
   pos: { x: number; y: number };
@@ -131,4 +131,73 @@ export function findPlayerWallHit(state: GameState, walls: Wall[]): Wall | null 
 // 老接口兼容 (保留 buildDungeonWalls 给 main.ts 默认初始化)
 export function buildDungeonWalls(): Wall[] {
   return generateChunkWalls(10, 7); // 占位, 实际用 getActiveWalls
+}
+
+// === V1 画质: 障碍物装饰 (纯视觉, 无碰撞) ===
+
+export interface Decor {
+  pos: { x: number; y: number };
+  sprite: string;
+  tint?: [number, number, number];
+}
+
+/** 主题 → 装饰配置 (复用 world 图集: grass / wall_alt) */
+export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: [number, number, number] }> = {
+  forest: { sprite: 'grass', count: 8 },
+  desert: { sprite: 'wall_alt', count: 6 },
+  ruin:   { sprite: 'wall_alt', count: 5, tint: [0.72, 0.74, 0.86] },
+  void:   { sprite: 'wall_alt', count: 4, tint: [0.55, 0.4, 0.85] },
+};
+
+const decorCache = new Map<string, Decor[]>();
+function decorKey(cx: number, cy: number, theme: Theme): string { return `${cx},${cy}:${theme}`; }
+
+/** 生成单个 chunk 的装饰 (种子化, 与墙布局共享 RNG 种子系, 避开墙块) */
+export function generateChunkDecor(cx: number, cy: number, theme: Theme): Decor[] {
+  const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xdec0de5);
+  const cfg = THEME_DECOR[theme];
+  const walls = getChunkWalls(cx, cy);
+  const out: Decor[] = [];
+  const ox = cx * CHUNK_SIZE;
+  const oy = cy * CHUNK_SIZE;
+  const size = 32;
+  let guard = 0;
+  while (out.length < cfg.count && guard++ < 64) {
+    const x = ox + 16 + rand() * (CHUNK_SIZE - 32);
+    const y = oy + 16 + rand() * (CHUNK_SIZE - 32);
+    let blocked = false;
+    for (const w of walls) {
+      if (aabbOverlap(x, y, size, size, w.pos.x, w.pos.y, w.size.w, w.size.h)) { blocked = true; break; }
+    }
+    if (blocked) continue;
+    out.push({ pos: { x, y }, sprite: cfg.sprite, tint: cfg.tint });
+  }
+  return out;
+}
+
+export function getChunkDecor(cx: number, cy: number, theme: Theme): Decor[] {
+  const k = decorKey(cx, cy, theme);
+  let d = decorCache.get(k);
+  if (!d) {
+    d = generateChunkDecor(cx, cy, theme);
+    decorCache.set(k, d);
+  }
+  return d;
+}
+
+/** 返回玩家附近 (radius chunks) 的所有装饰 (含当前 chunk) */
+export function getActiveDecor(state: GameState, radius = 2): Decor[] {
+  const center = worldToChunk(state.player.pos.x, state.player.pos.y);
+  const out: Decor[] = [];
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const cx = center.cx + dx;
+      const cy = center.cy + dy;
+      const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
+      const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
+      if (cx < 0 || cy < 0 || cx > maxCx || cy > maxCy) continue;
+      out.push(...getChunkDecor(cx, cy, state.theme));
+    }
+  }
+  return out;
 }

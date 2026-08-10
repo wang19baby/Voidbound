@@ -2,7 +2,7 @@
 // 玩家 pos 为世界坐标; camera = player - viewportCenter; 渲染时 worldPos - camera
 
 import type { RenderResources } from '../render/resources';
-import { WORLD_W, WORLD_H } from './world';
+import { WORLD_W, WORLD_H, type Decor } from './world';
 import { FIREBALL_DAMAGE, type Monster } from './monster';
 import type { CombatStats, DamageType } from './combat';
 import type { RuneId } from './rune';
@@ -197,8 +197,8 @@ export interface GameState {
     w: number; h: number;
     /** 玩家附近 chunks 的所有墙 (由 world.ts.getActiveWalls 动态加载) */
     walls: WallLike[];
-    floorPos: { x: number; y: number };
-    floorSize: { w: number; h: number };
+    /** V1 画质: 障碍物装饰 (纯视觉, 无碰撞), 每帧按相机半径刷新 */
+    decor: Decor[];
   };
   camera: Camera;
   fireballs: Fireball[];
