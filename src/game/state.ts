@@ -239,6 +239,8 @@ export interface GameState {
   /** 硬核二段确认 (OPT-006/015) */
   confirmHardcore: boolean;
   pendingDifficulty: Difficulty | null;
+  /** 材料 (M5 W4 C-401): 独立计数不占背包 (J3=a); 第二货币 */
+  materials: Partial<Record<import('./equipment').MaterialId, number>>;
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;

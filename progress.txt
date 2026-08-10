@@ -156,3 +156,16 @@
 ### 验证
 - npm test 530 例全绿 (town +13: 解锁链/布局/神秘商人); cargo 16/16 (v7 往返/迁移); build + cargo run 冒烟: 关窗确认全链路日志验证 (close requested → save_game → close-confirmed → Rust destroy), 0 JS error, 0 loop-crash
 - 教训: 依赖"标题屏冒烟 0 错误"不可靠 — 未执行路径 (保存/UI 点击) 的缺失导入要等实机触发; 修复后应 grep main.ts 全量调用名 vs import 清单
+
+## Session: 2026-08-10 (Ralph 10: M5 W4 炼制)
+
+### 已完成
+- **C-401 材料系统**: MaterialId 3 种 (iron_shard 灵铁碎片 / arcane_core 奥术核心 / void_fragment 虚空碎片); state.materials 独立计数不占背包 (J3=a); 纯函数 materialDrop (小怪 8% 灵铁 / 精英必掉 1 奥术 / Boss 必掉 1-2 虚空, roll 判定可单测); 商店 9=灵铁 (25金); 存档 v8 加 materials (v7→v8 迁移, cargo 用例); 硬核清档含材料
+- **C-402 重铸双轨**: rerollCostOption (金优先, 灵铁替代); rerollOwned 返回 'gold'|'iron'|null; 灵铁按稀有度 rare 10/set 20/unique 40; 面板显示双消耗与持有量
+- **C-403 符文锻造师**: 圣城新增 NPC; 面板列已变异技能槽 (skillRune 过滤); 选中扣 5 奥术核心+1 虚空碎片 (runeForgePay) → 复用 pickRuneOptions 触发三选一; 无变异提示"先升级技能到 10 级"
+- **C-404 材料经济基线**: balance.test 材料掉落断言 (Boss/精英/小怪/边界 0.0799 vs 0.0801); 重铸/锻造消耗表快照; 经济链 (1 次 Boss ≥ 2 次锻造)
+- **修复**: materialCount/addMaterial/spendMaterial 容忍 materials 未初始化 (测试暴露)
+
+### 验证
+- npm test 15 套 571 例全绿 (equipment +6 材料/重铸轨, town +9 双轨/锻造, balance +10 基线); cargo 17/17 (v8 往返/迁移); build + 冒烟 0 crash, 关窗确认链完整 (save_game 237B 含材料)
+- 教训: 测试里 emptyMaterials() 返回裸 record, 而 MaterialSrc 接口要 {materials: record} — 语义不对称; 用对象包装或改接口二选一, 不能两边都裸用

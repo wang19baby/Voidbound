@@ -112,6 +112,77 @@ export const SET_BONUSES: Record<string, { name: string; bonuses: SetBonusDef[] 
 export type SetName = keyof typeof SET_BONUSES;
 const SET_KEYS = Object.keys(SET_BONUSES) as SetName[];
 
+// === 材料系统 (M5 W4 C-401): 金币外第二货币, 独立计数不占背包 (J3=a) ===
+
+export type MaterialId = 'iron_shard' | 'arcane_core' | 'void_fragment';
+export const MATERIAL_IDS: readonly MaterialId[] = ['iron_shard', 'arcane_core', 'void_fragment'];
+
+export const MATERIAL_NAMES: Record<MaterialId, string> = {
+  iron_shard: '灵铁碎片',
+  arcane_core: '奥术核心',
+  void_fragment: '虚空碎片',
+};
+
+/** 材料来源 (GameState 结构满足: materials 字段) */
+export interface MaterialSrc {
+  materials: Partial<Record<MaterialId, number>>;
+}
+
+export function emptyMaterials(): Record<MaterialId, number> {
+  return { iron_shard: 0, arcane_core: 0, void_fragment: 0 };
+}
+
+export function materialCount(state: MaterialSrc, id: MaterialId): number {
+  return state.materials?.[id] ?? 0;
+}
+
+/** 材料入库 (掉落/购买) */
+export function addMaterial(state: MaterialSrc, id: MaterialId, n: number): void {
+  if (!state.materials) state.materials = {};
+  state.materials[id] = (state.materials[id] ?? 0) + n;
+}
+
+/** 材料扣除 (消耗渠道); 不足返回 false 不扣 */
+export function spendMaterial(state: MaterialSrc, id: MaterialId, n: number): boolean {
+  const have = state.materials?.[id] ?? 0;
+  if (have < n) return false;
+  state.materials = state.materials ?? {};
+  state.materials[id] = have - n;
+  return true;
+}
+
+/** 材料掉落判定 (C-401, 纯函数便于单测): roll∈[0,1)
+ *  - Boss: 必掉 1-2 虚空碎片
+ *  - 精英: 必掉 1 奥术核心
+ *  - 小怪: 8% 掉 1 灵铁碎片
+ */
+export function materialDrop(roll: number, isBoss: boolean, isElite: boolean): Array<[MaterialId, number]> {
+  if (isBoss) return [['void_fragment', roll < 0.5 ? 1 : 2]];
+  if (isElite) return [['arcane_core', 1]];
+  if (roll < 0.08) return [['iron_shard', 1]];
+  return [];
+}
+
+/** 符文锻造材料需求 (C-403): 5 奥术核心 + 1 虚空碎片 */
+export const RUNE_FORGE_COST = { arcane_core: 5, void_fragment: 1 } as const;
+
+/** 灵铁碎片价格 (C-401 商店可购) */
+export const IRON_SHARD_PRICE = 25;
+
+/** 重铸双轨 (C-402): 灵铁消耗按稀有度 (rare 10 / set 20 / unique 40); 普通/魔法无此轨 */
+export const REROLL_IRON_COST: Record<Rarity, number> = {
+  normal: 0, magic: 0, rare: 10, set: 20, unique: 40,
+};
+
+/** 重铸双轨: 100 金 或 灵铁 (C-402); 返回 'gold' | 'iron' | null */
+export function rerollCostOption(state: MaterialSrc & { player: { gold: number } }, eq: Equipment): 'gold' | 'iron' | null {
+  if (!eq) return null;
+  const ironNeed = REROLL_IRON_COST[eq.rarity];
+  if (ironNeed > 0 && materialCount(state, 'iron_shard') >= ironNeed) return 'iron';
+  if (state.player.gold >= 100) return 'gold';
+  return null;
+}
+
 export interface Equipment {
   id: number;
   name: string;

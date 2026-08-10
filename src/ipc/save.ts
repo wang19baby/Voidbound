@@ -66,6 +66,8 @@ export interface SaveData {
   exp: number;
   /** 当前城镇 (v7, C-302) */
   town: string;
+  /** 材料计数 (v8, C-401): [id, count][] */
+  materials: Array<[string, number]>;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

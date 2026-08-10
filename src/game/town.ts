@@ -4,9 +4,9 @@
 // W3: 3 城镇表 TOWN_DEFS + 解锁链 (森林→商业城, 沙漠+废墟→圣城) + 传送师 + 神秘商人/训练师
 
 import type { GameState } from './state';
-import { randomEquipment, getItemSellPrice, getItemBuyPrice, addOwned, rerollAffixes, getOwned, BACKPACK_CAP, type Equipment, type Rarity } from './equipment';
+import { randomEquipment, getItemSellPrice, getItemBuyPrice, addOwned, rerollAffixes, getOwned, BACKPACK_CAP, materialCount, spendMaterial, rerollCostOption, REROLL_IRON_COST, IRON_SHARD_PRICE, type Equipment, type Rarity, type MaterialId } from './equipment';
 
-export type NpcKind = 'merchant' | 'smith' | 'difficulty' | 'exit' | 'warehouse' | 'teleport' | 'mystery' | 'trainer';
+export type NpcKind = 'merchant' | 'smith' | 'difficulty' | 'exit' | 'warehouse' | 'teleport' | 'mystery' | 'trainer' | 'forge';
 
 export interface TownNpc {
   kind: NpcKind;
@@ -58,11 +58,12 @@ export const TOWN_DEFS: Record<TownId, TownDef> = {
     id: 'sanctum', name: '圣所·阿卡拉', requires: ['desert', 'ruin'],
     color: '0.16, 0.13, 0.08',
     npcs: [
-      { kind: 'merchant',   name: '商人',       pos: { x: 200, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
-      { kind: 'trainer',    name: '训练师',     pos: { x: 440, y: 400 }, hint: '技能树开发中' },
-      { kind: 'smith',      name: '重铸师',     pos: { x: 680, y: 400 }, hint: '100金 重铸词条' },
-      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 920, y: 400 }, hint: '存取装备 (账号共享)' },
-      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 400 }, hint: '前往其他城镇' },
+      { kind: 'merchant',   name: '商人',       pos: { x: 160, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
+      { kind: 'forge',      name: '符文锻造师', pos: { x: 400, y: 400 }, hint: '5奥术核心+1虚空碎片 重铸符文' },
+      { kind: 'trainer',    name: '训练师',     pos: { x: 640, y: 400 }, hint: '技能树开发中' },
+      { kind: 'smith',      name: '重铸师',     pos: { x: 880, y: 400 }, hint: '100金/灵铁 重铸词条' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 1120, y: 400 }, hint: '存取装备 (账号共享)' },
+      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 220 }, hint: '前往其他城镇' },
       { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
     ],
   },
@@ -143,15 +144,24 @@ export function sellItem(state: GameState, idx: number): number {
   return price;
 }
 
-/** 重铸: 100 金重roll (返回是否成功) */
-export function rerollOwned(state: GameState, idx: number): boolean {
+/** 重铸 (C-402 双轨): 100 金 或 灵铁 (rare 10/set 20/unique 40); 返回 'gold' | 'iron' | null */
+export function rerollOwned(state: GameState, idx: number): 'gold' | 'iron' | null {
   const owned = getOwned(state);
   const eq = owned[idx];
-  if (!eq) return false;
-  if (state.player.gold < 100) return false;
-  state.player.gold -= 100;
-  rerollAffixes(eq);
-  return true;
+  if (!eq) return null;
+  const opt = rerollCostOption(state, eq);
+  if (opt === 'iron') {
+    if (!spendMaterial(state, 'iron_shard', REROLL_IRON_COST[eq.rarity])) return null;
+    rerollAffixes(eq);
+    return 'iron';
+  }
+  if (opt === 'gold') {
+    if (state.player.gold < 100) return null;
+    state.player.gold -= 100;
+    rerollAffixes(eq);
+    return 'gold';
+  }
+  return null;
 }
 
 /** 药水价格 (OPT-028) */
@@ -172,7 +182,7 @@ export function buyPotion(state: PotionBuySrc, kind: 'hp' | 'mp'): boolean {
 }
 
 /** 城镇面板状态 (存 GameState 内部) */
-export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | null;
+export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | 'forge' | null;
 
 /** 仓库容量 (C-503, 拍板 J5=b): 账号层共享 20 格 */
 export const WAREHOUSE_CAP = 20;
@@ -201,4 +211,13 @@ export function warehouseTake(state: GameState & WarehouseSrc, warehouseIdx: num
   if (getOwned(state).length >= BACKPACK_CAP) return false;
   state.warehouse.splice(warehouseIdx, 1);
   return addOwned(state, eq);
+}
+
+/** 符文锻造 (C-403): 消耗 5 奥术核心 + 1 虚空碎片 → 返回是否成功 (具体重铸由调用方触发三选一) */
+export function runeForgePay(state: GameState): boolean {
+  if (materialCount(state, 'arcane_core') < RUNE_FORGE_COST.arcane_core) return false;
+  if (materialCount(state, 'void_fragment') < RUNE_FORGE_COST.void_fragment) return false;
+  spendMaterial(state, 'arcane_core', RUNE_FORGE_COST.arcane_core);
+  spendMaterial(state, 'void_fragment', RUNE_FORGE_COST.void_fragment);
+  return true;
 }

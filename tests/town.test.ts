@@ -1,8 +1,8 @@
 // 城镇经济单测 (OPT-028 药水购买 / 商店)
 // 运行: npm test
 
-import { buyPotion, genMerchantStock, genMysteryStock, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, townNpcs, TOWN_DEFS, type PotionBuySrc, type WarehouseSrc } from '../src/game/town';
-import type { Equipment, EquipType } from '../src/game/equipment';
+import { buyPotion, genMerchantStock, genMysteryStock, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, townNpcs, TOWN_DEFS, rerollOwned, runeForgePay, type PotionBuySrc, type WarehouseSrc } from '../src/game/town';
+import { emptyMaterials, addMaterial, type Equipment, type EquipType } from '../src/game/equipment';
 
 let failures = 0;
 function check(name: string, cond: boolean): void {
@@ -142,6 +142,62 @@ function TOWN_IDS_ok(): boolean {
   check('神秘商人 4 件', st.length === 4);
   check('全部 unique 稀有度', st.every(x => x.item.rarity === 'unique'));
   check('价格区间 500-2000', st.every(x => x.price >= 500 && x.price <= 2000));
+}
+
+// === C-402 重铸双轨 (100金 或 灵铁) ===
+function mkRerollState(gold: number, iron: number, eq: Equipment): import('../src/game/state').GameState {
+  // 测试只需 player.gold/materials/_owned; GameState 其余字段不触碰 (纯函数路径)
+  const s = {
+    player: { gold, potions: { hp: 0, mp: 0 }, equipped: {}, hp: 100, mp: 100, combat: { phys: 0, elem: 0, elemLv: 0, elemPct: 0, critRate: 0.05, critBonus: 1.5, dmgPct: 0, shred: 0, res: {}, lifesteal: 0 } },
+    _owned: [eq],
+    materials: emptyMaterials(),
+  } as unknown as import('../src/game/state').GameState;
+  addMaterial(s, 'iron_shard', iron);
+  return s;
+}
+{
+  const eq = mkEq('金轨剑', 'weapon'); eq.rarity = 'rare';
+  const s = mkRerollState(100, 0, eq);
+  const before = eq.affixes.slice();
+  check('100金 重铸成功', rerollOwned(s, 0) === 'gold');
+  eq('金扣 100-100=0', s.player.gold, 0);
+  check('词条已重roll (引用变化或值变化)', eq.affixes.length === before.length);
+}
+{
+  const eq = mkEq('灵铁轨戒', 'ring'); eq.rarity = 'set';
+  const s = mkRerollState(0, 30, eq);
+  check('灵铁重铸 (set 20 需 20, 有 30)', rerollOwned(s, 0) === 'iron');
+  eq('灵铁剩 10', s.materials['iron_shard'], 10);
+}
+{
+  const eq = mkEq('不足件', 'weapon'); eq.rarity = 'unique';
+  const s = mkRerollState(0, 10, eq);
+  check('unique 需 40 灵铁, 10 不足 → null', rerollOwned(s, 0) === null);
+  eq('不足不扣', s.materials['iron_shard'], 10);
+}
+{
+  const eq = mkEq('普通件', 'weapon'); eq.rarity = 'normal';
+  const s = mkRerollState(0, 100, eq);
+  check('普通无灵铁轨 → null (金也不足)', rerollOwned(s, 0) === null);
+}
+
+// === C-403 符文锻造扣费 ===
+function mkForgeState(arcane: number, voidFrag: number) {
+  const s = { materials: emptyMaterials() } as unknown as import('../src/game/state').GameState;
+  addMaterial(s, 'arcane_core', arcane);
+  addMaterial(s, 'void_fragment', voidFrag);
+  return s;
+}
+{
+  const s = mkForgeState(5, 1);
+  check('材料足 → 锻造成功', runeForgePay(s));
+  eq('奥术核心扣 5→0', s.materials['arcane_core'], 0);
+  eq('虚空碎片扣 1→0', s.materials['void_fragment'], 0);
+}
+{
+  const s = mkForgeState(3, 1);
+  check('奥术核心不足 → 拒绝', !runeForgePay(s));
+  eq('拒绝不扣', s.materials['arcane_core'], 3);
 }
 
 if (failures > 0) {

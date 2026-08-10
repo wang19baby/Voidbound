@@ -15,12 +15,13 @@ import { getActiveWalls, type Wall } from './game/world';
 import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
-import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, type SkillSlot } from './game/skill';
+import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
-import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, type EquipType, type Equipment } from './game/equipment';
-import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, type TownPanel, type TownId, type MerchantStock, type MysteryStock } from './game/town';
+import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, type EquipType, type Equipment, type MaterialId } from './game/equipment';
+import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, runeForgePay, type TownPanel, type TownId, type MerchantStock, type MysteryStock } from './game/town';
+import { RUNE_FORGE_COST } from './game/equipment';
 import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
@@ -198,6 +199,8 @@ const state = {
   charConfirmDel: false,
   // C-503 仓库: 账号层共享 (跨角色)
   warehouse: [] as Equipment[],
+  // M5 W4 C-401 材料: 独立计数
+  materials: emptyMaterials(),
 };
 
 // 初始化跑局状态 (OPT-012): 怪物在进入地牢时由 startRun/ensureDungeonRun 生成
@@ -309,6 +312,7 @@ window.addEventListener('keydown', (e) => {
       }).then(d => {
         bindClass(state, (d.class as ClassId) ?? 'barbarian');
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+        restoreMaterials(d);  // M5 W4 C-401
         return loadAccount();
       }).then(a => {
         state.cleared = a.cleared ?? [];
@@ -429,6 +433,7 @@ window.addEventListener('keydown', (e) => {
         if (d.theme) state.theme = d.theme;
         if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+        restoreMaterials(d);  // M5 W4 C-401
         for (const sl of d.skill_levels ?? []) {
           const sk = getSkill(sl.slot);
           if (sk) sk.level = sl.level;
@@ -760,6 +765,7 @@ window.addEventListener('keydown', (e) => {
         state.player.exp = d.exp ?? 0;
         bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+        restoreMaterials(d);  // M5 W4 C-401
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
         ensureDungeonRun(state);
         return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
@@ -1128,6 +1134,11 @@ function interactTown(state: GameState) {
       inf('ui', '传送师: 1-9 选择目标城镇, Esc 离开');
       break;
     }
+    case 'forge': {
+      state.townPanel = 'forge';
+      inf('ui', '符文锻造师: 1-6 选择已变异技能重铸符文 (5奥术+1虚空), Esc 离开');
+      break;
+    }
     case 'exit': {
       state.mode = 'dungeon';
       setScreen(state, 'dungeon');
@@ -1158,6 +1169,15 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
       else wrn('ui', '药水购买失败 (金币不足或已满 3)');
       return;
     }
+    if (k === '9') {
+      // C-401 灵铁可购 (材料独立计数不占背包)
+      if (state.player.gold < IRON_SHARD_PRICE) { wrn('ui', `灵铁 ${IRON_SHARD_PRICE}金, 金币不足`); return; }
+      state.player.gold -= IRON_SHARD_PRICE;
+      addMaterial(state, 'iron_shard', 1);
+      playSfxClient('ui_click');
+      inf('ui', '购入 灵铁碎片 ×1');
+      return;
+    }
     return;
   }
   if (state.townPanel === 'sell') {
@@ -1166,8 +1186,10 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
     return;
   }
   if (state.townPanel === 'smith') {
-    if (rerollOwned(state, n - 1)) inf('ui', '重铸完成');
-    else wrn('ui', '重铸失败 (金币不足或选择无效)');
+    const res = rerollOwned(state, n - 1);
+    if (res === 'gold') inf('ui', '重铸完成 (100金)');
+    else if (res === 'iron') inf('ui', '重铸完成 (灵铁)');
+    else wrn('ui', '重铸失败 (金币/灵铁不足或选择无效)');
     return;
   }
   if (state.townPanel === 'warehouse' || state.townPanel === 'warehouseTake') {
@@ -1202,6 +1224,32 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
       state.teleportT = 1.0;
       state.townPanel = null;
       inf('ui', `传送 → ${TOWN_DEFS[t].name} (1s 过场)`);
+    }
+    return;
+  }
+  if (state.townPanel === 'forge') {
+    // C-403: 选已变异技能槽 → 扣材料 → 触发符文三选一 (复用 runeChoice)
+    const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
+    const slot = mutated[n - 1];
+    if (slot && n >= 1 && n <= mutated.length) {
+      if (materialCount(state, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
+        pushToast(state, '奥术核心不足 (需要 5)', '#f66');
+        return;
+      }
+      if (materialCount(state, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
+        pushToast(state, '虚空碎片不足 (需要 1)', '#f66');
+        return;
+      }
+      if (runeForgePay(state)) {
+        state.townPanel = null;
+        // 打开三选一 (Esc 拒绝 = 保留原符文; 材料已扣)
+        state.runeChoice = { slot, options: pickRuneOptions(slot) };
+        pushToast(state, `符文锻造: ${slotDisplay(slot)} 重新变异`, '#c9aaff');
+        playSfxClient('ui_click');
+        inf('ui', `符文锻造 ${slot} → 三选一`);
+      } else {
+        pushToast(state, '材料不足', '#f66');
+      }
     }
     return;
   }
@@ -1301,6 +1349,8 @@ function drawTownPanel() {
     hudCtx.fillText(`7. HP 药水 (${POTION_PRICES.hp}金) ×${state.player.potions?.hp ?? 0}/3`, 60, y); y += 22;
     hudCtx.fillStyle = '#88f';
     hudCtx.fillText(`8. MP 药水 (${POTION_PRICES.mp}金) ×${state.player.potions?.mp ?? 0}/3`, 60, y); y += 22;
+    hudCtx.fillStyle = '#9cf';
+    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state, 'iron_shard')}`, 60, y); y += 22;
   } else if (state.townPanel === 'sell') {
     hudCtx.fillText(`卖出 (金:${state.player.gold})  [1-9] 选择  [Esc] 返回`, 40, y); y += 34;
     const owned = getOwned(state);
@@ -1312,7 +1362,10 @@ function drawTownPanel() {
       hudCtx.fillText(`${i + 1}. ${eq.name} (+${getItemSellPrice(eq.rarity, eq.affixes.length)}金)`, 60, y); y += 24;
     });
   } else if (state.townPanel === 'smith') {
-    hudCtx.fillText(`重铸师 (金:${state.player.gold}, 100金/次)  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
+    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
+    hudCtx.fillStyle = '#889';
+    hudCtx.font = '12px monospace';
+    hudCtx.fillText('消耗: 100金 或 灵铁 (rare 10 / set 20 / unique 40)', 40, y); y += 24;
     const owned = getOwned(state);
     owned.forEach((eq, i) => {
       if (i > 8) return;
@@ -1360,6 +1413,27 @@ function drawTownPanel() {
       hudCtx.font = '12px monospace';
       hudCtx.fillText(`   ${TOWN_DEFS[t].requires.length === 0 ? '初始城镇' : `解锁: 通关 ${TOWN_DEFS[t].requires.join(' + ')}`}`, 60, y); y += 26;
     });
+  } else if (state.townPanel === 'forge') {
+    hudCtx.fillText(`符文锻造师  消耗: 奥术核心×${RUNE_FORGE_COST.arcane_core} + 虚空碎片×${RUNE_FORGE_COST.void_fragment}`, 40, y); y += 34;
+    hudCtx.fillStyle = '#889';
+    hudCtx.font = '12px monospace';
+    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state, 'arcane_core')} · 虚空碎片 ${materialCount(state, 'void_fragment')}`, 40, y); y += 24;
+    const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
+    if (mutated.length === 0) {
+      hudCtx.fillStyle = '#f88';
+      hudCtx.font = 'bold 15px monospace';
+      hudCtx.fillText('先升级技能到 10 级获取符文变异', 40, y); y += 26;
+    } else {
+      mutated.forEach((slot, i) => {
+        const r = skillRune(slot);
+        hudCtx.fillStyle = '#c9aaff';
+        hudCtx.font = 'bold 15px monospace';
+        hudCtx.fillText(`${i + 1}. ${slotDisplay(slot)} — ${r ? RUNE_DEFS[r].name : ''}`, 60, y); y += 26;
+        hudCtx.fillStyle = '#667';
+        hudCtx.font = '12px monospace';
+        hudCtx.fillText(`   ${r ? RUNE_DEFS[r].desc : ''}`, 60, y); y += 26;
+      });
+    }
   }
   hudCtx.fillStyle = '#fff';
 }
@@ -1994,10 +2068,19 @@ function buildSavePayload(state: GameState): SaveData {
     gold: state.player.gold,
     class: state.player.classId,  // M5 C-104
     town: state.townId,  // M5 W3 C-302
+    materials: MATERIAL_IDS.filter(id => (state.materials[id] ?? 0) > 0).map(id => [id, state.materials[id] ?? 0]),
     skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: state.player.skillPoints ?? 0,
     exp: state.player.exp ?? 0,
   };
+}
+
+/** 读档还原材料 (M5 W4 C-401) */
+function restoreMaterials(d: { materials?: Array<[string, number]> }): void {
+  state.materials = emptyMaterials();
+  for (const [id, n] of d.materials ?? []) {
+    if (MATERIAL_IDS.includes(id as MaterialId)) state.materials[id as MaterialId] = n;
+  }
 }
 
 /** 异步保存 (OPT-002/029): 角色档 + 账号层双写; 失败 toast 提示, 不阻塞 */
@@ -2065,6 +2148,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
           }).then(d => {
             bindClass(state, (d.class as ClassId) ?? 'barbarian');
             if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+        restoreMaterials(d);  // M5 W4 C-401
             return loadAccount();
           }).then(a => {
             state.cleared = a.cleared ?? [];
@@ -2255,6 +2339,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
             if (d.theme) state.theme = d.theme;
             if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
             if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+        restoreMaterials(d);  // M5 W4 C-401
             for (const sl of d.skill_levels ?? []) { const sk = getSkill(sl.slot); if (sk) sk.level = sl.level; }
             ensureDungeonRun(state);
             setScreen(state, 'dungeon');
@@ -2346,6 +2431,7 @@ function hardcoreWipe(state: GameState): void {
   state.player.level = 1;
   state.player.exp = 0;
   state.player.skillPoints = 0;
+  state.materials = emptyMaterials();  // M5 W4 C-401: 硬核清档含材料
   for (const slot of SKILL_SLOTS) {
     const sk = getSkill(slot);
     sk.level = 1;

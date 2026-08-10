@@ -1,7 +1,7 @@
 // 装备词条聚合 → D-04 CombatStats 单测 (US-002)
 // 运行: npm test
 
-import { aggregateCombat, describeAffix, randomEquipment, rerollAffixes, itemPower, getItemBuyPrice, getItemSellPrice, equipItem, unequipItem, unequipSlot, recomputeCombat, getEquippedValues, itemPowerDelta, dropEliteLoot, collectAllLoot, clearGroundLoot, BACKPACK_CAP, type EquipState, type Equipment, type EquipType, type Affix } from '../src/game/equipment';
+import { aggregateCombat, describeAffix, randomEquipment, rerollAffixes, itemPower, getItemBuyPrice, getItemSellPrice, equipItem, unequipItem, unequipSlot, recomputeCombat, getEquippedValues, itemPowerDelta, dropEliteLoot, collectAllLoot, clearGroundLoot, BACKPACK_CAP, emptyMaterials, addMaterial, spendMaterial, materialCount, materialDrop, rerollCostOption, type EquipState, type Equipment, type EquipType, type Affix } from '../src/game/equipment';
 import { baseCombat } from '../src/game/combat';
 
 let failures = 0;
@@ -233,6 +233,28 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
   dropEliteLoot(fake2, 5, 5);
   clearGroundLoot(st2 as never);
   check('回城清理地上物品', (fake2._loot ?? []).length === 0);
+}
+
+// === C-401 材料系统 (M5 W4) ===
+{
+  const m = { materials: emptyMaterials() };
+  eq('初始 0', materialCount(m, 'iron_shard'), 0);
+  addMaterial(m, 'iron_shard', 3);
+  addMaterial(m, 'arcane_core', 1);
+  eq('计数 3', materialCount(m, 'iron_shard'), 3);
+  check('足额扣除成功', spendMaterial(m, 'iron_shard', 3));
+  eq('扣后 0', materialCount(m, 'iron_shard'), 0);
+  check('超额扣除拒绝', !spendMaterial(m, 'arcane_core', 5));
+  eq('拒绝不扣', materialCount(m, 'arcane_core'), 1);
+}
+{
+  // rerollCostOption: 金优先, 灵铁可替代
+  const m = { materials: { iron_shard: 10, arcane_core: 0, void_fragment: 0 }, player: { gold: 50 } };
+  eq('rare 10 灵铁 → iron', rerollCostOption(m, makeItem([], 'weapon')) === 'iron' ? 1 : 0, 1);
+  const m2 = { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 }, player: { gold: 200 } };
+  eq('无灵铁 金足 → gold', rerollCostOption(m2, makeItem([], 'weapon')) === 'gold' ? 1 : 0, 1);
+  const m3 = { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 }, player: { gold: 50 } };
+  eq('两者皆不足 → null', rerollCostOption(m3, makeItem([], 'weapon')) === null ? 1 : 0, 1);
 }
 
 if (failures > 0) {

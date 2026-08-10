@@ -4,7 +4,7 @@
 
 import { DIFFICULTY_MODS } from '../src/game/difficulty';
 import { MONSTER_DEFS, levelMonsterScale } from '../src/game/monster';
-import { getItemBuyPrice, RARITY_VALUE_MULT } from '../src/game/equipment';
+import { getItemBuyPrice, RARITY_VALUE_MULT, materialDrop, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE } from '../src/game/equipment';
 import { expNext } from '../src/game/player';
 
 let failures = 0;
@@ -39,6 +39,37 @@ check('expNext 曲线单调递增', expNext(10) > expNext(5) && expNext(20) > ex
 check('难度表 5 档完整', Object.keys(DIFFICULTY_MODS).length === 5);
 check('硬核 HP×5 有对应经验补偿', DIFFICULTY_MODS.hardcore.expMult === 2.5);
 check('普通难度数值基准不变', DIFFICULTY_MODS.normal.hpMult === 1.0 && DIFFICULTY_MODS.normal.dropMult === 1.0);
+
+// === C-404 材料经济基线 (M5 W4) ===
+{
+  const boss = materialDrop(0.9, true, false);
+  eq('Boss 必掉虚空碎片', boss[0]?.[0] === 'void_fragment' ? 1 : 0, 1);
+  eq('Boss roll<0.5 → 1 片', materialDrop(0.2, true, false)[0][1], 1);
+  eq('Boss roll≥0.5 → 2 片', materialDrop(0.8, true, false)[0][1], 2);
+}
+{
+  const elite = materialDrop(0.9, false, true);
+  eq('精英必掉奥术核心', elite[0]?.[0] === 'arcane_core' ? 1 : 0, 1);
+  eq('精英固定 1', elite[0][1], 1);
+}
+{
+  eq('小怪 roll<0.08 掉灵铁', materialDrop(0.05, false, false)[0]?.[1] ?? 0, 1);
+  eq('小怪 roll≥0.08 不掉', materialDrop(0.5, false, false).length, 0);
+  // 8% 阈值边界: 0.0799 掉 / 0.0801 不掉
+  eq('边界 0.0799 掉', materialDrop(0.0799, false, false).length, 1);
+  eq('边界 0.0801 不掉', materialDrop(0.0801, false, false).length, 0);
+}
+{
+  eq('重铸灵铁 rare 10', REROLL_IRON_COST.rare, 10);
+  eq('重铸灵铁 set 20', REROLL_IRON_COST.set, 20);
+  eq('重铸灵铁 unique 40', REROLL_IRON_COST.unique, 40);
+  eq('普通/魔法无灵铁轨', REROLL_IRON_COST.normal + REROLL_IRON_COST.magic, 0);
+  eq('符文锻造 5 奥术核心', RUNE_FORGE_COST.arcane_core, 5);
+  eq('符文锻造 1 虚空碎片', RUNE_FORGE_COST.void_fragment, 1);
+  eq('灵铁商店价 25 金', IRON_SHARD_PRICE, 25);
+  // 经济链: 1 次 Boss 击杀 (2 虚空) ≥ 2 次符文锻造
+  eq('Boss 材料 ≥ 2 次锻造需求', materialDrop(0.8, true, false)[0][1], 2);
+}
 
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);

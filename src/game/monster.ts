@@ -6,7 +6,7 @@ import { aabbOverlap } from './world';
 import { inf, dbg } from '../util/log';
 import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
-import { dropLoot, dropBossReward, dropEliteLoot, THEME_BOSS_SET } from './equipment';
+import { dropLoot, dropBossReward, dropEliteLoot, THEME_BOSS_SET, addMaterial, materialDrop } from './equipment';
 import { spawnDamageNum } from './damageNum';
 import { gainExp } from './player';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
@@ -435,6 +435,10 @@ export function killMonster(state: GameState, m: Monster): void {
   if (def.boss) dropBossReward(state, cx, cy, THEME_BOSS_SET[state.run.theme]);
   else if (m.elite) dropEliteLoot(state, cx, cy);
   else dropLoot(state, cx, cy);
+  // 材料掉落 (M5 W4 C-401): 小怪 8% 灵铁 / 精英必掉 1 奥术核心 / Boss 必掉 1-2 虚空碎片
+  for (const [mid, n] of materialDrop(Math.random(), !!def.boss, !!m.elite)) {
+    addMaterial(state, mid, n);
+  }
   // 分裂 (OPT-021): 死亡生成 2 只 30% 血小怪, 防递归
   if (def.ai === 'split' && (m.aiSpawned ?? 0) === 0) {
     for (let i = 0; i < 2; i++) {
