@@ -142,3 +142,17 @@
 ### 验证
 - npm test 515 例全绿 (screen +4, town +6 仓库存取); cargo 15/15 (sanitize/多档/删除/未知版本); build 262.5kb; 冒烟: 启动 2min, [boot] 干净, hb 每 5s 稳定, 0 loop-crash, list_characters 实机调用成功
 - 教训: Tauri 命令参数 Option<String> 时 TS 传 undefined 即可 (invoke 不传字段); warehouse 用 export interface SaveItem 直接经 serde_json 对齐 rust OwnedItem
+
+## Session: 2026-08-10 (Ralph 9: M5 W3 城镇 + 窗口修复)
+
+### 已完成
+- **C-301 城镇表 + 解锁**: TOWN_DEFS 3 镇 (新手镇鲁特·格莱宁 / 商业城卡斯特蓝港 / 圣城圣所·阿卡拉); unlockedTown 纯函数 (商业城←通关森林, 圣城←沙漠+废墟); townNpcs/TOWN_IDS/unlockedTowns; 挑战祭坛/入口按镇配置
+- **C-302 传送师 + 过场**: teleport NPC (商业城/圣城); 面板列已解锁目标镇 → 1s 黑屏+文字过场 (drawTeleportTransition) → enterTown(target); 存档 v7 加 town 字段 (v6→v7 迁移默认 greenwing, cargo 用例)
+- **C-303 新设施**: 神秘商人 (每局 4 件 unique, 500-2000 金); 训练师占位 (toast "技能树开发中"); buyItem 泛化承接 MysteryStock
+- **城镇差异化**: 底色按镇 (深蓝/海港蓝/圣光金 gl.clearColor); 城镇名标题; C-505 鼠标点击面板行 (handleUiClick case 'town' 复用键位逻辑)
+- **窗口修复 (用户反馈)**: 关闭按钮 → Rust prevent_close + 通知 JS 弹确认覆盖层 ([Y] 保存并退出 / [N] 取消); 确认后 persistNow → emit close-confirmed → Rust 侧 destroy (比 JS destroy 可靠, 修"关不掉窗口"); 最大化禁用 (tauri.conf maximizable: false)
+- **顺带修复 (冒烟暴露的隐藏缺失导入)**: playSfxClient / skillLevel 未 import 的 ReferenceError (仅保存/UI 路径触发, 标题屏冒烟测不出)
+
+### 验证
+- npm test 530 例全绿 (town +13: 解锁链/布局/神秘商人); cargo 16/16 (v7 往返/迁移); build + cargo run 冒烟: 关窗确认全链路日志验证 (close requested → save_game → close-confirmed → Rust destroy), 0 JS error, 0 loop-crash
+- 教训: 依赖"标题屏冒烟 0 错误"不可靠 — 未执行路径 (保存/UI 点击) 的缺失导入要等实机触发; 修复后应 grep main.ts 全量调用名 vs import 清单

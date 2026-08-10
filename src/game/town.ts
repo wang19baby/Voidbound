@@ -1,11 +1,12 @@
-// 城镇/NPC (US-021, F-TOWN-002 子集, D-06 经济)
+// 城镇/NPC (US-021, F-TOWN-002 子集, D-06 经济 + M5 W3 C-301~303)
 // 场景: mode='town' 城镇静止背景 + NPC 站桩; 接近按 E 交互
-// 设施: 商人(买/卖) · 重铸师(100金) · 难度选择 · 出发
+// 设施: 商人(买/卖) · 重铸师(100金) · 仓库(账号共享) · 难度选择 · 出发
+// W3: 3 城镇表 TOWN_DEFS + 解锁链 (森林→商业城, 沙漠+废墟→圣城) + 传送师 + 神秘商人/训练师
 
 import type { GameState } from './state';
 import { randomEquipment, getItemSellPrice, getItemBuyPrice, addOwned, rerollAffixes, getOwned, BACKPACK_CAP, type Equipment, type Rarity } from './equipment';
 
-export type NpcKind = 'merchant' | 'smith' | 'difficulty' | 'exit' | 'warehouse';
+export type NpcKind = 'merchant' | 'smith' | 'difficulty' | 'exit' | 'warehouse' | 'teleport' | 'mystery' | 'trainer';
 
 export interface TownNpc {
   kind: NpcKind;
@@ -14,21 +15,82 @@ export interface TownNpc {
   hint: string;
 }
 
-/** 城镇 NPC 布局 (1280x720 房间) */
-export const TOWN_NPCS: TownNpc[] = [
-  { kind: 'merchant',   name: '商人',        pos: { x: 240, y: 400 }, hint: '买装备 / 卖装备' },
-  { kind: 'smith',      name: '重铸师',      pos: { x: 520, y: 400 }, hint: '100金 重铸词条' },
-  { kind: 'warehouse',  name: '仓库管理员',  pos: { x: 780, y: 400 }, hint: '存取装备 (账号共享)' },
-  { kind: 'difficulty', name: '挑战祭坛',    pos: { x: 1020, y: 400 }, hint: '调整难度' },
-  { kind: 'exit',       name: '地下城入口',  pos: { x: 600, y: 200 }, hint: '出发' },
-];
+/** 城镇 id (C-301): 3 镇 */
+export type TownId = 'greenwing' | 'harbor' | 'sanctum';
+export const TOWN_IDS: readonly TownId[] = ['greenwing', 'harbor', 'sanctum'];
 
-/** 最近 NPC (80px 内) */
-export function nearestNpc(state: GameState): TownNpc | null {
+export interface TownDef {
+  id: TownId;
+  name: string;
+  /** 解锁前置主题 (C-301): greenwing=无, harbor=[forest], sanctum=[desert, ruin] */
+  requires: readonly string[];
+  /** 城镇底色 (C-302): 新手镇深蓝 / 商业城海港蓝 / 圣城圣光金 */
+  color: string;
+  npcs: TownNpc[];
+}
+
+/** 城镇表 (M5 §4.1) */
+export const TOWN_DEFS: Record<TownId, TownDef> = {
+  greenwing: {
+    id: 'greenwing', name: '鲁特·格莱宁', requires: [],
+    color: '0.10, 0.11, 0.16',
+    npcs: [
+      { kind: 'merchant',   name: '商人',       pos: { x: 240, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
+      { kind: 'smith',      name: '重铸师',     pos: { x: 480, y: 400 }, hint: '100金 重铸词条' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 720, y: 400 }, hint: '存取装备 (账号共享)' },
+      { kind: 'difficulty', name: '挑战祭坛',   pos: { x: 960, y: 400 }, hint: '调整难度' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+    ],
+  },
+  harbor: {
+    id: 'harbor', name: '卡斯特蓝港', requires: ['forest'],
+    color: '0.08, 0.16, 0.24',
+    npcs: [
+      { kind: 'merchant',   name: '商人',       pos: { x: 200, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
+      { kind: 'mystery',    name: '神秘商人',   pos: { x: 440, y: 400 }, hint: '传奇装备 (500-2000金)' },
+      { kind: 'smith',      name: '装备重铸师', pos: { x: 680, y: 400 }, hint: '100金 重铸词条' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 920, y: 400 }, hint: '存取装备 (账号共享)' },
+      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 400 }, hint: '前往其他城镇' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+    ],
+  },
+  sanctum: {
+    id: 'sanctum', name: '圣所·阿卡拉', requires: ['desert', 'ruin'],
+    color: '0.16, 0.13, 0.08',
+    npcs: [
+      { kind: 'merchant',   name: '商人',       pos: { x: 200, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
+      { kind: 'trainer',    name: '训练师',     pos: { x: 440, y: 400 }, hint: '技能树开发中' },
+      { kind: 'smith',      name: '重铸师',     pos: { x: 680, y: 400 }, hint: '100金 重铸词条' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 920, y: 400 }, hint: '存取装备 (账号共享)' },
+      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 400 }, hint: '前往其他城镇' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+    ],
+  },
+};
+
+/** 当前镇 NPC 列表 (C-301): 按 townId 取 */
+export function townNpcs(townId: TownId): TownNpc[] {
+  return TOWN_DEFS[townId]?.npcs ?? TOWN_DEFS.greenwing.npcs;
+}
+
+/** 城镇解锁判定 (C-301): 通关前置主题全部 → 解锁; 新手镇默认 */
+export function unlockedTown(cleared: readonly string[], townId: TownId): boolean {
+  const def = TOWN_DEFS[townId];
+  if (!def) return false;
+  return def.requires.every(t => cleared.includes(t));
+}
+
+/** 已解锁城镇列表 (C-302 传送师目标) */
+export function unlockedTowns(cleared: readonly string[]): TownId[] {
+  return TOWN_IDS.filter(t => unlockedTown(cleared, t));
+}
+
+/** 最近 NPC (80px 内; 按当前镇布局) */
+export function nearestNpc(state: GameState, townId: TownId): TownNpc | null {
   const p = state.player.pos;
   let best: TownNpc | null = null;
   let bestD = 80 * 80;
-  for (const n of TOWN_NPCS) {
+  for (const n of townNpcs(townId)) {
     const dx = n.pos.x - (p.x + 32);
     const dy = n.pos.y - (p.y + 32);
     const d = dx * dx + dy * dy;
@@ -50,8 +112,20 @@ export function genMerchantStock(): MerchantStock[] {
   return out;
 }
 
+/** 神秘商人库存 (C-303): 每局 4 件传奇, 500-2000 金 */
+export interface MysteryStock { item: Equipment; price: number; }
+export function genMysteryStock(): MysteryStock[] {
+  const out: MysteryStock[] = [];
+  for (let i = 0; i < 4; i++) {
+    const eq = randomEquipment('unique');
+    const price = 500 + Math.floor(Math.random() * 1501);  // 500-2000
+    out.push({ item: eq, price });
+  }
+  return out;
+}
+
 /** 购买: 扣金 + 入库 (背包满拒绝买入, 不扣金) */
-export function buyItem(state: GameState, stock: MerchantStock): boolean {
+export function buyItem(state: GameState, stock: MerchantStock | MysteryStock): boolean {
   if (state.player.gold < stock.price) return false;
   if (getOwned(state).length >= BACKPACK_CAP) return false;
   state.player.gold -= stock.price;
@@ -98,7 +172,7 @@ export function buyPotion(state: PotionBuySrc, kind: 'hp' | 'mp'): boolean {
 }
 
 /** 城镇面板状态 (存 GameState 内部) */
-export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | null;
+export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | null;
 
 /** 仓库容量 (C-503, 拍板 J5=b): 账号层共享 20 格 */
 export const WAREHOUSE_CAP = 20;

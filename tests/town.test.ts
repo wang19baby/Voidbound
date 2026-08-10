@@ -1,7 +1,7 @@
 // 城镇经济单测 (OPT-028 药水购买 / 商店)
 // 运行: npm test
 
-import { buyPotion, genMerchantStock, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, type PotionBuySrc, type WarehouseSrc } from '../src/game/town';
+import { buyPotion, genMerchantStock, genMysteryStock, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, townNpcs, TOWN_DEFS, type PotionBuySrc, type WarehouseSrc } from '../src/game/town';
 import type { Equipment, EquipType } from '../src/game/equipment';
 
 let failures = 0;
@@ -110,6 +110,38 @@ eq('MP 药水 30 金', POTION_PRICES.mp, 30);
   // 无效索引
   const s = mkWh([], []);
   check('背包空 0 号存入失败', !warehouseStore(s, 0));
+}
+
+// === C-301 城镇表 + 解锁链 ===
+{
+  check('3 镇定义完整', TOWN_IDS_ok());
+  check('新手镇默认解锁', unlockedTown([], 'greenwing'));
+  check('空进度商业城锁定', !unlockedTown([], 'harbor'));
+  check('通关森林 → 商业城解锁', unlockedTown(['forest'], 'harbor'));
+  check('仅森林圣城仍锁', !unlockedTown(['forest'], 'sanctum'));
+  check('通关沙漠+废墟 → 圣城解锁', unlockedTown(['desert', 'ruin'], 'sanctum'));
+  check('unlockedTowns 空进度仅新手镇', JSON.stringify(unlockedTowns([])) === JSON.stringify(['greenwing']));
+  check('unlockedTowns 全通 = 3 镇', unlockedTowns(['forest', 'desert', 'ruin']).length === 3);
+}
+function TOWN_IDS_ok(): boolean {
+  const ids = ['greenwing', 'harbor', 'sanctum'];
+  return ids.every(id => TOWN_DEFS[id as keyof typeof TOWN_DEFS]?.npcs?.length > 0);
+}
+
+// === C-302 城镇布局 ===
+{
+  check('新手镇有 5 NPC (商人/重铸/仓库/祭坛/出口)', townNpcs('greenwing').length === 5);
+  check('商业城有传送师', townNpcs('harbor').some(n => n.kind === 'teleport'));
+  check('圣城有训练师', townNpcs('sanctum').some(n => n.kind === 'trainer'));
+  check('城镇底色不同', new Set([TOWN_DEFS.greenwing.color, TOWN_DEFS.harbor.color, TOWN_DEFS.sanctum.color]).size === 3);
+}
+
+// === C-303 神秘商人 ===
+{
+  const st = genMysteryStock();
+  check('神秘商人 4 件', st.length === 4);
+  check('全部 unique 稀有度', st.every(x => x.item.rarity === 'unique'));
+  check('价格区间 500-2000', st.every(x => x.price >= 500 && x.price <= 2000));
 }
 
 if (failures > 0) {

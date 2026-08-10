@@ -15,13 +15,13 @@ import { getActiveWalls, type Wall } from './game/world';
 import { drawSprite } from './render/draw';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
-import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, getSkill, SKILL_SLOTS, slotDisplay, type SkillSlot } from './game/skill';
+import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, type EquipType, type Equipment } from './game/equipment';
-import { TOWN_NPCS, nearestNpc, genMerchantStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, type TownPanel, type MerchantStock } from './game/town';
-import { playBgmClient, setVolumeClient } from './ipc/sfx';
+import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, type TownPanel, type TownId, type MerchantStock, type MysteryStock } from './game/town';
+import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
@@ -162,6 +162,12 @@ const state = {
   townReturn: null as { x: number; y: number } | null,
   townPanel: null as TownPanel | null,
   townStock: null as MerchantStock[] | null,
+  mysteryStock: null as MysteryStock[] | null,
+  /** 当前城镇 (C-301) */
+  townId: 'greenwing' as TownId,
+  /** 传送过场 (C-302): 目标镇 + 倒计时秒 */
+  teleportTo: null as TownId | null,
+  teleportT: 0,
   settingsOpen: false,
   screen: 'title' as Screen,
   pauseFrom: 'dungeon' as Screen,
@@ -222,6 +228,17 @@ loadAccount().then(a => {
 
 
 window.addEventListener('keydown', (e) => {
+  // 关窗确认 (最高优先级): Y 保存退出 / N·Esc 取消
+  if (closeConfirmOpen) {
+    const k = e.key.toLowerCase();
+    if (k === 'y') {
+      confirmCloseSave();
+    } else if (k === 'n' || k === 'escape') {
+      confirmCloseCancel();
+      inf('ui', '取消关闭');
+    }
+    return;
+  }
   // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
   if (state.runeChoice) {
     if (e.key === '1' || e.key === '2' || e.key === '3') {
@@ -291,6 +308,7 @@ window.addEventListener('keydown', (e) => {
         return loadGame(last);
       }).then(d => {
         bindClass(state, (d.class as ClassId) ?? 'barbarian');
+        if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         return loadAccount();
       }).then(a => {
         state.cleared = a.cleared ?? [];
@@ -410,6 +428,7 @@ window.addEventListener('keydown', (e) => {
         }
         if (d.theme) state.theme = d.theme;
         if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
+        if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         for (const sl of d.skill_levels ?? []) {
           const sk = getSkill(sl.slot);
           if (sk) sk.level = sl.level;
@@ -740,6 +759,7 @@ window.addEventListener('keydown', (e) => {
         state.player.skillPoints = d.skill_points ?? 0;
         state.player.exp = d.exp ?? 0;
         bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
+        if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
         ensureDungeonRun(state);
         return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
@@ -801,14 +821,32 @@ function autoPauseOnBlur(): void {
 window.addEventListener('blur', autoPauseOnBlur);
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPauseOnBlur(); });
 
-// 关窗保存 (OPT-002): Rust 拦截 CloseRequested → JS 先存 → 再销毁窗口
-void import('@tauri-apps/api/event').then(({ listen }) => {
+// 关窗确认 (OPT-002 升级): Rust 拦截 CloseRequested → 弹确认 → Y 保存后 emit close-confirmed → Rust 销毁
+let closeConfirmOpen = false;
+let closeConfirmSaving = false;
+let closeEmit: ((event: string) => Promise<void>) | null = null;
+void import('@tauri-apps/api/event').then(({ listen, emit }) => {
+  closeEmit = emit;
   void listen('close-requested', () => {
-    void persistNow().finally(() => {
-      void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().destroy());
-    });
+    closeConfirmOpen = true;
+    closeConfirmSaving = false;
+    inf('ui', 'close-requested: 显示退出确认');
   });
 });
+function confirmCloseSave(): void {
+  if (closeConfirmSaving) return;
+  closeConfirmSaving = true;
+  void persistNow().finally(() => {
+    if (closeEmit) void closeEmit('close-confirmed');
+    else {
+      // 事件模块未就绪的兜底: JS 直接销毁
+      void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().destroy());
+    }
+  });
+}
+function confirmCloseCancel(): void {
+  closeConfirmOpen = false;
+}
 
 inf('loop', 'main loop start');
 
@@ -833,6 +871,7 @@ function loop(now: number) {
     } else {
       loopImpl(now);
     }
+    if (closeConfirmOpen) drawCloseConfirm();
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -888,6 +927,21 @@ function loopImpl(now: number) {
 
   // 城镇场景: 只移动+绘制 (战斗全部冻结)
   if (state.mode === 'town') {
+    // C-302 传送过场: 1s 倒计时 → 到达目标镇
+    if (state.teleportTo) {
+      state.teleportT -= dt;
+      drawTeleportTransition();
+      mouse.reset();
+      if (state.teleportT <= 0) {
+        const target = state.teleportTo;
+        state.teleportTo = null;
+        state.teleportT = 0;
+        enterTown(state, target);
+        pushToast(state, `到达 ${TOWN_DEFS[target].name}`, '#9cf');
+        inf('ui', `传送完成 → ${TOWN_DEFS[target].name}`);
+      }
+      return;
+    }
     const dir = keys.direction();
     if (dir.x !== 0 || dir.y !== 0) state.player.facing = dir;
     if (keys.isDown('d')) state.player.flipDir = 'R';
@@ -1020,20 +1074,25 @@ function loopImpl(now: number) {
 }
 
 
-/** 城镇: 进入 (商人库存刷新) */
-function enterTown(state: GameState) {
+/** 城镇: 进入 (C-301: 指定镇; 省略时用最近城镇; townReturn 保留地下城还原坐标) */
+function enterTown(state: GameState, townId?: TownId) {
+  const tid = townId && TOWN_DEFS[townId] ? townId : (TOWN_DEFS[state.townId] ? state.townId : 'greenwing');
+  state.townId = tid;
   if (!state.townReturn) state.townReturn = { x: state.player.pos.x, y: state.player.pos.y };
   clearGroundLoot(state);  // M5 实测修复: 回城清理地上物品
   state.mode = 'town';
   setScreen(state, 'town');
   state.townPanel = null;
   state.townStock = null;
+  state.mysteryStock = null;
+  state.teleportTo = null;
+  state.teleportT = 0;
   state.player.pos = { x: 560, y: 500 };
 }
 
 /** 城镇: E 交互 */
 function interactTown(state: GameState) {
-  const npc = nearestNpc(state);
+  const npc = nearestNpc(state, state.townId);
   if (!npc) { wrn('ui', '没有可交互的 NPC (靠近一点)'); return; }
   switch (npc.kind) {
     case 'merchant':
@@ -1053,6 +1112,22 @@ function interactTown(state: GameState) {
       requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared));
       inf('ui', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
       break;
+    case 'mystery':
+      state.mysteryStock = genMysteryStock();
+      state.townPanel = 'mystery';
+      inf('ui', '神秘商人: 1-4 购买传奇 (500-2000金), Esc 离开');
+      break;
+    case 'trainer':
+      pushToast(state, '训练师: 技能树开发中', '#9cf');
+      inf('ui', '训练师: 技能树开发中 (占位)');
+      break;
+    case 'teleport': {
+      const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
+      if (targets.length === 0) { pushToast(state, '暂无可传送的城镇', '#f88'); break; }
+      state.townPanel = 'teleport';
+      inf('ui', '传送师: 1-9 选择目标城镇, Esc 离开');
+      break;
+    }
     case 'exit': {
       state.mode = 'dungeon';
       setScreen(state, 'dungeon');
@@ -1110,12 +1185,52 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
     }
     return;
   }
+  if (state.townPanel === 'mystery' && state.mysteryStock) {
+    if (n >= 1 && n <= 4) {
+      const st = state.mysteryStock[n - 1];
+      if (buyItem(state, st)) { playSfxClient('ui_click'); inf('ui', `购入传奇 ${st.item.name}`); }
+      else wrn('ui', '金币不足或背包已满');
+    }
+    return;
+  }
+  if (state.townPanel === 'teleport') {
+    const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
+    const t = targets[n - 1];
+    if (t && n >= 1 && n <= targets.length) {
+      // C-302: 1s 过场 (黑屏 + 文字) → 到达
+      state.teleportTo = t;
+      state.teleportT = 1.0;
+      state.townPanel = null;
+      inf('ui', `传送 → ${TOWN_DEFS[t].name} (1s 过场)`);
+    }
+    return;
+  }
+}
+
+/** C-302 传送过场绘制: 黑屏 + 目标镇文字 (1s) */
+function drawTeleportTransition() {
+  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.fillStyle = '#000';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#cfe8ff';
+  hudCtx.font = 'bold 30px monospace';
+  const t = state.teleportTo;
+  hudCtx.fillText(`传送中… ${t && TOWN_DEFS[t] ? TOWN_DEFS[t].name : ''}`, hudCanvas.width / 2, hudCanvas.height / 2);
+  hudCtx.fillStyle = '#668';
+  hudCtx.font = '14px monospace';
+  hudCtx.fillText(`[${Math.ceil(Math.max(0, state.teleportT))}s]`, hudCanvas.width / 2, hudCanvas.height / 2 + 40);
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
 }
 
 /** 城镇绘制: 背景/NPC/玩家/提示/面板 */
 function drawTownFrame() {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  gl.clearColor(0.10, 0.11, 0.16, 1);   // 城镇底色 (GL 层, 勿画进 canvas 否则盖住角色)
+  const townColor = TOWN_DEFS[state.townId]?.color ?? TOWN_DEFS.greenwing.color;
+  const [cr, cg, cb] = townColor.split(',').map(s => parseFloat(s.trim()));
+  gl.clearColor(cr, cg, cb, 1);   // C-302 城镇底色按镇 (GL 层, 勿画进 canvas 否则盖住角色)
   gl.clear(gl.COLOR_BUFFER_BIT);
   // 先画角色 (GL 层; 城镇=屏幕坐标, 直接按 pos 绘制)
   const tSprite = pickPlayerSprite(state, mouse.state().pos.x);
@@ -1123,13 +1238,14 @@ function drawTownFrame() {
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = '#9aa';
   hudCtx.font = 'bold 26px monospace';
-  hudCtx.fillText('城镇', hudCanvas.width / 2, 26);
+  hudCtx.fillText(TOWN_DEFS[state.townId]?.name ?? '城镇', hudCanvas.width / 2, 26);
   hudCtx.fillStyle = '#889';
   hudCtx.font = '12px monospace';
   hudCtx.fillText('WASD 移动 · 靠近 NPC 按 E 交互 · [1-5]买 [6]卖 [1-9]重铸/仓储 · Esc 暂停', hudCanvas.width / 2, 62);
-  // NPC
-  for (const npc of TOWN_NPCS) {
-    const near = nearestNpc(state)?.kind === npc.kind;
+  // NPC (C-301: 按当前镇布局)
+  const npcs = townNpcs(state.townId);
+  for (const npc of npcs) {
+    const near = nearestNpc(state, state.townId)?.kind === npc.kind;
     hudCtx.fillStyle = near ? '#4a9' : '#334';
     hudCtx.beginPath();
     hudCtx.arc(npc.pos.x, npc.pos.y, 26, 0, Math.PI * 2);
@@ -1142,7 +1258,7 @@ function drawTownFrame() {
     hudCtx.fillText(npc.hint, npc.pos.x, npc.pos.y + 40);
   }
   // 交互提示
-  const npc = nearestNpc(state);
+  const npc = nearestNpc(state, state.townId);
   if (npc) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = 'bold 14px monospace';
@@ -1221,6 +1337,28 @@ function drawTownPanel() {
       hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
       hudCtx.font = '14px monospace';
       hudCtx.fillText(`${i + 1}. ${eq.name} — ${eq.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
+    });
+  } else if (state.townPanel === 'mystery') {
+    hudCtx.fillText(`神秘商人 (金:${state.player.gold})  [1-4] 购买  [Esc] 离开`, 40, y); y += 34;
+    const st = state.mysteryStock ?? [];
+    st.forEach((s, i) => {
+      const col = RARITY_COLORS[s.item.rarity];
+      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText(`${i + 1}. ${s.item.name} (${s.price}金)`, 60, y); y += 24;
+      hudCtx.fillStyle = '#bbb';
+      hudCtx.fillText(`    ${s.item.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
+    });
+  } else if (state.townPanel === 'teleport') {
+    hudCtx.fillText('传送师 — 选择目标城镇 [1-9]  [Esc] 离开', 40, y); y += 34;
+    const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
+    targets.forEach((t, i) => {
+      hudCtx.fillStyle = '#cfe8ff';
+      hudCtx.font = 'bold 16px monospace';
+      hudCtx.fillText(`${i + 1}. ${TOWN_DEFS[t].name}`, 60, y); y += 26;
+      hudCtx.fillStyle = '#889';
+      hudCtx.font = '12px monospace';
+      hudCtx.fillText(`   ${TOWN_DEFS[t].requires.length === 0 ? '初始城镇' : `解锁: 通关 ${TOWN_DEFS[t].requires.join(' + ')}`}`, 60, y); y += 26;
     });
   }
   hudCtx.fillStyle = '#fff';
@@ -1403,6 +1541,29 @@ function drawNewgame() {
   hudCtx.fillStyle = '#fff';
   hudCtx.font = 'bold 16px monospace';
   hudCtx.fillText('[Enter] 开始 · [Esc] 返回标题 · 鼠标点击亦可', hudCanvas.width / 2, hudCanvas.height - 60);
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
+}
+
+/** 关窗确认覆盖层: 全屏遮罩 + [Y] 保存并退出 / [N] 取消 */
+function drawCloseConfirm() {
+  hudCtx.fillStyle = 'rgba(0,0,0,0.7)';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#ffd';
+  hudCtx.font = 'bold 26px monospace';
+  hudCtx.fillText('确认退出?', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+  hudCtx.fillStyle = '#9aa';
+  hudCtx.font = '15px monospace';
+  hudCtx.fillText(closeConfirmSaving ? '正在保存…' : '当前进度会自动保存', hudCanvas.width / 2, hudCanvas.height / 2);
+  if (!closeConfirmSaving) {
+    hudCtx.fillStyle = '#8f8';
+    hudCtx.font = 'bold 18px monospace';
+    hudCtx.fillText('[Y] 保存并退出', hudCanvas.width / 2, hudCanvas.height / 2 + 50);
+    hudCtx.fillStyle = '#f88';
+    hudCtx.fillText('[N] 取消', hudCanvas.width / 2, hudCanvas.height / 2 + 82);
+  }
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
 }
@@ -1832,6 +1993,7 @@ function buildSavePayload(state: GameState): SaveData {
     difficulty: state.difficulty,
     gold: state.player.gold,
     class: state.player.classId,  // M5 C-104
+    town: state.townId,  // M5 W3 C-302
     skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: state.player.skillPoints ?? 0,
     exp: state.player.exp ?? 0,
@@ -1902,6 +2064,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
             return loadGame(last);
           }).then(d => {
             bindClass(state, (d.class as ClassId) ?? 'barbarian');
+            if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
             return loadAccount();
           }).then(a => {
             state.cleared = a.cleared ?? [];
@@ -1934,6 +2097,20 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
       ];
       for (const it of items) {
         if (inRect(mx, my, cx - btnW / 2, it.y, btnW, btnH)) { it.action(); return true; }
+      }
+      return true;
+    }
+    case 'town': {
+      // C-505 城镇面板鼠标操作: 点击行对应键位 (与 handleTownPanelKey 同布局)
+      if (state.townPanel) {
+        const y0 = 70 + 34;
+        const rowH = 24;
+        const clicked = (my - y0) >= 0 ? Math.floor((my - y0) / rowH) : -1;
+        if (mx > 40 && clicked >= 0) {
+          const k = `${clicked + 1}`;
+          handleTownPanelKey(state, { key: k } as KeyboardEvent, k);
+          return true;
+        }
       }
       return true;
     }
@@ -2077,6 +2254,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
             for (const rr of d.runes ?? []) { const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null; if (sk) sk.rune = rr.rune; }
             if (d.theme) state.theme = d.theme;
             if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
+            if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
             for (const sl of d.skill_levels ?? []) { const sk = getSkill(sl.slot); if (sk) sk.level = sl.level; }
             ensureDungeonRun(state);
             setScreen(state, 'dungeon');

@@ -64,6 +64,8 @@ export interface SaveData {
   skill_levels: SaveSkillLevel[];
   skill_points: number;
   exp: number;
+  /** 当前城镇 (v7, C-302) */
+  town: string;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

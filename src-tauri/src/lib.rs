@@ -22,6 +22,7 @@ pub mod account;
 
 use std::sync::Arc;
 use tauri::Emitter;
+use tauri::Listener;
 
 use tauri::{Manager, State};
 
@@ -75,17 +76,27 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        // 关窗保存 (OPT-002): 拦截关闭 → 通知 JS 先存 → JS 再 destroy
+        // 关窗确认 (OPT-002 升级): 拦截关闭 → 通知 JS 弹确认 → JS 确认后发 close-confirmed → Rust 销毁
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
-                log::info!("Voidbound close requested: notifying JS to save");
+                log::info!("Voidbound close requested: notifying JS to confirm");
                 let _ = window.emit("close-requested", ());
             }
         })
         .setup(move |app| {
             app.manage(AppState {
                 atlases: Arc::clone(&atlases),
+            });
+
+            // 确认关闭: JS persistNow 完成后发此事件, Rust 侧销毁 (比 JS destroy 可靠)
+            let app_handle = app.handle().clone();
+            let close_handle = app_handle.clone();
+            app_handle.listen("close-confirmed", move |_| {
+                log::info!("close-confirmed: destroying window from Rust");
+                if let Some(w) = close_handle.get_webview_window("main") {
+                    let _ = w.destroy();
+                }
             });
 
             if let Err(e) = audio::setup(app) {
