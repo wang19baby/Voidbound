@@ -203,6 +203,35 @@ def run(jobs: list, resume: bool = True):
             print(f"  FAILED: {job['id']}")
 
 
+def probe():
+    """连通性 + 模型可用性探测: 依次尝试候选模型, 打印首个可用的"""
+    import requests
+    api_key = os.environ["GEMINI_API_KEY"]
+    candidates = ["gemini-3-pro-image-preview", "gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation"]
+    prompt = "pixel art, tiny 1x1 square, solid magenta background"
+    for model in candidates:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            resp = requests.post(
+                url,
+                params={"key": api_key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseModalities": ["TEXT", "IMAGE"], "imageConfig": {"aspectRatio": "1:1", "imageSize": "1K"}},
+                },
+                timeout=60,
+            )
+            if resp.status_code == 200 and "candidates" in resp.json():
+                img = resp.json()["candidates"][0]["content"]["parts"]
+                has_img = any(p.get("inlineData") for p in img if isinstance(p, dict))
+                print(f"OK  model={model} status=200 image={'yes' if has_img else 'no'}")
+                return model
+            print(f"FAIL model={model} status={resp.status_code} body={(resp.text or '')[:200]}")
+        except Exception as e:  # noqa: BLE001
+            print(f"ERR model={model}: {e}")
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Voidbound Gemini 批量生成")
     parser.add_argument("target", nargs="?", help="职业 id 或 主题 id")
@@ -210,9 +239,17 @@ def main():
     parser.add_argument("--monsters", metavar="THEME", help="生成指定主题怪物 (--monsters all = 全部)")
     parser.add_argument("--dry-run", action="store_true", help="仅打印 jobs")
     parser.add_argument("--list", action="store_true", help="列出可生成目标")
+    parser.add_argument("--probe", action="store_true", help="连通性/模型探测 (不生成)")
     args = parser.parse_args()
 
     load_env()
+
+    if not os.environ.get("GEMINI_API_KEY"):
+        sys.exit("缺少 GEMINI_API_KEY: 设置环境变量或在 assets/ai-gen/.env 写入 GEMINI_API_KEY=xxx")
+
+    if args.probe:
+        model = probe()
+        sys.exit(0 if model else 1)
 
     if args.list:
         data = load_prompts("characters.yaml")
