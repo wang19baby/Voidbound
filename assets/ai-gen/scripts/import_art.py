@@ -233,12 +233,8 @@ def main():
                 total += 1
                 continue
             try:
-                # 量化 key: 显式 --quantize 优先; 怪物目录按主题自动 (ruin→frozen)
-                qkey = args.quantize
-                if qkey is None and rel == "monsters" and len(p.relative_to(IMPORT).parts) > 1:
-                    theme = p.relative_to(IMPORT).parts[1]
-                    qkey = PALETTE_ALIAS.get(theme, theme)
-                outs = process(p, rel, args.size, qkey)
+                # 量化仅 --quantize 显式启用 (HD 流程默认不量化)
+                outs = process(p, rel, args.size, args.quantize)
                 print(f"✓ {p.relative_to(IMPORT)} -> " + ", ".join(o.split('/')[-1] for o in outs))
                 total += len(outs)
             except Exception as e:  # noqa: BLE001
