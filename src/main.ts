@@ -1895,8 +1895,7 @@ function drawFrameToScreen() {
   // 主题混铺 + 暗石点缀 + 主题色 (虚空瓦片是沙色 bug, 用紫色 tint 桥接等 AI 新画)
   const FLOOR_TILE = 32;
   const FLOOR_THEME_TINT: Partial<Record<Theme, [number, number, number]>> = {
-    void: [0.66, 0.52, 1.0],
-    ruin: [0.82, 0.88, 1.05],
+    ruin: [0.82, 0.88, 1.05], // 旧地板微冷蓝; HD 落地后移除
   };
   const t0x = Math.max(0, Math.floor(state.camera.x / FLOOR_TILE));
   const t0y = Math.max(0, Math.floor(state.camera.y / FLOOR_TILE));

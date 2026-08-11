@@ -116,6 +116,30 @@ def apply_quantize(rgba: Image.Image, key: str) -> Image.Image:
     return quantize_to_palette(rgba, load_palette(key))
 
 
+def make_seamless(img: Image.Image) -> Image.Image:
+    """半幅偏移混合: 原图 + 自身平移 (w/2, h/2) 各象限拼接后 50% 混合
+    → 结果以 (w/2, h/2) 为周期, 裁左上 w/2 x w/2 即为数学无缝瓦片 (分辨率减半, 纹理稍柔)"""
+    w, h = img.size
+    hw, hh = w // 2, h // 2
+    quad = Image.new("RGB", (w, h))
+    quad.paste(img.crop((hw, hh, w, h)), (0, 0))
+    quad.paste(img.crop((0, hh, hw, h)), (hw, 0))
+    quad.paste(img.crop((hw, 0, w, hh)), (0, hh))
+    quad.paste(img.crop((0, 0, hw, hh)), (hw, hh))
+    blended = Image.blend(img, quad, 0.5)
+    return blended.crop((0, 0, hw, hh))
+
+
+def brighten_if_dark(img: Image.Image, min_lum: float = 80) -> Image.Image:
+    """平均亮度过低 (<min_lum) 的瓦片按比例提亮 (暗角/近黑图在游戏里看不清)"""
+    import statistics
+    lum = statistics.mean(sum(c) / 3 for c in img.resize((64, 64)).getdata())
+    if lum < min_lum:
+        scale = min(1.9, min_lum / max(1.0, lum))
+        return img.point(lambda v: min(255, int(v * scale)))
+    return img
+
+
 def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> list[str]:
     """处理单个文件 → 输出文件列表"""
     name = path.stem
@@ -124,7 +148,7 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     out_done: list[str] = []
     if rel_dir == "world":
         # 瓦片: 无缝纹理铺满画布, 无品红底 → 不抠图; 仅当检测到品红底才抠 (防误食纹理边缘)
-        # 中心方裁: 模型常给 1408x768 非正方形, 先裁中心正方形再缩放 (防拉伸变形)
+        # 中心方裁: 模型常给非正方形, 先裁中心正方形再缩放 (防拉伸变形)
         w0, h0 = img.size
         side = min(w0, h0)
         img = img.crop(((w0 - side) // 2, (h0 - side) // 2, (w0 + side) // 2, (h0 + side) // 2))
@@ -133,6 +157,9 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
         mag = sum(1 for c in small.getdata() if c[0] > 180 and c[2] > 170 and c[1] < 100)
         if mag / (64 * 64) > 0.5:
             rgba = chroma_key_magenta(img)
+        # 自动无缝化 + 提亮 (模型接缝/亮度不合格的兜底)
+        rgba = make_seamless(rgba.convert("RGB")).convert("RGBA")
+        rgba = brighten_if_dark(rgba)
         if quantize_key:
             rgba = apply_quantize(rgba, quantize_key)
         resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
@@ -224,20 +251,15 @@ def check(path: Path, rel_dir: str) -> list[str]:
                 if diff < 5:
                     issues.append(f"帧 {i+1} 与帧 {i+2} 几乎相同 (平均差 {diff:.1f}/255, 请改提示词逐帧点名姿势)")
 
-    # 3. 瓦片边缘连续性 (四边 8px 平均色差, 越小越无缝)
+    # 3. 瓦片无缝检测: 边界跳跃 vs 内部跳跃 (ratio<2.2 无接缝; 旧指标比较 col0/colW 是错的)
     if rel_dir == "world":
-        def edge_diff(y0, y1, x0, x1, dy, dx):
-            total = n = 0
-            for k in range(8):
-                c1 = px[x0 + k * dx, y0 + k * dy]
-                c2 = px[x1 + k * dx, y1 + k * dy]
-                total += sum(abs(a - b) for a, b in zip(c1, c2))
-                n += 3
-            return total / n
-        d_lr = edge_diff(0, 0, 0, w - 1, 1, 0)  # 左列 vs 右列 (行递增)
-        d_tb = edge_diff(0, h - 1, 0, 0, 0, 1)  # 顶行 vs 底行 (列递增)
-        if d_lr > 90 or d_tb > 90:
-            issues.append(f"瓦片边缘不连续 (左右差 {d_lr:.0f}/上下差 {d_tb:.0f}, >90 会露接缝)")
+        def jump(xa, xb):
+            return sum(sum(abs(px[xa, y][c] - px[xb, y][c]) for c in range(3)) for y in range(0, h, 4)) / ((h // 4 + 1) * 3)
+        interior = jump(0, 1)
+        boundary = jump(w - 1, 0)
+        tb = sum(sum(abs(px[x, h - 1][c] - px[x, 0][c]) for c in range(3)) for x in range(0, w, 4)) / ((w // 4 + 1) * 3)
+        if boundary > max(4.0, interior * 2.2) or tb > max(4.0, interior * 2.2):
+            issues.append(f"瓦片边界有接缝 (内部{interior:.1f} vs 左右包边{boundary:.1f}/上下{tb:.1f}); 导入时会自动无缝化兜底")
 
     return issues
 

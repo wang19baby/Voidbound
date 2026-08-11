@@ -1,8 +1,8 @@
 {
   "atlas": "world",
   "size": {
-    "width": 242,
-    "height": 20
+    "width": 258,
+    "height": 36
   },
   "sprite_count": 12,
   "sprites": [
@@ -51,15 +51,15 @@
       "file": "floor_void.png",
       "x": 82,
       "y": 2,
-      "frame_width": 16,
-      "frame_height": 16,
+      "frame_width": 32,
+      "frame_height": 32,
       "frames": 1,
       "is_animated": false
     },
     {
       "name": "grass",
       "file": "grass.png",
-      "x": 102,
+      "x": 118,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -69,7 +69,7 @@
     {
       "name": "wall",
       "file": "wall.png",
-      "x": 122,
+      "x": 138,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -79,7 +79,7 @@
     {
       "name": "wall_alt",
       "file": "wall_alt.png",
-      "x": 142,
+      "x": 158,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -89,7 +89,7 @@
     {
       "name": "wall_desert",
       "file": "wall_desert.png",
-      "x": 162,
+      "x": 178,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -99,7 +99,7 @@
     {
       "name": "wall_forest",
       "file": "wall_forest.png",
-      "x": 182,
+      "x": 198,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -109,7 +109,7 @@
     {
       "name": "wall_ruin",
       "file": "wall_ruin.png",
-      "x": 202,
+      "x": 218,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -119,7 +119,7 @@
     {
       "name": "wall_void",
       "file": "wall_void.png",
-      "x": 222,
+      "x": 238,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
