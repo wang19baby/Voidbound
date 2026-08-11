@@ -171,6 +171,16 @@ def check(path: Path, rel_dir: str) -> list[str]:
             issues.append(f"sheet 宽高比 {w/h:.2f} 不是规整 4 帧 (建议 4:1 左右, 每帧方形)")
         if not is_sheet and rel_dir == "characters" and "walk" in path.stem:
             issues.append("行走图宽高比 <1.8, 未识别为 4 帧 sheet")
+        if is_sheet:
+            # 相邻帧雷同检测: 各帧平均通道差 <5 → 警告 (模型常复制帧)
+            fw = w // 4
+            frames = [img.crop((i * fw, 0, (i + 1) * fw, h)) for i in range(4)]
+            for i in range(3):
+                a, b = frames[i], frames[i + 1]
+                da = list(a.getdata()); db = list(b.getdata())
+                diff = sum(sum(abs(x - y) for x, y in zip(pa, pb)) for pa, pb in zip(da, db)) / (len(da) * 3)
+                if diff < 5:
+                    issues.append(f"帧 {i+1} 与帧 {i+2} 几乎相同 (平均差 {diff:.1f}/255, 请改提示词逐帧点名姿势)")
 
     # 3. 瓦片边缘连续性 (四边 8px 平均色差, 越小越无缝)
     if rel_dir == "world":

@@ -46,7 +46,8 @@ strong build, battle-scarred. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: muscular male barbarian warrior, wild unkempt hair,
 dark red leather armor with fur trim, gripping a large battle axe,
 strong build, battle-scarred. {高清块}
@@ -64,7 +65,8 @@ golden winged helmet with plume, divine light aura. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: holy paladin knight in radiant golden armor,
 white flowing cape, holding a war hammer and large shield,
 golden winged helmet with plume, divine light aura. {高清块}
@@ -82,7 +84,8 @@ around the crystal head, mystical atmosphere. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: elegant female sorceress in blue and purple robes,
 pointed wizard hat, holding a glowing magic staff with arcane energy swirling
 around the crystal head, mystical atmosphere. {高清块}
@@ -100,7 +103,8 @@ faint green ghost energy wisps. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: sinister necromancer in tattered dark purple robes,
 skull shoulder pad, hooded, holding a bone staff topped with a glowing skull,
 faint green ghost energy wisps. {高清块}
@@ -118,7 +122,8 @@ sharp-eyed scout. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: agile female ranger archer in green leather armor,
 hooded forest cloak, holding an elven longbow with a quiver of arrows on her back,
 sharp-eyed scout. {高清块}
@@ -136,7 +141,8 @@ silent killer. {高清块}
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
 each frame exactly 256x256 px, frames evenly spaced with no gaps,
-character centered in every frame, facing down, subtle walk pose variation.
+character centered in every frame, facing down.
+Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: shadowy assassin in black leather armor,
 red face mask, hooded, crouched low ready stance, dual wielding daggers,
 silent killer. {高清块}
