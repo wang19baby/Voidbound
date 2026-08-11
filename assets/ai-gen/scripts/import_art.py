@@ -111,6 +111,70 @@ def process(path: Path, rel_dir: str, size: int) -> list[str]:
     return out_done
 
 
+def is_magenta(r: int, g: int, b: int) -> bool:
+    return r > 180 and b > 180 and g < 120
+
+
+def check(path: Path, rel_dir: str) -> list[str]:
+    """质检: 品红底纯度 / 主体占比 / 色数 / sheet 比例 / 瓦片边缘连续性
+    返回问题列表 (空 = 通过)"""
+    issues: list[str] = []
+    img = Image.open(path).convert("RGB")
+    w, h = img.size
+    px = img.load()
+
+    # 1. 品红占比 + 内容 bbox
+    magenta = 0
+    min_x, min_y, max_x, max_y = w, h, -1, -1
+    colors: set[tuple[int, int, int]] = set()
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            if is_magenta(r, g, b):
+                magenta += 1
+            else:
+                colors.add((r, g, b))
+                if x < min_x: min_x = x
+                if x > max_x: max_x = x
+                if y < min_y: min_y = y
+                if y > max_y: max_y = y
+    bg_ratio = magenta / (w * h)
+    cov = 0.0 if max_x < 0 else ((max_x - min_x + 1) * (max_y - min_y + 1)) / (w * h)
+
+    if rel_dir != "world":
+        if bg_ratio < 0.4:
+            issues.append(f"品红底占比仅 {bg_ratio:.0%} (<40%, 抠图会脏; 背景必须纯品红)")
+        if cov < 0.04 or cov > 0.9:
+            issues.append(f"主体占比 {cov:.0%} (建议 5%~80%; 太小或占满都难用)")
+    if len(colors) > 96:
+        issues.append(f"颜色数 {len(colors)} (>96, 不像像素风限色)")
+
+    # 2. sheet 判断 (怪物/角色行走)
+    if rel_dir in ("monsters", "characters"):
+        is_sheet = w >= h * 1.8
+        if is_sheet and (w % 4 != 0 or w / h < 2.5):
+            issues.append(f"sheet 宽高比 {w/h:.2f} 不是规整 4 帧 (建议 4:1 左右, 每帧方形)")
+        if not is_sheet and rel_dir == "characters" and "walk" in path.stem:
+            issues.append("行走图宽高比 <1.8, 未识别为 4 帧 sheet")
+
+    # 3. 瓦片边缘连续性 (四边 8px 平均色差, 越小越无缝)
+    if rel_dir == "world":
+        def edge_diff(y0, y1, x0, x1, dy, dx):
+            total = n = 0
+            for k in range(8):
+                c1 = px[x0 + k * dx, y0 + k * dy]
+                c2 = px[x1 + k * dx, y1 + k * dy]
+                total += sum(abs(a - b) for a, b in zip(c1, c2))
+                n += 3
+            return total / n
+        d_lr = edge_diff(0, 0, 0, w - 1, 1, 0)  # 左列 vs 右列 (行递增)
+        d_tb = edge_diff(0, h - 1, 0, 0, 0, 1)  # 顶行 vs 底行 (列递增)
+        if d_lr > 90 or d_tb > 90:
+            issues.append(f"瓦片边缘不连续 (左右差 {d_lr:.0f}/上下差 {d_tb:.0f}, >90 会露接缝)")
+
+    return issues
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Voidbound 美术导入")
@@ -118,7 +182,24 @@ def main():
     parser.add_argument("--all", action="store_true", help="处理全部 (等价于省略参数)")
     parser.add_argument("--size", type=int, default=SIZE, help=f"输出贴图尺寸, 默认 {SIZE} (小怪/瓦片按显示尺寸烘焙, 如 --size 32)")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--check", action="store_true", help="只质检不导入 (品红底/主体/色数/无缝)")
     args = parser.parse_args()
+
+    # 质检模式: 遍历 import/ 全部 PNG, 只报告问题
+    if args.check:
+        if not IMPORT.exists():
+            sys.exit("import 目录不存在")
+        bad = 0
+        for p in sorted(IMPORT.rglob("*.png")):
+            rel_dir = p.relative_to(IMPORT).parts[0]
+            issues = check(p, rel_dir)
+            status = "✓" if not issues else "✗"
+            print(f"{status} {p.relative_to(IMPORT)}")
+            for msg in issues:
+                print(f"    - {msg}")
+                bad += 1
+        print(f"检查完成: {bad} 个问题" if bad else "检查完成: 全部通过")
+        sys.exit(1 if bad else 0)
 
     groups = ["characters", "monsters", "world"] if (args.all or args.group in (None, "all")) else [args.group]
     if not IMPORT.exists():
