@@ -2116,6 +2116,17 @@ function drawFrameToScreen() {
       drawSprite(gl, quad, res, { x: sp.x, y: sp.y + m.size.h - 2 }, { w: m.size.w, h: 3 }, 'ui', 'slide_horizontal_color', { color: mc });
     }
 
+    // A-W3 扑击预警圈 (leap): 蓄力 0.4s 落点圈可见 → 翻滚躲避
+    if (m.moveAI === 'leap' && m.leapT > 0) {
+      const warn = m.leapT / LEAP_WINDUP;
+      drawSprite(gl, quad, res, { x: sp.x - 8, y: sp.y + m.size.h - 6 }, { w: m.size.w + 16, h: 4 }, 'ui', 'slide_horizontal_color', { color: [1, 0.4, 0.2] });
+      void warn;
+    }
+    // A-W3 遁地土痕 (burrow): 地下移动的可见痕迹 → 预判落点
+    if (m.moveAI === 'burrow' && m.burrowT > 0) {
+      drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: m.size.w, h: m.size.h }, 'ui', 'slide_horizontal_color', { color: [0.75, 0.65, 0.4] });
+    }
+
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
       const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;

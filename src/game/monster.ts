@@ -14,6 +14,7 @@ import { skillDamageScale, advanceCombo, comboScoreMult } from './skill';
 import { DIFFICULTY_MODS } from './difficulty';
 import { ELEMENT_DEFS, randomElement, type ElementId } from './element';
 import { rollMech, MECH_TYPES, SHIELD_UP_T, SHIELD_DOWN_T, SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, THORNS_REFLECT, THORNS_FLAT, CURSE_SLOW_MULT, CURSE_DURATION, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_DPS, DEATH_POOL_RADIUS, DEATH_POOL_T, type MechType } from './mech';
+import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT, type MoveAI } from './moveai';
 
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
@@ -276,6 +277,12 @@ export interface Monster {
   pureSupport: boolean;
   /** 机制 (A-W3 包2): 精英/领主随机 1 个 */
   mech?: MechType;
+  /** 移动 AI (A-W3 包1): 领主随机 1 个 */
+  moveAI?: MoveAI;
+  /** 扑击蓄力剩余 (s): >0 = 预警中 (落点圈可见) */
+  leapT: number;
+  /** 遁地剩余 (s): >0 = 地下移动 (无敌) */
+  burrowT: number;
   /** 护盾状态机 (A-W3): >0 = 开盾, <=0 = 破盾虚弱窗口 */
   shieldT: number;
   /** 元素色相旋转 (度): def.element 或领主随机元素 */
@@ -303,6 +310,8 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     : (enhanced ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined);
   // 机制 (A-W3 包2): 精英/领主随机 1 个 (Boss 走专用技能池)
   const mech: MechType | undefined = (elite || isLord) && !def.boss ? rollMech() : undefined;
+  // 移动 AI (A-W3 包1): 领主专属
+  const moveAI: MoveAI | undefined = isLord && !def.boss ? rollMoveAI() : undefined;
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
@@ -354,6 +363,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       regenAccum: 0,
       pureSupport: camp?.pureSupport ?? false,
       mech,
+      moveAI,
+      leapT: 0,
+      burrowT: 0,
       shieldT: 0,
       hue,
       elementId: element,
@@ -387,6 +399,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     regenAccum: 0,
     pureSupport: false,
     mech: undefined,
+    moveAI: undefined,
+    leapT: 0,
+    burrowT: 0,
     shieldT: 0,
     hue: 0,
   };
@@ -512,6 +527,71 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.shieldT = SHIELD_UP_T;  // 重新开盾
       }
     }
+    // 移动 AI (A-W3 包1): 领主专属
+    if (m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD) {
+      // 残血逃窜: 反向移动 + 提速 (连锁仇恨: 不追击则放走, 不回血)
+      if (dist > 4) {
+        m.vel.x = (dx / dist) * -def.speed * FLEE_SPEED_MULT;
+        m.vel.y = (dy / dist) * -def.speed * FLEE_SPEED_MULT;
+      }
+    } else if (m.moveAI === 'burrow') {
+      m.aiCd -= dt;
+      if (m.burrowT > 0) {
+        // 遁地: 无敌 + 高速移动到玩家旁, 出地时如果贴脸 → 伤害
+        m.burrowT -= dt;
+        if (dist > def.attackRange) {
+          m.vel.x = (dx / (dist || 1)) * def.speed * BURROW_SPEED_MULT;
+          m.vel.y = (dy / (dist || 1)) * def.speed * BURROW_SPEED_MULT;
+        }
+        m.pos.x += m.vel.x * dt;
+        m.pos.y += m.vel.y * dt;
+        if (m.burrowT <= 0) {
+          // 出地
+          if (dist < def.attackRange * 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+            const bdmg = Math.round(def.contactDmg * BURROW_EXIT_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
+            state.player.hp -= bdmg;
+            state.lastKiller = m.type;
+            spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${bdmg}`, '#c9aaff');
+            state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+          }
+          m.aiCd = BURROW_CD;
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 8, '钻地', '#9cf');
+        }
+      } else if (m.aiCd <= 0 && dist < def.aggroRange && dist > def.attackRange * 1.2) {
+        m.burrowT = BURROW_TIME;
+        m.hitFlash = 0.2;
+      }
+    } else if (m.moveAI === 'leap') {
+      m.aiCd -= dt;
+      if (m.leapT > 0) {
+        // 蓄力预警中: 快速冲向玩家
+        m.leapT -= dt;
+        const sp2 = LEAP_SPEED;
+        if (dist > def.attackRange) {
+          m.vel.x = (dx / (dist || 1)) * sp2;
+          m.vel.y = (dy / (dist || 1)) * sp2;
+        }
+        if (m.leapT <= 0 && dist < def.attackRange * 1.6 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+          const ldmg = Math.round(def.contactDmg * LEAP_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
+          state.player.hp -= ldmg;
+          state.lastKiller = m.type;
+          spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff9600');
+          state.cameraShake = Math.min(14, (state.cameraShake ?? 0) + 8);
+        }
+        m.aiCd = LEAP_CD;
+      } else if (m.aiCd <= 0 && dist > def.attackRange * 1.2 && dist < LEAP_RANGE) {
+        m.leapT = LEAP_WINDUP;  // 开始蓄力 (落点预警圈)
+      }
+    } else if (m.moveAI === 'strafe' && dist < def.aggroRange && dist > def.attackRange * 1.5) {
+      // 侧移: 垂直于玩家方向绕圈 (放风筝)
+      const fx = -(dy / (dist || 1));
+      const fy = dx / (dist || 1);
+      m.vel.x = fx * def.speed * STRAFE_SPEED_MULT;
+      m.vel.y = fy * def.speed * STRAFE_SPEED_MULT;
+    } else if (m.moveAI === 'strafe' && m.vel.x !== 0) {
+      m.vel.x = 0;
+      m.vel.y = 0;
+    }
     // 自爆 (A-W3): 血 <25% + 玩家贴脸 (可翻滚躲) → 引爆
     if (m.mech === 'explode' && m.hp > 0 && m.hp <= m.maxHp * EXPLODE_HP_THRESHOLD && dist < def.attackRange * 2.5) {
       const dmg = Math.round(def.contactDmg * EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1));
@@ -562,7 +642,12 @@ export function updateMonsters(state: GameState, dt: number): void {
     const charging = m.aiT > 0;
     const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
     const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste;
-    if (dist < def.aggroRange) {
+    // A-W3 移动 AI 接管移动: flee (残血逃窜) / burrow (遁地中) / leap (蓄力扑击) 时跳过普通追击
+    const moveAIActive =
+      (m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD) ||
+      (m.moveAI === 'burrow' && m.burrowT > 0) ||
+      (m.moveAI === 'leap' && m.leapT > 0);
+    if (dist < def.aggroRange && !moveAIActive) {
       if (dist > 0.01) {
         m.vel.x = (dx / dist) * spd;
         m.vel.y = (dy / dist) * spd;
@@ -713,6 +798,8 @@ export function damageMonster(
   spec: { base: number; type: DamageType; knockback?: number },
 ): { killed: boolean; damage: number; isCrit: boolean } {
   const def = MONSTER_DEFS[m.type];
+  // A-W3 遁地: 地下移动无敌 (土痕可预判)
+  if (m.burrowT > 0) return { killed: false, damage: 0, isCrit: false };
   const targetRes = def.res?.[spec.type] ?? 0;
   const { damage: rawDmg, isCrit } = calcDamage({
     base: spec.base,

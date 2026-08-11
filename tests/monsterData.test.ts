@@ -164,6 +164,19 @@ startDodge(cursedState as never);
 check('翻滚清除诅咒', cursedState.player.curseT === 0);
 check('翻滚进入无敌帧', cursedState.player.dodgeT > 0);
 
+// === A-W3 移动 AI (领主专属) ===
+import { MOVE_AIS, MOVE_AI_NAMES, rollMoveAI, LEAP_WINDUP, LEAP_CD, BURROW_CD, BURROW_TIME, FLEE_HP_THRESHOLD, STRAFE_RADIUS } from '../src/game/moveai';
+check('移动 AI ×4', MOVE_AIS.length === 4);
+check('移动 AI 唯一', new Set(MOVE_AIS).size === 4);
+check('移动 AI 名齐全', ['strafe', 'leap', 'burrow', 'flee'].every(m => MOVE_AIS.includes(m as 'strafe')));
+for (const m of MOVE_AIS) check(`移动 AI ${m} 有名`, typeof MOVE_AI_NAMES[m] === 'string' && MOVE_AI_NAMES[m].length > 0);
+check('rollMoveAI 在池内', MOVE_AIS.includes(rollMoveAI(() => 0.5)));
+check('扑击预警 0.4s', LEAP_WINDUP === 0.4);
+check('扑击 CD 4s', LEAP_CD === 4.0);
+check('遁地 CD 5s / 持续 1.6s', BURROW_CD === 5.0 && BURROW_TIME === 1.6);
+check('逃窜阈值 30%', FLEE_HP_THRESHOLD === 0.3);
+check('侧移半径 150', STRAFE_RADIUS === 150);
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
