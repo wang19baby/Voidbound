@@ -124,6 +124,10 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     out_done: list[str] = []
     if rel_dir == "world":
         # 瓦片: 无缝纹理铺满画布, 无品红底 → 不抠图; 仅当检测到品红底才抠 (防误食纹理边缘)
+        # 中心方裁: 模型常给 1408x768 非正方形, 先裁中心正方形再缩放 (防拉伸变形)
+        w0, h0 = img.size
+        side = min(w0, h0)
+        img = img.crop(((w0 - side) // 2, (h0 - side) // 2, (w0 + side) // 2, (h0 + side) // 2))
         rgba = img.convert("RGBA")
         small = img.resize((64, 64))
         mag = sum(1 for c in small.getdata() if c[0] > 180 and c[2] > 170 and c[1] < 100)
