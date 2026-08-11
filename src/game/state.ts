@@ -246,6 +246,10 @@ export interface GameState {
   combo: { count: number; timer: number };
   /** 升级全屏闪光剩余秒 (US-019) */
   levelUpFlash: number;
+  /** B-V2 Boss 入场演出: >0 = 横幅+全屏泛光脉动剩余秒; 文案在 introText */
+  bossIntroT: number;
+  bossIntroText: string;
+  bossIntroTitle: string;
   /** 装备面板: 选中背包索引 / 当前页 (C-502 网格分页) */
   equipSel: number;
   equipPage: number;

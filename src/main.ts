@@ -200,6 +200,9 @@ const state = {
   killsTotal: 0,
   combo: { count: 0, timer: 0 },
   levelUpFlash: 0,
+  bossIntroT: 0,
+  bossIntroText: '',
+  bossIntroTitle: '',
   volume: 0.8,
   equipSel: 0,
   equipPage: 0,
@@ -1096,6 +1099,8 @@ function loopImpl(now: number) {
     if (state.combo.timer <= 0) state.combo.count = 0;
   }
   if (state.levelUpFlash > 0) state.levelUpFlash -= dt;
+  // B-V2 Boss 入场演出倒计时
+  if (state.bossIntroT > 0) state.bossIntroT -= dt;
   resolveFireballHits(state);
   resolveMeleeHits(state);
   cullLoot(state, nowSec);  // OPT-032: 60s 后地面装备消失
@@ -1149,6 +1154,7 @@ function loopImpl(now: number) {
         state.run.bossAlive = false;  // 4 只外层 Boss 走 alive-- (死后触发下一阶段)
         state.run.alive = 4;          // 4 只外层 Boss 计入 alive (killMonster 递减)
         playSfxClient('boss_roar');
+        triggerBossIntro(state, '元素 Boss ×4', '四个方向的外来者迫近…');
         inf('world', `extract: 4 outer boss summoned (${state.run.theme})`);
       } else if (isExtract && state.run.bossStage === 1) {
         // 4 外层 Boss 全清 → 中央最终主题 Boss
@@ -1161,7 +1167,7 @@ function loopImpl(now: number) {
         const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
         pushToast(state, `${elemTag}最终 BOSS: ${bossName}`, '#ffd64a');
         playSfxClient('boss_roar');
-        state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);
+        triggerBossIntro(state, '最终 BOSS', `${bossName} 降临!`);
         inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
@@ -1172,7 +1178,7 @@ function loopImpl(now: number) {
         const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
         pushToast(state, `${elemTag}BOSS 出现: ${bossName}`, '#ff9530');
         playSfxClient('boss_roar');  // OPT-025
-        state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);  // OPT-026
+        triggerBossIntro(state, 'BOSS', `${bossName} 出现!`);
         inf('world', `BOSS 出现: ${bossName} (${state.run.theme})`);
       }
     } else if (ph === 'won' && !state.run.victoryShown) {
@@ -1687,6 +1693,14 @@ function ensureDungeonRun(state: GameState): void {
     state.run.bossStage = 0;
     state.run.t0 = performance.now();
   }
+}
+
+/** B-V2 Boss 入场演出: 横幅倒计时 + 泛光种子; 全屏渲染层读取 */
+function triggerBossIntro(state: GameState, title: string, text: string): void {
+  state.bossIntroT = 2.8;
+  state.bossIntroTitle = title;
+  state.bossIntroText = text;
+  state.cameraShake = Math.min(20, (state.cameraShake ?? 0) + 10);
 }
 
 /** 秒 → mm:ss */
@@ -2403,6 +2417,29 @@ function drawFrameToScreen() {
     hudCtx.font = 'bold 15px monospace';
     hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
     hudCtx.textAlign = 'left';
+  }
+
+  // B-V2 Boss 入场演出: 横幅 + 全屏泛光脉动 (2.8s 倒计时)
+  if (state.bossIntroT > 0) {
+    const t = state.bossIntroT;
+    const fadeIn = Math.min(1, (2.8 - t) / 0.4);
+    const pulse = 0.5 + 0.5 * Math.sin(t * 8);
+    // 边缘泛红脉动
+    hudCtx.fillStyle = `rgba(160, 20, 30, ${0.18 * pulse * fadeIn})`;
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hudCtx.fillStyle = `rgba(160, 20, 30, ${0.3 * pulse * fadeIn})`;
+    hudCtx.fillRect(0, hudCanvas.height / 2 - 90, hudCanvas.width, 180);
+    // 横幅文字
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillStyle = `rgba(255, 90, 90, ${fadeIn})`;
+    hudCtx.font = 'bold 64px monospace';
+    hudCtx.fillText(state.bossIntroTitle, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
+    hudCtx.fillStyle = `rgba(255, 220, 150, ${fadeIn})`;
+    hudCtx.font = 'bold 24px monospace';
+    hudCtx.fillText(state.bossIntroText, hudCanvas.width / 2, hudCanvas.height / 2 + 26);
+    hudCtx.textAlign = 'left';
+    hudCtx.textBaseline = 'top';
   }
 
   mouse.reset();
