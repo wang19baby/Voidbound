@@ -127,13 +127,49 @@ Top-down view 2D game character sprite, single character centered, facing down, 
 Top-down view 2D game character sprite, single character centered, facing down, full body visible. Elegant female sorceress in blue and purple robes, pointed wizard hat, holding a glowing magic staff with arcane energy swirling around the crystal head. Walk pose frame 4: feet together passing stance, body slightly raised. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
 ```
 
-### 游侠(女性)— 4 帧(同上,只换角色描述)
-> 描述替换为:`Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout`
-> 文件:`ranger_walk_0.png` ~ `ranger_walk_3.png`,姿势句与高清块与法师完全一致。
+### 游侠(女性)— 站立 + 4 帧
+**站立** → `ranger_stand.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 0** → `ranger_walk_0.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout. Walk pose frame 1: left foot stepping forward, left arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 1** → `ranger_walk_1.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout. Walk pose frame 2: feet together passing stance, body slightly lowered. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 2** → `ranger_walk_2.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout. Walk pose frame 3: right foot stepping forward, right arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 3** → `ranger_walk_3.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout. Walk pose frame 4: feet together passing stance, body slightly raised. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
 
-### 刺客(女性)— 4 帧(同上,只换角色描述)
-> 描述替换为:`Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer`
-> 文件:`assassin_walk_0.png` ~ `assassin_walk_3.png`,姿势句与高清块与法师完全一致。
+### 刺客(女性)— 站立 + 4 帧
+**站立** → `assassin_stand.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 0** → `assassin_walk_0.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer. Walk pose frame 1: left foot stepping forward, left arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 1** → `assassin_walk_1.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer. Walk pose frame 2: feet together passing stance, body slightly lowered. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 2** → `assassin_walk_2.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer. Walk pose frame 3: right foot stepping forward, right arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 3** → `assassin_walk_3.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer. Walk pose frame 4: feet together passing stance, body slightly raised. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
 
 ---
 
