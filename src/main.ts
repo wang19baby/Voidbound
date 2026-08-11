@@ -1989,7 +1989,11 @@ function drawFrameToScreen() {
     const want = `${def.sprite}_${m.walkFrame}`;
     // 缺帧回退 (旧 2 帧画: 2/3 → 0/1), 新 4 帧画到即用
     const frameSprite = resolveSprite(res, 'monsters', want) ? want : `${def.sprite}_${m.walkFrame % 2}`;
-    drawSprite(gl, quad, res, sp, sz, 'monsters', frameSprite, { color: drawColor });
+    drawSprite(gl, quad, res, sp, sz, 'monsters', frameSprite, { color: drawColor, hue: m.hue ?? 0 });
+    // 领主标记 (M3): HP 条上方紫色横条
+    if (m.lord) {
+      drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 9 }, { w: m.size.w, h: 2 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1] });
+    }
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
       const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;

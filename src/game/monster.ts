@@ -12,6 +12,7 @@ import { gainExp } from './player';
 import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './combat';
 import { skillDamageScale, advanceCombo, comboScoreMult } from './skill';
 import { DIFFICULTY_MODS } from './difficulty';
+import { ELEMENT_DEFS, randomElement, type ElementId } from './element';
 
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
@@ -37,6 +38,8 @@ export interface MonsterDef {
   res?: Partial<Record<DamageType, number>>;
   /** 精灵染色变体 (复用图集同 sprite) */
   tint?: [number, number, number];
+  /** 元素 (元素变体): 绘制时色相旋转 + 攻击伤害系 */
+  element?: ElementId;
   /** 小怪独有行为 (OPT-021): dash=冲撞 / split=死亡分裂 (每主题 ≥2 只) */
   ai?: 'dash' | 'split';
   /** Boss 独有机制 (OPT-022): summon=召唤小怪 / ring=弹幕环 / charge=冲锋 (每 Boss 不同) */
@@ -111,6 +114,13 @@ export function rollElite(r: () => number): boolean {
   return r() < ELITE_CHANCE;
 }
 
+/** 领主判定 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5 — 精英之上 Boss 之下 */
+export const LORD_CHANCE = 0.04;
+export const LORD_SIZE_SCALE = 1.6;
+export const LORD_HP_MULT = 5;
+/** 领主伤害倍率 (M3): 接触/投射 ×1.5 */
+export const LORD_DMG_MULT = 1.5;
+
 /** 精英属性倍率 */
 export const ELITE_HP_MULT = 2.2;
 export const ELITE_DMG_MULT = 1.5;
@@ -167,6 +177,10 @@ export interface Monster {
   aiSpawned: number;
   /** 精英标记 (内容扩充): 金色变体, HP×2.2 伤×1.5, 保底 rare+ 掉落 */
   elite: boolean;
+  /** 领主标记 (M3): 元素变体 + 体型 ×1.6 + HP×5, 精英之上 Boss 之下 */
+  lord: boolean;
+  /** 元素色相旋转 (度): def.element 或领主随机元素 */
+  hue: number;
 }
 
 let nextMonsterId = 1;
@@ -175,9 +189,14 @@ let nextMonsterId = 1;
 export function spawnMonster(state: GameState, type: MonsterType): Monster {
   const def = MONSTER_DEFS[type];
   const lvScale = levelMonsterScale(state.player.level);
-  const elite = !def.boss && rollElite(Math.random);
+  // 领主 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5; 精英仅非领主时 roll
+  const isLord = !def.boss && Math.random() < LORD_CHANCE;
+  const elite = !def.boss && !isLord && rollElite(Math.random);
+  const element: ElementId | undefined = def.element ?? (isLord ? randomElement() : undefined);
+  const hue = element ? ELEMENT_DEFS[element].hue : 0;
+  const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
   const baseHp = Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * lvScale);
-  const hp = Math.round(baseHp * (elite ? ELITE_HP_MULT : 1));
+  const hp = Math.round(baseHp * (elite ? ELITE_HP_MULT : 1) * (isLord ? LORD_HP_MULT : 1));
   // 半径 600-1200 px, 超出 aggroRange, 不立刻追杀
   for (let i = 0; i < 30; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -188,7 +207,7 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     // 验证 spawn 点不撞墙
     let blocked = false;
     for (const w of state.world.walls) {
-      if (aabbOverlap(x, y, def.size.w, def.size.h, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
+      if (aabbOverlap(x, y, def.size.w * sizeScale, def.size.h * sizeScale, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
         blocked = true;
         break;
       }
@@ -203,7 +222,7 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       maxHp: hp,
       phase: 1,
       burnT: 0, burnDps: 0, burnAccum: 0,
-      size: { ...def.size },
+      size: { w: def.size.w * sizeScale, h: def.size.h * sizeScale },
       wanderTarget: pickWanderTarget(state, x, y, def.aggroRange * 2),
       wanderTimer: 3 + Math.random() * 2,
       attackCd: 0,
@@ -214,6 +233,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       aiCd: 0,
       aiSpawned: 0,
       elite,
+      lord: isLord,
+      hue,
     };
     return m;
   }
@@ -238,6 +259,8 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     aiCd: 0,
     aiSpawned: 0,
     elite: false,
+    lord: false,
+    hue: 0,
   };
 }
 
@@ -375,7 +398,7 @@ export function updateMonsters(state: GameState, dt: number): void {
       }
       if (dist < def.attackRange && m.attackCd <= 0 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
         const lvScale = levelMonsterScale(state.player.level);
-        state.player.hp -= def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1);
+        state.player.hp -= def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1);
         m.attackCd = 1.0;
         state.lastKiller = m.type;  // 死亡结算显示
         state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 5);  // OPT-026
@@ -433,10 +456,10 @@ export function killMonster(state: GameState, m: Monster): void {
   playSfxClient('die');
   // Boss 专属套装掉落 (OPT-021); 精英保底 rare+; 小怪普通掉落
   if (def.boss) dropBossReward(state, cx, cy, THEME_BOSS_SET[state.run.theme]);
-  else if (m.elite) dropEliteLoot(state, cx, cy);
+  else if (m.elite || m.lord) dropEliteLoot(state, cx, cy); // 领主保底 rare+ (M3)
   else dropLoot(state, cx, cy);
   // 材料掉落 (M5 W4 C-401): 小怪 8% 灵铁 / 精英必掉 1 奥术核心 / Boss 必掉 1-2 虚空碎片
-  for (const [mid, n] of materialDrop(Math.random(), !!def.boss, !!m.elite)) {
+  for (const [mid, n] of materialDrop(Math.random(), !!def.boss, !!m.elite || !!m.lord)) {
     addMaterial(state, mid, n);
   }
   // 分裂 (OPT-021): 死亡生成 2 只 30% 血小怪, 防递归
@@ -599,7 +622,7 @@ function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle =
     pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
     vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
     size: { w: 12, h: 12 },
-    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1)),
+    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1)),
     life: 2.0,
     fromId: m.id,
   });

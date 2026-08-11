@@ -53,6 +53,26 @@ check('rollElite 0.08 → 普通 (开区间)', !rollElite(() => 0.08));
 check('rollElite 0.2 → 普通', !rollElite(() => 0.2));
 check('精英 HP ×2.2', ELITE_HP_MULT === 2.2);
 
+// === M3 元素/领主系统 ===
+import { ELEMENT_DEFS, ELEMENT_IDS } from '../src/game/element';
+import { DAMAGE_TYPES } from '../src/game/combat';
+import { LORD_CHANCE, LORD_SIZE_SCALE, LORD_HP_MULT, LORD_DMG_MULT } from '../src/game/monster';
+check('5 元素定义', ELEMENT_IDS.length === 5);
+for (const id of ELEMENT_IDS) {
+  const def = ELEMENT_DEFS[id];
+  check(`元素 ${id} 色相 0-360`, def.hue >= 0 && def.hue < 360);
+  check(`元素 ${id} 伤害系合法`, (DAMAGE_TYPES as string[]).includes(def.dmgType));
+}
+check('领主概率 4%', LORD_CHANCE === 0.04);
+check('领主体型 ×1.6', LORD_SIZE_SCALE === 1.6);
+check('领主 HP ×5', LORD_HP_MULT === 5);
+check('领主伤害 ×1.5', LORD_DMG_MULT === 1.5);
+// HD 接线回归: 4 Boss 用自己的画 (M3 美术接入后)
+check('pumpking 自画', MONSTER_DEFS.pumpking.sprite === 'pumpking');
+check('war_pharaoh 自画', MONSTER_DEFS.war_pharaoh.sprite === 'war_pharaoh');
+check('frost_lich 自画', MONSTER_DEFS.frost_lich.sprite === 'frost_lich');
+check('void_overlord 自画', MONSTER_DEFS.void_overlord.sprite === 'void_overlord');
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
