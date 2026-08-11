@@ -93,13 +93,47 @@ A game sprite sheet: exactly 4 separate copies of the same character, arranged l
 
 ### 站立 → `assassin_stand.png`
 ```
-Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy assassin in black leather armor, red face mask, hooded, crouched low ready stance, dual wielding daggers, silent killer. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Shadowy female assassin in black leather armor, red face mask, hooded, crouched low ready stance, dual wielding daggers, silent killer. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
 ```
 
 ### 行走 → `assassin_walk.png`
 ```
 A game sprite sheet: exactly 4 separate copies of the same character, arranged left-to-right in ONE row. The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four. The four zones from left to right show the same character in four walk poses: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm. Character: shadowy assassin in black leather armor, red face mask, hooded, crouched low ready stance, dual wielding daggers, silent killer. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
 ```
+
+---
+
+## 7. 独立 4 帧行走(每帧单图 — sheet 总连在一起时用这个)
+
+> 4 张独立图替代 1 张 sheet,文件名 `_0.._3`,导入器单图路径直接收。
+> 每帧 = 单帧模板 + 逐帧姿势 + 高清块(已填好)。
+> AI Studio 建议:第 0 帧生成后,2~4 帧用"参考图 + 编辑"保持角色一致。
+
+### 法师(女性)— 4 帧
+**帧 0** → `sorceress_walk_0.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Elegant female sorceress in blue and purple robes, pointed wizard hat, holding a glowing magic staff with arcane energy swirling around the crystal head. Walk pose frame 1: left foot stepping forward, left arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 1** → `sorceress_walk_1.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Elegant female sorceress in blue and purple robes, pointed wizard hat, holding a glowing magic staff with arcane energy swirling around the crystal head. Walk pose frame 2: feet together passing stance, body slightly lowered. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 2** → `sorceress_walk_2.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Elegant female sorceress in blue and purple robes, pointed wizard hat, holding a glowing magic staff with arcane energy swirling around the crystal head. Walk pose frame 3: right foot stepping forward, right arm swinging back. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+**帧 3** → `sorceress_walk_3.png`
+```
+Top-down view 2D game character sprite, single character centered, facing down, full body visible. Elegant female sorceress in blue and purple robes, pointed wizard hat, holding a glowing magic staff with arcane energy swirling around the crystal head. Walk pose frame 4: feet together passing stance, body slightly raised. high-resolution detailed game art, crisp sharp texture, rich saturated colors, smooth surfaces with soft shading and gentle gradients, clean anti-aliased edges, premium fantasy RPG art style. No pixel art, no pixelation, no chunky pixels, no low resolution, no retro 8-bit, no dithering. No text, no watermark. Solid pure magenta background (#FF00FF), nothing else in the background.
+```
+
+### 游侠(女性)— 4 帧(同上,只换角色描述)
+> 描述替换为:`Agile female ranger archer in green leather armor, hooded forest cloak, holding an elven longbow with a quiver of arrows on her back, sharp-eyed scout`
+> 文件:`ranger_walk_0.png` ~ `ranger_walk_3.png`,姿势句与高清块与法师完全一致。
+
+### 刺客(女性)— 4 帧(同上,只换角色描述)
+> 描述替换为:`Shadowy female assassin in black leather armor, red face mask, hooded, dual wielding daggers, silent killer`
+> 文件:`assassin_walk_0.png` ~ `assassin_walk_3.png`,姿势句与高清块与法师完全一致。
 
 ---
 
