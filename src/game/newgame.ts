@@ -4,15 +4,17 @@
 import { CLASS_IDS, type ClassId } from './class';
 import { DIFFICULTIES, type Difficulty } from './difficulty';
 import { THEMES, type Theme } from './state';
+import { MAP_MODES, type MapMode } from './mapmode';
 
 export interface NewgameSel {
   classIdx: number;
   diffIdx: number;
   themeIdx: number;
+  modeIdx: number;
 }
 
 export function ngDefault(): NewgameSel {
-  return { classIdx: 0, diffIdx: 0, themeIdx: 0 };
+  return { classIdx: 0, diffIdx: 0, themeIdx: 0, modeIdx: 0 };
 }
 
 /** 键盘选择迁移: 返回新选择状态; 未命中返回 null (Enter/Esc 由状态机处理) */
@@ -28,20 +30,32 @@ export function moveSelection(sel: NewgameSel, key: string): NewgameSel | null {
     return { ...sel, diffIdx: Math.min(DIFFICULTIES.length - 1, sel.diffIdx + 1) };
   }
   if (k === 'arrowleft' || k === 'a') {
-    return { ...sel, themeIdx: (sel.themeIdx + THEMES.length - 1) % THEMES.length };
+    return {
+      ...sel,
+      themeIdx: (sel.themeIdx + THEMES.length - 1) % THEMES.length,
+      modeIdx: (sel.modeIdx + 1) % MAP_MODES.length,  // A-W2: ← 顺带切模式 (第三维)
+    };
   }
   if (k === 'arrowright' || k === 'd') {
-    return { ...sel, themeIdx: (sel.themeIdx + 1) % THEMES.length };
+    return {
+      ...sel,
+      themeIdx: (sel.themeIdx + 1) % THEMES.length,
+      modeIdx: sel.modeIdx,  // ← 切主题, → 保持模式 (模式用单独键)
+    };
+  }
+  if (k === 'm') {
+    return { ...sel, modeIdx: (sel.modeIdx + 1) % MAP_MODES.length };
   }
   return null;
 }
 
-/** 解析选择 → 职业/难度/主题 (index 越界安全) */
-export function ngResolve(sel: NewgameSel): { classId: ClassId; difficulty: Difficulty; theme: Theme } {
+/** 解析选择 → 职业/难度/主题/模式 (index 越界安全) */
+export function ngResolve(sel: NewgameSel): { classId: ClassId; difficulty: Difficulty; theme: Theme; mode: MapMode } {
   const c = Math.min(Math.max(0, sel.classIdx), CLASS_IDS.length - 1);
   const d = Math.min(Math.max(0, sel.diffIdx), DIFFICULTIES.length - 1);
   const t = Math.min(Math.max(0, sel.themeIdx), THEMES.length - 1);
-  return { classId: CLASS_IDS[c], difficulty: DIFFICULTIES[d], theme: THEMES[t] };
+  const md = Math.min(Math.max(0, sel.modeIdx), MAP_MODES.length - 1);
+  return { classId: CLASS_IDS[c], difficulty: DIFFICULTIES[d], theme: THEMES[t], mode: MAP_MODES[md] };
 }
 
 /** 主题解锁 (OPT-015): forest 恒解锁, 其余需已通关 */

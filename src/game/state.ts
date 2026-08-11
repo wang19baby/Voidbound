@@ -2,7 +2,7 @@
 // 玩家 pos 为世界坐标; camera = player - viewportCenter; 渲染时 worldPos - camera
 
 import type { RenderResources } from '../render/resources';
-import { WORLD_W, WORLD_H, type Decor } from './world';
+import { WORLD_W, WORLD_H, type Decor, spawnPointForMode } from './world';
 import { FIREBALL_DAMAGE, type Monster } from './monster';
 import type { CombatStats, DamageType } from './combat';
 import type { RuneId } from './rune';
@@ -11,6 +11,7 @@ import type { Difficulty } from './difficulty';
 import type { Equipment, EquipType } from './equipment';
 import type { ClassId } from './class';
 import type { ElementId } from './element';
+import type { MapMode } from './mapmode';
 
 export interface Camera {
   x: number;
@@ -158,6 +159,8 @@ export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
 /** 单层地牢跑局状态 (OPT-012): 清图 → 召 Boss → 通关结算; Boss 不计入 alive */
 export interface RunState {
   theme: Theme;
+  /** A-W2 布局模式 (linear/gauntlet/extract); 存档 v10 持久化 */
+  mode: MapMode;
   /** 本局小怪总数 / 存活 (非 Boss) */
   total: number;
   alive: number;
@@ -195,7 +198,7 @@ export function runPhase(alive: number, bossAlive: boolean, bossKilled: boolean)
 /** 空跑局 (初始/读档前) */
 export function emptyRun(theme: Theme): RunState {
   return {
-    theme, total: 0, alive: 0,
+    theme, mode: 'linear', total: 0, alive: 0,
     bossAlive: false, bossKilled: false, victoryShown: false,
     t0: performance.now(), timeSec: 0, kills: 0, best: {}, collectedLoot: 0,
     portal: undefined,
@@ -267,9 +270,10 @@ export interface GameState {
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
 export type Theme = (typeof THEMES)[number];
 
-/** 重置 player 状态到世界中心 */
+/** 重置 player 状态到本局模式出生点 (A-W2: 线性左 / 高级角落 / 挑战中央) */
 export function resetPlayer(state: GameState): void {
-  state.player.pos = { x: WORLD_W / 2 - 32, y: WORLD_H / 2 - 32 };
+  const sp = spawnPointForMode(state.run.mode ?? 'linear');
+  state.player.pos = { x: sp.x - 32, y: sp.y - 32 };
   state.player.hp = 100;
   state.player.mp = 100;
   state.player.idleT = 0;

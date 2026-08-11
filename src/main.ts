@@ -12,7 +12,7 @@ import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
-import { getActiveWalls, getActiveDecor, type Wall } from './game/world';
+import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
 import { drawSprite, setViewportUniform } from './render/draw';
 import { resolveSprite } from './render/resources';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
@@ -21,6 +21,7 @@ import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rej
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { ELEMENT_DEFS } from './game/element';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
+import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, type EquipType, type Equipment, type MaterialId } from './game/equipment';
 import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, runeForgePay, type TownPanel, type TownId, type MerchantStock, type MysteryStock } from './game/town';
@@ -304,7 +305,7 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (k === '1') {
-      state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme) };
+      state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
       setScreen(state, 'newgame');
       state.titleMsg = '';
       inf('ui', '新游戏 → 选择屏');
@@ -395,7 +396,7 @@ window.addEventListener('keydown', (e) => {
         state.charNaming = false;
         state.charCreating = false;
         state.charNameInput = '';
-        state.ngSel = { classIdx: CLASS_IDS.indexOf(state.charNamingClass as ClassId), diffIdx: 0, themeIdx: 0 };
+        state.ngSel = { classIdx: CLASS_IDS.indexOf(state.charNamingClass as ClassId), diffIdx: 0, themeIdx: 0, modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
         setScreen(state, 'newgame');
         state.titleMsg = '';
         pushToast(state, `新建角色: ${name}`, '#9cf');
@@ -473,6 +474,7 @@ window.addEventListener('keydown', (e) => {
         }
         if (d.theme) state.theme = d.theme;
         if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
+        state.run.mode = validMapMode(d.mode ?? 'linear');  // A-W2 v10 模式还原
         if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
         restoreMaterials(d);  // M5 W4 C-401
         restorePassives(d);  // v9 被动技能树
@@ -511,7 +513,7 @@ window.addEventListener('keydown', (e) => {
     const mv = moveSelection(state.ngSel, k);
     if (mv) { state.ngSel = mv; return; }
     if (k === 'enter') {
-      const { classId, difficulty, theme } = ngResolve(state.ngSel);
+      const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
       if (!unlockedDifficulty(state.cleared, difficulty)) {
         pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66');
         return;
@@ -521,7 +523,7 @@ window.addEventListener('keydown', (e) => {
         return;
       }
       bindClass(state, classId);  // M5 C-103: 新局绑定职业
-      startRun(state, theme, difficulty);
+      startRun(state, theme, difficulty, mode);
       return;
     }
     if (k === 'escape') { setScreen(state, 'title'); return; }
@@ -1572,10 +1574,11 @@ function drawTownPanel() {
   hudCtx.fillStyle = '#fff';
 }
 
-/** 开始一局地牢 (OPT-012): 设定主题/难度 → 清场刷跑局池 → 进 dungeon */
-function startRun(state: GameState, theme: Theme, difficulty: Difficulty): void {
+/** 开始一局地牢 (OPT-012 + A-W2): 设定主题/难度/模式 → 清场刷跑局池 → 进 dungeon */
+function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode?: MapMode): void {
   state.theme = theme;
   state.difficulty = difficulty;
+  state.run.mode = mode ?? state.run.mode ?? 'linear';
   state.score = 0;
   state.dying = false;
   state.fireballs.length = 0;
@@ -1592,6 +1595,7 @@ function startRun(state: GameState, theme: Theme, difficulty: Difficulty): void 
     if (sk && !sk.rune) sk.rune = l.rune;
   }
   fadeBgm(`bgm_${theme}`, state.volume);  // OPT-027: 换主题交叉淡化 (顺带修旧 bug: startRun 从未切 BGM)
+  resetWorldForMode(state.run.mode);
   resetPlayer(state);
   spawnRunPool(state);
   setScreen(state, 'dungeon');
@@ -1601,6 +1605,7 @@ function startRun(state: GameState, theme: Theme, difficulty: Difficulty): void 
 /** 读档/回城再进时: 场上无怪 → 补刷一池; 有怪 → 按现存怪重算跑局计数 (Boss 在场/击杀态) */
 function ensureDungeonRun(state: GameState): void {
   state.run.theme = state.theme;
+  resetWorldForMode(state.run.mode ?? 'linear');
   if (state.monsters.length === 0) {
     spawnRunPool(state);
   } else {
@@ -1744,6 +1749,20 @@ function drawNewgame() {
   hudCtx.font = '13px monospace';
   hudCtx.fillStyle = '#667';
   hudCtx.fillText('清空小怪后挑战主题 Boss, 通关解锁下一主题', tx, cy + 76);
+
+  // A-W2 模式 (右列下方, [M] 切换): 普通/高级/挑战
+  const mx = hudCanvas.width / 2 + 300;
+  const my = cy + 130;
+  hudCtx.font = 'bold 15px monospace';
+  hudCtx.fillStyle = '#fc9';
+  hudCtx.fillText('模式 [M]', mx, my - 26);
+  const selMode = MAP_MODES[state.ngSel.modeIdx];
+  hudCtx.font = 'bold 20px monospace';
+  hudCtx.fillStyle = '#ffd64a';
+  hudCtx.fillText(MAP_MODE_NAMES[selMode], mx, my + 8);
+  hudCtx.font = '13px monospace';
+  hudCtx.fillStyle = '#889';
+  hudCtx.fillText(MAP_MODE_DESC[selMode], mx, my + 34);
 
   // 底部操作行
   hudCtx.fillStyle = '#fff';
@@ -2336,6 +2355,7 @@ function buildSavePayload(state: GameState): SaveData {
     town: state.townId,  // M5 W3 C-302
     materials: MATERIAL_IDS.filter(id => (state.materials[id] ?? 0) > 0).map(id => [id, state.materials[id] ?? 0]),
     passives: PASSIVE_IDS.filter(id => (state.player.passives[id] ?? 0) > 0).map(id => [id, state.player.passives[id] ?? 0]),
+    mode: state.run.mode ?? 'linear',  // A-W2 v10 布局模式
     skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: state.player.skillPoints ?? 0,
     exp: state.player.exp ?? 0,
@@ -2413,7 +2433,7 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
       const cx = w / 2, btnW = 320, btnH = 38;
       const items: Array<{ y: number; action: () => void }> = [
         { y: h / 2 - 10 - btnH / 2, action: () => {
-          state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme) };
+          state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
           setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
         { y: h / 2 + 30 - btnH / 2, action: () => { state.settingsOpen = !state.settingsOpen; } },
         { y: h / 2 + 70 - btnH / 2, action: () => {

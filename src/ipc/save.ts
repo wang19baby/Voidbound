@@ -70,6 +70,8 @@ export interface SaveData {
   materials: Array<[string, number]>;
   /** 被动技能等级 (v9): [id, level][] */
   passives: Array<[string, number]>;
+  /** 布局模式 (v10, A-W2): linear/gauntlet/extract */
+  mode: string;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

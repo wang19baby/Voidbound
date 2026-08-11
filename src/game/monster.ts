@@ -186,6 +186,7 @@ export function spawnRunPool(state: GameState): void {
   state.run.kills = 0;
   state.run.collectedLoot = 0;
   state.run.theme = state.theme;
+  state.run.mode = state.run.mode ?? 'linear';
   // M3 元素地图: 50% 概率本局整体元素染色 (地板/墙/装饰 + Boss 变体)
   state.run.element = Math.random() < 0.5 ? randomElement() : undefined;
   state.run.t0 = performance.now();
