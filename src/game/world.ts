@@ -145,7 +145,7 @@ export interface Decor {
 export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: [number, number, number] }> = {
   forest: { sprite: 'decor_forest', count: 6 }, // HD 草丛
   desert: { sprite: 'decor_desert', count: 6 }, // HD 石块
-  ruin:   { sprite: 'wall_alt', count: 5, tint: [0.72, 0.74, 0.86] }, // 待 decor_ruin 重出
+  ruin:   { sprite: 'decor_ruin', count: 5 }, // HD 冰石
   void:   { sprite: 'decor_void', count: 4 }, // HD 虚空水晶
 };
 
