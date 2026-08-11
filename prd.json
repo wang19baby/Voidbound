@@ -285,6 +285,26 @@
         "挑战模式两段 Boss 触发逻辑在 main.ts"
       ],
       "passes": true
+    },
+    {
+      "id": "MM-BV3",
+      "title": "B-V3 粒子 instancing — 批量粒子单 draw call (5k 护栏)",
+      "description": "render/instanced.ts InstancedBatch: 3×vec3 实例属性 divisor 1, drawElementsInstanced; 环境/挥砍/火球/敌弹/死亡粒子 5 组入 batch, 同 atlas 一次纹理绑定按色组 flush; 容量 2048 防御丢弃; packInstance 纯函数可测",
+      "acceptanceCriteria": [
+        "npm test 含 instanced.test.ts (packInstance 布局/stride/串扰)",
+        "npm run build 通过"
+      ],
+      "passes": true
+    },
+    {
+      "id": "MM-BV2",
+      "title": "B-V2 Boss 入场演出 — 横幅 + 全屏泛光",
+      "description": "GameState.bossIntroT/Title/Text; triggerBossIntro 统一触发 (2.8s); 普通 Boss/四元素×4/中央最终三召唤点接线; 渲染边缘泛红脉动+中央横幅 (淡入 0.4s)",
+      "acceptanceCriteria": [
+        "三召唤点触发演出 (main.ts)",
+        "npm test 733 例全绿"
+      ],
+      "passes": true
     }
   ]
 }
