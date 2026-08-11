@@ -45,7 +45,7 @@ strong build, battle-scarred. {高清块}
 **行走** → `import/characters/barbarian_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: muscular male barbarian warrior, wild unkempt hair,
@@ -64,7 +64,7 @@ golden winged helmet with plume, divine light aura. {高清块}
 **行走** → `import/characters/paladin_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: holy paladin knight in radiant golden armor,
@@ -83,7 +83,7 @@ around the crystal head, mystical atmosphere. {高清块}
 **行走** → `import/characters/sorceress_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: elegant female sorceress in blue and purple robes,
@@ -102,7 +102,7 @@ faint green ghost energy wisps. {高清块}
 **行走** → `import/characters/necromancer_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: sinister necromancer in tattered dark purple robes,
@@ -121,7 +121,7 @@ sharp-eyed scout. {高清块}
 **行走** → `import/characters/ranger_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: agile female ranger archer in green leather armor,
@@ -140,7 +140,7 @@ silent killer. {高清块}
 **行走** → `import/characters/assassin_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
+The image MUST be divided into 4 equal vertical zones by empty background space. Each character stands fully inside its own zone, NEVER touching or overlapping the next character. Between every two characters there MUST be a visible empty magenta gap at least one quarter of a character's width. Absolutely no contact, no shared outlines, no overlap between characters, generous pure magenta space separating all four.
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: shadowy assassin in black leather armor,
