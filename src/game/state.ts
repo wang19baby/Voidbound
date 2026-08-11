@@ -57,6 +57,8 @@ export interface Player {
   mpMax: number;
   mpRegen: number;
   speedMult: number;
+  /** A-W3 诅咒 (curse 机制): >0 = 减速 + 禁翻滚短窗 (翻滚/时间清除) */
+  curseT: number;
 }
 
 export interface Fireball {

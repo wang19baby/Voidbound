@@ -150,6 +150,7 @@ const state = {
     mpMax: 100,
     mpRegen: 0,
     speedMult: 1,
+    curseT: 0,
   },
   viewport: { w: VW, h: VH },
   world: {
@@ -1065,6 +1066,25 @@ function loopImpl(now: number) {
   if (state.player.potionCd > 0) state.player.potionCd -= dt;
   if (state.player.dodgeT > 0) state.player.dodgeT -= dt;
   if (state.player.dodgeCd > 0) state.player.dodgeCd -= dt;
+  // A-W3 诅咒系 (滚动/时间清除)
+  if (state.player.curseT > 0) state.player.curseT -= dt;
+  // A-W3 毒池 (death_trigger): 站内每秒伤害
+  const pools = (state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> })._pools;
+  if (pools && pools.length > 0) {
+    for (let pi = pools.length - 1; pi >= 0; pi--) {
+      const pk = pools[pi];
+      pk.t -= dt;
+      if (pk.t <= 0) { pools.splice(pi, 1); continue; }
+      if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+        const px = state.player.pos.x;
+        const py = state.player.pos.y;
+        if (px >= pk.x && px <= pk.x + pk.r && py >= pk.y && py <= pk.y + pk.r) {
+          state.player.hp -= pk.dps * dt;
+          state.lastKiller = '毒池';
+        }
+      }
+    }
+  }
   if (state.combo.timer > 0) {
     state.combo.timer -= dt;
     if (state.combo.timer <= 0) state.combo.count = 0;
@@ -1989,6 +2009,19 @@ function drawFrameToScreen() {
     }
   }
 
+  // A-W3 毒池 (death_trigger): 半透明毒圈, 站内 DOT
+  const pools = (state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> })._pools;
+  if (pools) {
+    for (const pk of pools) {
+      const sp = worldToScreen(state, { x: pk.x, y: pk.y });
+      if (sp.x > -pk.r && sp.x < state.viewport.w + pk.r && sp.y > -pk.r && sp.y < state.viewport.h + pk.r) {
+        const fade = Math.min(0.5, pk.t / 3);
+        drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: pk.r, h: pk.r }, 'particles', 'spark_03', { color: [0.2, 0.9, 0.3], blend: 'add' });
+        void fade;
+      }
+    }
+  }
+
   // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上
   const envColor = THEME_ENV_COLOR[state.theme];
   for (const p of state.envFx) {
@@ -2070,6 +2103,19 @@ function drawFrameToScreen() {
       const auraColor = AURA_DEFS[m.aura].color;
       drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - 4, y: sp.y - 13 }, { w: 8, h: 8 }, 'ui', 'slide_horizontal_color', { color: auraColor });
     }
+    // 机制标记 (A-W3 包2): 精英/领主头像下色条 (盾=青 爆炸=橙 荆棘=绿 诅咒=紫 死亡=红)
+    if (m.mech) {
+      const mechBar: Record<string, [number, number, number]> = {
+        shield: [0.4, 0.9, 1],
+        explode: [1, 0.6, 0.2],
+        thorns: [0.5, 1, 0.5],
+        curse: [0.8, 0.5, 1],
+        death_trigger: [1, 0.4, 0.4],
+      };
+      const mc = mechBar[m.mech];
+      drawSprite(gl, quad, res, { x: sp.x, y: sp.y + m.size.h - 2 }, { w: m.size.w, h: 3 }, 'ui', 'slide_horizontal_color', { color: mc });
+    }
+
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
       const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;

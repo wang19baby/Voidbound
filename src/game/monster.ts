@@ -13,6 +13,7 @@ import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './c
 import { skillDamageScale, advanceCombo, comboScoreMult } from './skill';
 import { DIFFICULTY_MODS } from './difficulty';
 import { ELEMENT_DEFS, randomElement, type ElementId } from './element';
+import { rollMech, MECH_TYPES, SHIELD_UP_T, SHIELD_DOWN_T, SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, THORNS_REFLECT, THORNS_FLAT, CURSE_SLOW_MULT, CURSE_DURATION, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_DPS, DEATH_POOL_RADIUS, DEATH_POOL_T, type MechType } from './mech';
 
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
@@ -273,6 +274,10 @@ export interface Monster {
   regenAccum: number;
   /** 专职光环者 (A-W1 双核营地): 不攻击, 只提供光环; 死亡后光环消失 */
   pureSupport: boolean;
+  /** 机制 (A-W3 包2): 精英/领主随机 1 个 */
+  mech?: MechType;
+  /** 护盾状态机 (A-W3): >0 = 开盾, <=0 = 破盾虚弱窗口 */
+  shieldT: number;
   /** 元素色相旋转 (度): def.element 或领主随机元素 */
   hue: number;
   /** 元素 id (绘制/文案用) */
@@ -296,6 +301,8 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   const aura: AuraType | undefined = camp
     ? (camp.eliteAura ?? (camp.pureSupport ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined))
     : (enhanced ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined);
+  // 机制 (A-W3 包2): 精英/领主随机 1 个 (Boss 走专用技能池)
+  const mech: MechType | undefined = (elite || isLord) && !def.boss ? rollMech() : undefined;
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
@@ -346,6 +353,8 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       aura,
       regenAccum: 0,
       pureSupport: camp?.pureSupport ?? false,
+      mech,
+      shieldT: 0,
       hue,
       elementId: element,
     };
@@ -377,6 +386,8 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     aura: undefined,
     regenAccum: 0,
     pureSupport: false,
+    mech: undefined,
+    shieldT: 0,
     hue: 0,
   };
 }
@@ -494,6 +505,28 @@ export function updateMonsters(state: GameState, dt: number): void {
       inf('combat', `${m.type} enters PHASE 2 (狂暴)`);
     }
 
+    // boss 狂暴计时 (A-W3: 护盾周期)
+    if (m.mech === 'shield') {
+      m.shieldT -= dt;
+      if (m.shieldT <= -SHIELD_DOWN_T) {
+        m.shieldT = SHIELD_UP_T;  // 重新开盾
+      }
+    }
+    // 自爆 (A-W3): 血 <25% + 玩家贴脸 (可翻滚躲) → 引爆
+    if (m.mech === 'explode' && m.hp > 0 && m.hp <= m.maxHp * EXPLODE_HP_THRESHOLD && dist < def.attackRange * 2.5) {
+      const dmg = Math.round(def.contactDmg * EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1));
+      if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+        state.player.hp -= dmg;
+        state.lastKiller = m.type;
+        spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${dmg}`, '#ff7043');
+        state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 8);
+      }
+      spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '💥', '#ff9600');
+      playSfxClient('hit');
+      m.hp = 0;  // 自爆 = 自身死亡 (掉落照常)
+      inf('combat', `${m.type} 自爆`);
+    }
+
     // 远程攻击: 朝玩家发射投射物 (二阶段双发); 专职光环者不攻击
     if (!m.pureSupport && def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
       spawnEnemyProjectile(state, m, def.contactDmg);
@@ -546,6 +579,11 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.attackCd = 1.0 * frenzyMult;
         state.lastKiller = m.type;  // 死亡结算显示
         state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 5);  // OPT-026
+        // A-W3 诅咒: 命中玩家 → 减速 40% + 禁翻滚 1s (药水/翻滚清除)
+        if (m.mech === 'curse') {
+          state.player.curseT = Math.max(state.player.curseT ?? 0, CURSE_DURATION);
+          spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 14, '☠', '#c9aaff');
+        }
         if (elemental) {
           // 元素附伤: 额外一次小型伤害数字 (纯粹视觉标记, 数值已含在 dmg)
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, '⚡', '#ffb74d');
@@ -613,6 +651,45 @@ export function killMonster(state: GameState, m: Monster): void {
   for (const [mid, n] of materialDrop(Math.random(), !!def.boss, !!m.elite || !!m.lord)) {
     addMaterial(state, mid, n);
   }
+  // A-W3 死亡触发 (death_trigger): 33% 爆裂 / 40% 分裂 / 27% 毒池
+  if (m.mech === 'death_trigger') {
+    const roll = Math.random();
+    if (roll < 0.33) {
+      // 爆裂: 范围内玩家受伤 (可翻滚躲)
+      const pdx = state.player.pos.x - cx;
+      const pdy = state.player.pos.y - cy;
+      if (Math.hypot(pdx, pdy) <= DEATH_EXPLODE_RADIUS && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+        const boom = Math.round(def.contactDmg * DEATH_EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level));
+        state.player.hp -= boom;
+        state.lastKiller = m.type;
+        spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${boom}`, '#ff7043');
+      }
+      spawnDamageNum(state, cx, m.pos.y - 10, '💥', '#ff9600');
+    } else if (roll < 0.73) {
+      // 分裂: 2 只 25% 血小怪 (防递归)
+      for (let i = 0; i < DEATH_SPLIT_COUNT; i++) {
+        const c = spawnMonster(state, m.type);
+        c.hp = Math.max(1, Math.round(c.maxHp * 0.25));
+        c.maxHp = c.hp;
+        c.aiSpawned = 1;
+        c.mech = undefined;  // 分裂小怪不带机制
+        c.pos = { x: cx + (i === 0 ? -28 : 28), y: cy };
+        state.monsters.push(c);
+      }
+      inf('combat', `${def.type} 死亡触发: 分裂 ×${DEATH_SPLIT_COUNT}`);
+    } else {
+      // 毒池: 3s 站内每秒伤害 (走位反制)
+      const pool = {
+        x: cx - DEATH_POOL_RADIUS / 2, y: cy - DEATH_POOL_RADIUS / 2,
+        r: DEATH_POOL_RADIUS, dps: DEATH_POOL_DPS, t: DEATH_POOL_T,
+      };
+      const ext = state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> };
+      ext._pools = ext._pools ?? [];
+      ext._pools.push(pool);
+      inf('combat', `${def.type} 死亡触发: 毒池`);
+    }
+  }
+
   // 分裂 (OPT-021): 死亡生成 2 只 30% 血小怪, 防递归
   if (def.ai === 'split' && (m.aiSpawned ?? 0) === 0) {
     for (let i = 0; i < 2; i++) {
@@ -637,12 +714,16 @@ export function damageMonster(
 ): { killed: boolean; damage: number; isCrit: boolean } {
   const def = MONSTER_DEFS[m.type];
   const targetRes = def.res?.[spec.type] ?? 0;
-  const { damage, isCrit } = calcDamage({
+  const { damage: rawDmg, isCrit } = calcDamage({
     base: spec.base,
     type: spec.type,
     attacker: state.player.combat,
     targetRes,
   });
+  // A-W3 护盾: 开盾减伤 90%, 破盾虚弱 +30% 承伤 (输出窗口 = 决策点)
+  let damage = rawDmg;
+  if (m.mech === 'shield' && m.shieldT > 0) damage = Math.max(1, Math.round(damage * (1 - SHIELD_DAMAGE_REDUCE)));
+  else if (m.mech === 'shield' && m.shieldT <= 0) damage = Math.round(damage * (1 + SHIELD_BREAK_VULN));
   m.hp -= damage;
   m.hitFlash = 0.15;
   // 吸血 (OPT-020 unique 独占): 命中回复 damage×lifesteal%
@@ -736,6 +817,14 @@ export function resolveMeleeHits(state: GameState): number {
         if (r.damage > 0) {
           if (s.rune === 'steal') state.player.mp = Math.min(100, state.player.mp + 4);
           else if (s.rune === 'vampire') state.player.hp = Math.min(100, state.player.hp + 5);
+          // A-W3 荆棘: 近战反伤 20% 伤害 + 固定 5 (远程免疫 → 换技能/换目标反制)
+          if (m.mech === 'thorns') {
+            const reflect = Math.max(1, Math.round(r.damage * THORNS_REFLECT) + THORNS_FLAT);
+            state.player.hp -= reflect;
+            state.lastKiller = m.type;
+            spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${reflect}`, '#9f9');
+            state.cameraShake = Math.min(8, (state.cameraShake ?? 0) + 4);
+          }
         }
         if (r.killed) { kills++; return false; }
         // 一次挥击只结算一次

@@ -7,6 +7,7 @@ import { isHardcore } from './difficulty';
 import { pushToast } from './toast';
 import { playSfxClient } from '../ipc/sfx';
 import { classAttrWeight } from './class';
+import { CURSE_SLOW_MULT } from './mech';
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;
@@ -62,6 +63,8 @@ export function startDodge(state: GameState): boolean {
   if (p.dodgeCd > 0) return false;
   p.dodgeCd = DODGE_CD;
   p.dodgeT = DODGE_DURATION;
+  // A-W3 诅咒: 翻滚清除 (反制点 = 用无敌帧解 debuff)
+  p.curseT = 0;
   return true;
 }
 
@@ -71,7 +74,7 @@ export function updatePlayer(
   dt: number,
 ): void {
   const p = state.player;
-  const spd = p.speed * (p.speedMult ?? 1) * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1);
+  const spd = p.speed * (p.speedMult ?? 1) * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1) * (p.curseT > 0 ? CURSE_SLOW_MULT : 1);
   const nx = p.pos.x + dir.x * spd * dt;
   const ny = p.pos.y + dir.y * spd * dt;
   const maxX = Math.max(0, state.world.w - p.size.w);

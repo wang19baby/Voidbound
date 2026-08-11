@@ -90,7 +90,7 @@ check('光环半径 140', AURA_RADIUS === 140);
 check('层级 HP 链: lord 5× > elite 2.2× > enhanced 1.4×', LORD_HP_MULT > ELITE_HP_MULT && ELITE_HP_MULT > ENHANCED_HP_MULT);
 
 // === A-W1 营地三型 ===
-import { CAMP_TYPES, spawnCamp } from '../src/game/monster';
+import { CAMP_TYPES, spawnCamp, spawnMonster } from '../src/game/monster';
 check('营地三型', CAMP_TYPES.length === 3);
 check('营地类型齐全', ['aura', 'swarm', 'duo'].every(t => CAMP_TYPES.includes(t as 'aura' | 'swarm' | 'duo')));
 
@@ -134,6 +134,35 @@ check('玩家远离门 → 不 near', nearPortal(portalState(pFar) as never) ===
 const s = portalState(p0) as { run: { portal: { used: boolean } } };
 leaveThroughPortal(s as never);
 check('回城 → 门标记已使用', s.run.portal.used === true);
+
+// === A-W3 怪物机制包 ===
+import { MECH_TYPES, MECH_NAMES, rollMech, SHIELD_UP_T, SHIELD_DOWN_T, THORNS_REFLECT, CURSE_SLOW_MULT, EXPLODE_HP_THRESHOLD } from '../src/game/mech';
+check('机制 ×5 类型', MECH_TYPES.length === 5);
+check('机制类型唯一', new Set(MECH_TYPES).size === 5);
+check('机制名齐全', ['shield', 'explode', 'thorns', 'curse', 'death_trigger'].every(m => MECH_TYPES.includes(m as 'shield')));
+for (const m of MECH_TYPES) check(`机制 ${m} 有名`, typeof MECH_NAMES[m] === 'string' && MECH_NAMES[m].length > 0);
+check('rollMech 在池内', MECH_TYPES.includes(rollMech(() => 0.9)));
+check('护盾周期 2s 开盾', SHIELD_UP_T === 2.0 && SHIELD_DOWN_T === 2.0);
+check('荆棘反伤 20%', THORNS_REFLECT === 0.2);
+check('诅咒减速 40%', CURSE_SLOW_MULT === 0.6);
+check('自爆阈值 25% 血', EXPLODE_HP_THRESHOLD === 0.25);
+// 精英/领主挂载验证: spawnCamp 的精英带机制
+const mechCamp = spawnCamp(makeStubState() as never, { x: 10240, y: 5760, type: 'aura' }, pickForest);
+check('营地精英带机制', mechCamp.filter(m => m.elite)[0]?.mech !== undefined);
+const lordMech = spawnMonster(makeStubState() as never, 'slime', undefined, { forceElite: true, eliteAura: 'haste' });
+check('forceElite 怪物带机制', lordMech.mech !== undefined);
+const plainM = spawnMonster(makeStubState() as never, 'slime', undefined, {});
+check('白怪不带机制', plainM.mech === undefined);
+
+// === A-W3 诅咒清除: 翻滚解 debuff ===
+import { startDodge } from '../src/game/player';
+const cursedState = makeStubState() as never as { player: { curseT: number; dodgeCd: number; dodgeT: number } };
+cursedState.player.curseT = 1.0;
+cursedState.player.dodgeCd = 0;
+cursedState.player.dodgeT = 0;
+startDodge(cursedState as never);
+check('翻滚清除诅咒', cursedState.player.curseT === 0);
+check('翻滚进入无敌帧', cursedState.player.dodgeT > 0);
 
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
