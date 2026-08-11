@@ -13,6 +13,10 @@
 | 每帧 | 64×64 像素,主体居中占满帧 |
 | 行走 sheet | 4 帧横向一行、等距、每帧等宽、间无空隙(我按 1/4 宽裁切) |
 | 风格 | pixel art / top-down view / bold dark outlines / limited color palette / no anti-aliasing / no text / no watermark across all prompts |
+
+> ⚠️ **强制像素块**(任何提示词都追加这段,否则模型会出"假像素"软图):
+> `HARD pixel edges, chunky blocky pixels, 16-bit retro sprite style, indexed color palette, dithered shading only, no anti-aliasing, no gradients, no soft edges, no smooth color transitions, no 3d lighting`
+> 就算输出仍偏软,导入管线 `--quantize` 会按主题 16 色调色板强制量化兜底。
 | 朝向 | 面向屏幕下方(facing down) |
 
 **瓦片**与角色不同:瓦片要求 **edge-to-edge seamless(tileable)图案、铺满整张画布、四边连续可无缝拼接**,单张 64×64 内容(提示词写明 tileable)。我按整图缩放到 64×64。
@@ -75,8 +79,11 @@ each frame 64x64 px, character facing down, full body visible.
 Character: a female mage in blue and purple robes, pointed wizard hat,
 holding a glowing magic staff, arcane energy swirling around the staff head,
 blue purple magic color scheme (#3a7bd5 / #5a3a8b), bold dark outlines,
-limited color palette, no anti-aliasing, no text, no watermark,
-solid pure magenta background (#FF00FF), nothing else in the background
+limited color palette.
+HARD pixel edges, chunky blocky pixels, 16-bit retro sprite style,
+indexed color palette, dithered shading only,
+no anti-aliasing, no gradients, no soft edges, no smooth color transitions, no 3d lighting,
+no text, no watermark, solid pure magenta background (#FF00FF), nothing else in the background
 ```
 
 (6 职业行走 4 帧 sheet 的提示词模板见 §5)

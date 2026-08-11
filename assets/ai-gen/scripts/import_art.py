@@ -55,9 +55,11 @@ def bbox_crop(img: Image.Image, size: int = SIZE) -> Image.Image:
     return canvas.resize((size, size), resample)
 
 
-def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool, size: int = SIZE):
+def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool, size: int = SIZE, quantize_key: str | None = None):
     out_stem.parent.mkdir(parents=True, exist_ok=True)
     rgba = chroma_key_magenta(img)
+    if quantize_key:
+        rgba = apply_quantize(rgba, quantize_key)
     if is_sheet:
         n = 4
         w = rgba.width // n
@@ -70,7 +72,16 @@ def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool, size: int = SI
         rgba.save(f"{out_stem}_0.png", format="PNG")
 
 
-def process(path: Path, rel_dir: str, size: int) -> list[str]:
+PALETTE_ALIAS = {"ruin": "frozen"}  # 游戏主题 → palettes.yaml key
+
+
+def apply_quantize(rgba: Image.Image, key: str) -> Image.Image:
+    """量化到主题调色板 (post_process 已保 alpha; 抠图后调用)"""
+    from post_process import load_palette, quantize_to_palette
+    return quantize_to_palette(rgba, load_palette(key))
+
+
+def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> list[str]:
     """处理单个文件 → 输出文件列表"""
     name = path.stem
     img = Image.open(path).convert("RGBA")
@@ -79,6 +90,8 @@ def process(path: Path, rel_dir: str, size: int) -> list[str]:
     if rel_dir == "world":
         # 瓦片: 整图抠图缩放到 size (不裁 bbox, 保 seamless)
         rgba = chroma_key_magenta(img)
+        if quantize_key:
+            rgba = apply_quantize(rgba, quantize_key)
         resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
         rgba = rgba.resize((size, size), resample)
         out = ATLAS_IN / "world" / f"{name}.png"
@@ -92,7 +105,7 @@ def process(path: Path, rel_dir: str, size: int) -> list[str]:
         for stale in ATLAS_IN.glob(f"monsters/{name}_*.png"):
             stale.unlink()
         out = ATLAS_IN / "monsters" / name
-        save_frames(img, out, is_sheet, size)
+        save_frames(img, out, is_sheet, size, quantize_key)
         out_done.extend(str(p) for p in sorted(ATLAS_IN.glob(f"monsters/{name}_*.png")))
     elif rel_dir == "characters":
         # 站立单帧 → 以基础名保存 (游戏 pickPlayerSprite 用 sorceress_stand 无后缀)
@@ -100,13 +113,15 @@ def process(path: Path, rel_dir: str, size: int) -> list[str]:
             for stale in ATLAS_IN.glob(f"characters/{name}.png"):
                 stale.unlink()
             rgba = bbox_crop(chroma_key_magenta(img), size)
+            if quantize_key:
+                rgba = apply_quantize(rgba, quantize_key)
             rgba.save(ATLAS_IN / "characters" / f"{name}.png", format="PNG")
             out_done.append(f"characters/{name}.png")
         else:
             # _walk sheet → _0..3
             for stale in ATLAS_IN.glob(f"characters/{name}_*.png"):
                 stale.unlink()
-            save_frames(img, ATLAS_IN / "characters" / name, True, size)
+            save_frames(img, ATLAS_IN / "characters" / name, True, size, quantize_key)
             out_done.extend(str(p) for p in sorted(ATLAS_IN.glob(f"characters/{name}_*.png")))
     return out_done
 
@@ -183,6 +198,7 @@ def main():
     parser.add_argument("--size", type=int, default=SIZE, help=f"输出贴图尺寸, 默认 {SIZE} (小怪/瓦片按显示尺寸烘焙, 如 --size 32)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--check", action="store_true", help="只质检不导入 (品红底/主体/色数/无缝)")
+    parser.add_argument("--quantize", metavar="KEY", help="量化到调色板 (forest/desert/frozen/void; 怪物目录自动按主题, 如 --quantize void)")
     args = parser.parse_args()
 
     # 质检模式: 遍历 import/ 全部 PNG, 只报告问题
@@ -217,7 +233,12 @@ def main():
                 total += 1
                 continue
             try:
-                outs = process(p, rel, args.size)
+                # 量化 key: 显式 --quantize 优先; 怪物目录按主题自动 (ruin→frozen)
+                qkey = args.quantize
+                if qkey is None and rel == "monsters" and len(p.relative_to(IMPORT).parts) > 1:
+                    theme = p.relative_to(IMPORT).parts[1]
+                    qkey = PALETTE_ALIAS.get(theme, theme)
+                outs = process(p, rel, args.size, qkey)
                 print(f"✓ {p.relative_to(IMPORT)} -> " + ", ".join(o.split('/')[-1] for o in outs))
                 total += len(outs)
             except Exception as e:  # noqa: BLE001

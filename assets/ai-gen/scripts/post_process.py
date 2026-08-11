@@ -65,12 +65,12 @@ def quantize_to_palette(img: Image.Image, palette_rgb: list[tuple]) -> Image.Ima
         pal_data.extend([0, 0, 0])
     palette_img.putpalette(pal_data)
 
-    # 2. 转 RGBA → 量化
-    if img.mode != "RGBA":
-        img = img.convert("RGBA")
-
-    # 先量化到 16 色,再 palettize
-    quantized = img.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
+    # 2. 保留 alpha, 只量化 RGB 通道 (PIL quantize 不支持 RGBA)
+    alpha = img.getchannel("A") if img.mode in ("RGBA", "LA") else None
+    rgb = img.convert("RGB")
+    quantized = rgb.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG).convert("RGB")
+    if alpha is not None:
+        quantized.putalpha(alpha)
     return quantized
 
 
