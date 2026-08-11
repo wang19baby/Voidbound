@@ -241,6 +241,50 @@
         "npm test 新增 定价/重铸 纯函数用例; cargo 5/5; build 绿"
       ],
       "passes": true
+    },
+    {
+      "id": "MM-AW1",
+      "title": "A-W1 玩法骨架 — 五层增强层/营地三型/门结算/存档v10",
+      "description": "增强层(白怪30% 1.4×+光环×1); 光环×5(狂暴/加速/石肤/回复/元素)半径140; 营地三型(光环/抱团/双核)环绕生成; Boss 死亡位生门 V 交互[回城/继续]; save v10 mode 字段+迁移",
+      "acceptanceCriteria": [
+        "npm test 645 例全绿",
+        "cargo test 19 例全绿包含 v10 迁移",
+        "增强/光环/营地/门测试在 monsterData.test.ts"
+      ],
+      "passes": true
+    },
+    {
+      "id": "MM-AW2",
+      "title": "A-W2 三模式地图 — 布局选择/出生点/密度梯度/地标雕刻",
+      "description": "newgame 屏 [M] 第三维 linear/gauntlet/extract; 出生点按模式(线性左/高级角/挑战中央); 密度 18/22/16%; 地标雕刻(线性主轴走廊+死路pocket / 高级中央竞技场环墙+四角领主区 / 挑战中央出生区); 存档 v10 mode 持久化还原",
+      "acceptanceCriteria": [
+        "npm test 713 例全绿 (模式/出生点/密度/雕刻)",
+        "cargo test 19 例全绿",
+        "三个模式出生点/密度单测在 run.test.ts"
+      ],
+      "passes": true
+    },
+    {
+      "id": "MM-AW3",
+      "title": "A-W3 机制包 — 怪物机制/移动AI/Boss技能",
+      "description": "精英/领主 5 机制(护盾周期/自爆/荆棘反伤/诅咒减速/死亡触发爆裂分裂毒池); 领主 4 移动AI(侧移/扑击预警/遁地无敌/残血逃窜); Boss 5 技能(螺旋/激光/新星/召精英/狂暴), spawn 随机1与原技能组合",
+      "acceptanceCriteria": [
+        "npm test 718 例全绿 (机制/移动AI/Boss技能)",
+        "cargo test 19 例全绿",
+        "机制反制可读: 护盾破盾窗口/扑击预警圈/土痕/毒池可见"
+      ],
+      "passes": true
+    },
+    {
+      "id": "MM-AW4",
+      "title": "A-W4 挑战模式多 Boss — 四元素外向 Boss + 中央最终",
+      "description": "extract 模式清场 → 四方向各 1 元素 Boss (池内随机+精英倍率×3+随机元素+skill3) → 全清后中央主题最终 Boss; RunState.bossStage 状态机; 非 extract 保持单 Boss",
+      "acceptanceCriteria": [
+        "npm test 718 例全绿 (外层 alive 驱动阶段)",
+        "cargo test 19 例全绿",
+        "挑战模式两段 Boss 触发逻辑在 main.ts"
+      ],
+      "passes": true
     }
   ]
 }
