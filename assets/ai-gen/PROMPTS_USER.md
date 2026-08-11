@@ -12,7 +12,7 @@
 | 画布 | 1024×1024,正方形 |
 | 背景 | **纯品红 #FF00FF**(我抠透明底,主体绝不能带品红) |
 | 站立单帧 | 主体 512×512 居中占画布(四周留品红边,我好裁) |
-| 行走 sheet | 4 帧横向一行,每帧 **256×256**,等宽无空隙,共 1024×256;角色每帧居中、面朝下 |
+| 行走 sheet | 4 帧横向一行,每帧 **256×256**,**帧与帧之间留明显品红间隔(互不接触)**,共 ~1024×256;角色每帧居中、面朝下 |
 | 风格 | 高清 2D 游戏美术:细节清晰、色彩饱和、柔和光影渐变、平滑抗锯齿边缘、高级奇幻 RPG 质感 |
 
 ## 强制高清块(所有提示词都追加)
@@ -45,7 +45,7 @@ strong build, battle-scarred. {高清块}
 **行走** → `import/characters/barbarian_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: muscular male barbarian warrior, wild unkempt hair,
@@ -64,7 +64,7 @@ golden winged helmet with plume, divine light aura. {高清块}
 **行走** → `import/characters/paladin_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: holy paladin knight in radiant golden armor,
@@ -83,7 +83,7 @@ around the crystal head, mystical atmosphere. {高清块}
 **行走** → `import/characters/sorceress_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: elegant female sorceress in blue and purple robes,
@@ -102,7 +102,7 @@ faint green ghost energy wisps. {高清块}
 **行走** → `import/characters/necromancer_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: sinister necromancer in tattered dark purple robes,
@@ -121,7 +121,7 @@ sharp-eyed scout. {高清块}
 **行走** → `import/characters/ranger_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: agile female ranger archer in green leather armor,
@@ -140,7 +140,7 @@ silent killer. {高清块}
 **行走** → `import/characters/assassin_walk.png`
 ```
 Top-down view 2D game character sprite sheet, 4-frame walk animation in one row,
-each frame exactly 256x256 px, frames evenly spaced with no gaps,
+four distinct frames in a single horizontal row, each frame exactly 256x256 px, generous solid magenta spacing between frames, frames must not touch or overlap each other,
 character centered in every frame, facing down.
 Frame-by-frame poses, no two frames identical: frame 1 = left foot stepping forward, left arm swinging back; frame 2 = feet together passing stance, body slightly lowered; frame 3 = right foot stepping forward, right arm swinging back; frame 4 = feet together passing stance, body slightly raised, clear stride rhythm across all four frames.
 Character: shadowy assassin in black leather armor,

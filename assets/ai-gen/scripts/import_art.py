@@ -55,20 +55,55 @@ def bbox_crop(img: Image.Image, size: int = SIZE) -> Image.Image:
     return canvas.resize((size, size), resample)
 
 
+def split_frames(rgba: Image.Image, expect: int = 4) -> list[Image.Image]:
+    """按品红分隔列拆分 sheet:
+    - 抠图后透明列 = 分隔符; 只认宽度 >=4px 的分隔 (忽略腿缝等窄孔)
+    - 内容块数量合理时按真实边界切; 否则回退等分 expect 份 (模型贴死帧的兜底)
+    """
+    w, h = rgba.size
+    alpha = rgba.getchannel("A")
+    col = [sum(1 for y in range(h) if alpha.getpixel((x, y)) > 8) for x in range(w)]
+    # 分隔符段 (全透明列)
+    sep: list[tuple[int, int]] = []
+    x = 0
+    while x < w:
+        if col[x] == 0:
+            x0 = x
+            while x < w and col[x] == 0:
+                x += 1
+            if x - x0 >= 4:
+                sep.append((x0, x))
+        else:
+            x += 1
+    if sep:
+        # 内容块 = 分隔符之间; 过滤过窄块 (<16px)
+        bounds = []
+        prev = 0
+        for s0, s1 in sep:
+            if s0 - prev >= 16:
+                bounds.append((prev, s0))
+            prev = s1
+        if w - prev >= 16:
+            bounds.append((prev, w))
+        if 2 <= len(bounds) <= expect + 2:
+            return [rgba.crop((x0, 0, x1, h)) for x0, x1 in bounds]
+    # 回退等分
+    fw = w // expect
+    return [rgba.crop((i * fw, 0, (i + 1) * fw, h)) for i in range(expect)]
+
+
 def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool, size: int = SIZE, quantize_key: str | None = None):
     out_stem.parent.mkdir(parents=True, exist_ok=True)
     rgba = chroma_key_magenta(img)
     if quantize_key:
         rgba = apply_quantize(rgba, quantize_key)
     if is_sheet:
-        n = 4
-        w = rgba.width // n
-        for i in range(n):
-            f = rgba.crop((i * w, 0, (i + 1) * w, rgba.height))
-            f = bbox_crop(f)
+        frames = split_frames(rgba)
+        for i, f in enumerate(frames[:4]):
+            f = bbox_crop(f, size)
             f.save(f"{out_stem}_{i}.png", format="PNG")
     else:
-        rgba = bbox_crop(rgba)
+        rgba = bbox_crop(rgba, size)
         rgba.save(f"{out_stem}_0.png", format="PNG")
 
 
@@ -173,8 +208,7 @@ def check(path: Path, rel_dir: str) -> list[str]:
             issues.append("行走图宽高比 <1.8, 未识别为 4 帧 sheet")
         if is_sheet:
             # 相邻帧雷同检测: 各帧平均通道差 <5 → 警告 (模型常复制帧)
-            fw = w // 4
-            frames = [img.crop((i * fw, 0, (i + 1) * fw, h)) for i in range(4)]
+            frames = [f.convert("RGB") for f in split_frames(img.convert("RGBA"))]
             for i in range(3):
                 a, b = frames[i], frames[i + 1]
                 da = list(a.getdata()); db = list(b.getdata())
