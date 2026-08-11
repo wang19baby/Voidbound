@@ -186,6 +186,8 @@ export interface RunState {
   best: Partial<Record<Difficulty, number>>;
   /** A-W1 门结算: Boss 死亡位置生门; 交互 → 面板 [回城/继续]; 持续到本局结束 */
   portal?: { x: number; y: number; bossType: string; used: boolean };
+  /** A-W4 挑战模式 Boss 阶段: 0=未召 / 1=四元素外向 Boss 在场 / 2=中央最终 Boss 在场 */
+  bossStage: 0 | 1 | 2;
 }
 
 export type RunPhase = 'clearing' | 'boss' | 'won';
@@ -204,6 +206,7 @@ export function emptyRun(theme: Theme): RunState {
     bossAlive: false, bossKilled: false, victoryShown: false,
     t0: performance.now(), timeSec: 0, kills: 0, best: {}, collectedLoot: 0,
     portal: undefined,
+    bossStage: 0,
   };
 }
 

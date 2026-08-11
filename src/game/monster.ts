@@ -185,6 +185,7 @@ export function spawnRunPool(state: GameState): void {
   state.run.bossKilled = false;
   state.run.victoryShown = false;
   state.run.portal = undefined;
+  state.run.bossStage = 0;
   state.run.kills = 0;
   state.run.collectedLoot = 0;
   state.run.theme = state.theme;

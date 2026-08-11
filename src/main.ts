@@ -19,8 +19,9 @@ import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
-import { ELEMENT_DEFS } from './game/element';
-import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
+import { ELEMENT_DEFS, randomElement } from './game/element';
+import { rollBossSkill3 } from './game/mech';
+import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
 import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, type EquipType, type Equipment, type MaterialId } from './game/equipment';
@@ -1115,16 +1116,60 @@ function loopImpl(now: number) {
   if (state.screen === 'dungeon') {
     const ph = runPhase(state.run.alive, state.run.bossAlive, state.run.bossKilled);
     if (ph === 'boss') {
-      const bossType = THEME_BOSS[state.run.theme];
-      const boss = spawnMonster(state, bossType);
-      state.monsters.push(boss);
-      state.run.bossAlive = true;
-      const bossName = MONSTER_DEFS[bossType].type;
-      const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
-      pushToast(state, `${elemTag}BOSS 出现: ${bossName}`, '#ff9530');
-      playSfxClient('boss_roar');  // OPT-025
-      state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);  // OPT-026
-      inf('world', `BOSS 出现: ${bossName} (${state.run.theme})`);
+      const isExtract = state.run.mode === 'extract';
+      if (isExtract && state.run.bossStage === 0) {
+        // A-W4 挑战模式: 四方向区各 1 元素 Boss (池内随机 4 只, 强元素化) → 全清后中央最终 Boss
+        const pool = THEME_MONSTER_POOL[state.run.theme];
+        for (let i = 0; i < 4; i++) {
+          const t = pool[Math.floor(Math.random() * pool.length)];
+          const ob = spawnMonster(state, t);
+          ob.elite = true;           // 外层 Boss 级: 精英倍率 + 随机元素
+          ob.elementId = randomElement();
+          ob.hue = ob.elementId ? ELEMENT_DEFS[ob.elementId].hue : 0;
+          ob.size = { w: ob.size.w * 1.5, h: ob.size.h * 1.5 };
+          ob.hp = Math.round(ob.hp * 3);
+          ob.maxHp = ob.hp;
+          ob.skill3 = rollBossSkill3();  // A-W3 技能池
+          // 分置四方向 (外→内)
+          const a = (Math.PI / 2) * i;
+          ob.pos = {
+            x: state.player.pos.x + Math.cos(a) * 1400 + (Math.random() * 300 - 150),
+            y: state.player.pos.y + Math.sin(a) * 1400 + (Math.random() * 300 - 150),
+          };
+          state.monsters.push(ob);
+          const elemTag = ob.elementId ? `[${ELEMENT_DEFS[ob.elementId].name}] ` : '';
+          pushToast(state, `${elemTag}元素 Boss 出现: ${t} (${i + 1}/4)`, '#ff9530');
+        }
+        state.run.bossStage = 1;
+        state.run.bossAlive = false;  // 4 只外层 Boss 走 alive-- (死后触发下一阶段)
+        state.run.alive = 4;          // 4 只外层 Boss 计入 alive (killMonster 递减)
+        playSfxClient('boss_roar');
+        inf('world', `extract: 4 outer boss summoned (${state.run.theme})`);
+      } else if (isExtract && state.run.bossStage === 1) {
+        // 4 外层 Boss 全清 → 中央最终主题 Boss
+        const bossType = THEME_BOSS[state.run.theme];
+        const boss = spawnMonster(state, bossType);
+        state.monsters.push(boss);
+        state.run.bossStage = 2;
+        state.run.bossAlive = true;
+        const bossName = MONSTER_DEFS[bossType].type;
+        const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
+        pushToast(state, `${elemTag}最终 BOSS: ${bossName}`, '#ffd64a');
+        playSfxClient('boss_roar');
+        state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);
+        inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
+      } else if (!isExtract) {
+        const bossType = THEME_BOSS[state.run.theme];
+        const boss = spawnMonster(state, bossType);
+        state.monsters.push(boss);
+        state.run.bossAlive = true;
+        const bossName = MONSTER_DEFS[bossType].type;
+        const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
+        pushToast(state, `${elemTag}BOSS 出现: ${bossName}`, '#ff9530');
+        playSfxClient('boss_roar');  // OPT-025
+        state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);  // OPT-026
+        inf('world', `BOSS 出现: ${bossName} (${state.run.theme})`);
+      }
     } else if (ph === 'won' && !state.run.victoryShown) {
       state.run.victoryShown = true;
       state.run.timeSec = Math.max(0, (performance.now() - state.run.t0) / 1000);
@@ -1634,6 +1679,7 @@ function ensureDungeonRun(state: GameState): void {
     state.run.bossAlive = state.monsters.some(m => MONSTER_DEFS[m.type].boss);
     state.run.bossKilled = false;
     state.run.victoryShown = false;
+    state.run.bossStage = 0;
     state.run.t0 = performance.now();
   }
 }

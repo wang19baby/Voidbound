@@ -74,6 +74,14 @@ check('高级中央环墙存在', [1, CHUNK_BLOCKS - 2].some(r => [1, CHUNK_BLOC
 const exWalls = generateChunkWalls(midC, midR, 0.16, 'extract');
 check('挑战中央清空', [2, 3, 4, 5].every(r => [2, 3, 4, 5].every(c => !chunkHasWall(exWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
 
+// === A-W4 挑战多 Boss 阶段驱动 (alive 计数驱动阶段迁移) ===
+// 外层 Boss spawn 后 alive=4; 依次击杀 → ph='boss' 于 0; bossStage 1→2 由 main 处理
+eq('4 外层→alive4 clearing', runPhase(4, false, false), 'clearing');
+eq('3 外层→clearing', runPhase(3, false, false), 'clearing');
+eq('0 外层→boss(段1触发)', runPhase(0, false, false), 'boss');
+eq('中央 Boss 在场→clearing', runPhase(0, true, false), 'clearing');
+eq('中央已杀→won', runPhase(0, true, true), 'won');
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
