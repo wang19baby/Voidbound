@@ -14,7 +14,8 @@ export function uploadRgbaTexture(
   const tex = gl.createTexture();
   if (!tex) throw new Error('createTexture 失败');
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  // 画布顶部 = 纹理顶部: FLIP_Y 让行 0 到 v=1, 否则整图上下颠倒 (HD 艺术接入后暴露)
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.texImage2D(
     gl.TEXTURE_2D,
     0,
