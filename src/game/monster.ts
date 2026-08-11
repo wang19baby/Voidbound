@@ -140,6 +140,8 @@ export function spawnRunPool(state: GameState): void {
   state.run.kills = 0;
   state.run.collectedLoot = 0;
   state.run.theme = state.theme;
+  // M3 元素地图: 50% 概率本局整体元素染色 (地板/墙/装饰 + Boss 变体)
+  state.run.element = Math.random() < 0.5 ? randomElement() : undefined;
   state.run.t0 = performance.now();
   inf('world', `run pool spawned: ${RUN_POOL_SIZE} (theme=${state.theme})`);
 }
@@ -181,6 +183,8 @@ export interface Monster {
   lord: boolean;
   /** 元素色相旋转 (度): def.element 或领主随机元素 */
   hue: number;
+  /** 元素 id (绘制/文案用) */
+  elementId?: ElementId;
 }
 
 let nextMonsterId = 1;
@@ -189,10 +193,10 @@ let nextMonsterId = 1;
 export function spawnMonster(state: GameState, type: MonsterType): Monster {
   const def = MONSTER_DEFS[type];
   const lvScale = levelMonsterScale(state.player.level);
-  // 领主 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5; 精英仅非领主时 roll
+  // 领主 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5; 精英仅非领主时 roll; Boss 也滚元素变体
   const isLord = !def.boss && Math.random() < LORD_CHANCE;
   const elite = !def.boss && !isLord && rollElite(Math.random);
-  const element: ElementId | undefined = def.element ?? (isLord ? randomElement() : undefined);
+  const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
   const baseHp = Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * lvScale);
@@ -235,6 +239,7 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       elite,
       lord: isLord,
       hue,
+      elementId: element,
     };
     return m;
   }

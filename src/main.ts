@@ -18,6 +18,7 @@ import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
+import { ELEMENT_DEFS } from './game/element';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, type EquipType, type Equipment, type MaterialId } from './game/equipment';
@@ -1071,10 +1072,12 @@ function loopImpl(now: number) {
     const ph = runPhase(state.run.alive, state.run.bossAlive, state.run.bossKilled);
     if (ph === 'boss') {
       const bossType = THEME_BOSS[state.run.theme];
-      state.monsters.push(spawnMonster(state, bossType));
+      const boss = spawnMonster(state, bossType);
+      state.monsters.push(boss);
       state.run.bossAlive = true;
       const bossName = MONSTER_DEFS[bossType].type;
-      pushToast(state, `BOSS 出现: ${bossName}`, '#ff9530');
+      const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
+      pushToast(state, `${elemTag}BOSS 出现: ${bossName}`, '#ff9530');
       playSfxClient('boss_roar');  // OPT-025
       state.cameraShake = Math.min(16, (state.cameraShake ?? 0) + 8);  // OPT-026
       inf('world', `BOSS 出现: ${bossName} (${state.run.theme})`);
@@ -1898,12 +1901,14 @@ function drawFrameToScreen() {
   const t1x = Math.min(Math.floor(WORLD_W / FLOOR_TILE), Math.ceil((state.camera.x + state.viewport.w) / FLOOR_TILE));
   const t1y = Math.min(Math.floor(WORLD_H / FLOOR_TILE), Math.ceil((state.camera.y + state.viewport.h) / FLOOR_TILE));
   const floorBase = `floor_${state.theme}`;
+  // M3 元素地图: 本局元素色相旋转整图 (地板/墙/装饰)
+  const runHue = state.run.element ? ELEMENT_DEFS[state.run.element].hue : 0;
   for (let ty = t0y; ty < t1y; ty++) {
     for (let tx = t0x; tx < t1x; tx++) {
       // 位置哈希 → 10% 微暗增深度 (HD 纹理自带细节, 不需混铺)
       const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
       const r = (h % 1000) / 1000;
-      const opt: { color?: [number, number, number] } = r > 0.9 ? { color: [0.9, 0.9, 0.96] } : {};
+      const opt: { color?: [number, number, number]; hue?: number } = r > 0.9 ? { color: [0.9, 0.9, 0.96], hue: runHue } : { hue: runHue };
       drawSprite(gl, quad, res, { x: tx * FLOOR_TILE - state.camera.x, y: ty * FLOOR_TILE - state.camera.y }, { w: FLOOR_TILE, h: FLOOR_TILE }, 'world', floorBase, opt);
     }
   }
@@ -1914,7 +1919,7 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, w.pos);
     if (sp.x + w.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + w.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, w.size, 'world', wallName);
+    drawSprite(gl, quad, res, sp, w.size, 'world', wallName, runHue ? { hue: runHue } : undefined);
   }
 
   // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞), 墙与地板之间
@@ -1922,7 +1927,8 @@ function drawFrameToScreen() {
     const sp = worldToScreen(state, d.pos);
     if (sp.x + 64 < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + 64 < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, d.tint ? { color: d.tint } : {});
+    const dopt: { color?: [number, number, number]; hue?: number } = d.tint ? { color: d.tint, hue: runHue } : { hue: runHue };
+    drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, dopt);
   }
 
   // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上

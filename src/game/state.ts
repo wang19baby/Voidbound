@@ -10,6 +10,7 @@ import type { SkillSlot } from './skill';
 import type { Difficulty } from './difficulty';
 import type { Equipment, EquipType } from './equipment';
 import type { ClassId } from './class';
+import type { ElementId } from './element';
 
 export interface Camera {
   x: number;
@@ -166,6 +167,8 @@ export interface RunState {
   timeSec: number;
   /** 本局击杀数 */
   kills: number;
+  /** 本局元素染色 (M3): 地板/墙/装饰整图色相旋转; undefined = 原色主题 */
+  element?: ElementId;
   /** 通关时收集的地上掉落数 (M5 实测修复: 胜利屏显示) */
   collectedLoot: number;
   /** 各难度最佳通关秒数 (账号层, OPT-015 持久化) */
