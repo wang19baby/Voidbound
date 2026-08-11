@@ -13,6 +13,7 @@ import { updatePlayer, castFireball, usePotion, startDodge } from './game/player
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { getActiveWalls, getActiveDecor, type Wall } from './game/world';
 import { drawSprite, setViewportUniform } from './render/draw';
+import { resolveSprite } from './render/resources';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
@@ -2000,8 +2001,10 @@ function drawFrameToScreen() {
     const bobH = m.size.h * (1 - bob * 0.08);
     const sz = charging ? { w: bobW * 1.15, h: bobH * 1.15 } : { w: bobW, h: bobH };
     const drawColor: [number, number, number] | undefined = charging ? [1.5, 1.25, 1.0] : color;
-    const monsterSprite = `${def.sprite}_${m.walkFrame}`;
-    drawSprite(gl, quad, res, sp, sz, 'monsters', monsterSprite, { color: drawColor });
+    const want = `${def.sprite}_${m.walkFrame}`;
+    // 缺帧回退 (旧 2 帧画: 2/3 → 0/1), 新 4 帧画到即用
+    const frameSprite = resolveSprite(res, 'monsters', want) ? want : `${def.sprite}_${m.walkFrame % 2}`;
+    drawSprite(gl, quad, res, sp, sz, 'monsters', frameSprite, { color: drawColor });
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
       const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;

@@ -156,8 +156,8 @@ export interface Monster {
   /** 攻击冷却 (避免每帧都扣血) */
   attackCd: number;
   hitFlash: number;          // 受击闪光剩余秒数
-  /** walk 动画 (每 0.3s 切换 0/1) */
-  walkFrame: 0 | 1;
+  /** walk 动画 (每 0.15s 前进一帧, 0~3 循环; 图集缺帧时绘制回退 _0) */
+  walkFrame: number;
   walkT: number;             // 倒计时 (s)
   /** 行为计时 (OPT-021/022): >0 = 冲撞/冲锋窗口; <=0 = 待触发 */
   aiT: number;
@@ -301,11 +301,11 @@ export function updateMonsters(state: GameState, dt: number): void {
     if (m.attackCd > 0) m.attackCd -= dt;
     if (m.hitFlash > 0) m.hitFlash -= dt;
 
-    // walk 动画
+    // walk 动画 (4 帧, 每帧 0.15s → 全周期 0.6s)
     m.walkT -= dt;
     if (m.walkT <= 0) {
-      m.walkFrame = m.walkFrame === 0 ? 1 : 0;
-      m.walkT = 0.3;
+      m.walkFrame = (m.walkFrame + 1) % 4;
+      m.walkT = 0.15;
     }
 
     // 燃烧 DOT (US-016): 每 0.5s 跳一次
