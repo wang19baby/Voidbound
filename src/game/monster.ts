@@ -70,9 +70,9 @@ export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
   ice_wisp:   { type: 'ice_wisp',   sprite: 'ghost',  size: { w: 32, h: 32 }, hp: 60,  speed: 90,  aggroRange: 230, attackRange: 26, contactDmg: 6,  score: 20, rangedCooldown: 1.6, res: { ice: 45, fire: -25 }, tint: [0.45, 0.95, 1] },
   void_crawler:{ type: 'void_crawler', sprite: 'worm', size: { w: 40, h: 40 }, hp: 110, speed: 70, aggroRange: 220, attackRange: 34, contactDmg: 11, score: 32, ai: 'dash', res: { physical: 30, shadow: 25 }, tint: [0.5, 0.3, 0.9] },
   // === US-013 主题 Boss (通用二阶段机制) ===
-  war_pharaoh:  { type: 'war_pharaoh',  sprite: 'war_pharaoh', size: { w: 56, h: 56 }, hp: 620, speed: 30,  aggroRange: 320, attackRange: 64, contactDmg: 12, score: 170, boss: true, rangedCooldown: 2.5, res: { fire: 30, physical: 20 }, bossSkill: 'ring' } // HD 新画,
+  war_pharaoh:  { type: 'war_pharaoh',  sprite: 'war_pharaoh', size: { w: 56, h: 56 }, hp: 620, speed: 30,  aggroRange: 320, attackRange: 64, contactDmg: 12, score: 170, boss: true, rangedCooldown: 2.5, res: { fire: 30, physical: 20 }, bossSkill: 'ring' }, // HD 新画
   frost_lich:   { type: 'frost_lich',   sprite: 'frost_lich', size: { w: 56, h: 56 }, hp: 700, speed: 36,  aggroRange: 340, attackRange: 56, contactDmg: 15, score: 190, boss: true, rangedCooldown: 2.0, res: { fire: 30, physical: 40, ice: 45 }, bossSkill: 'summon' }, // HD 新画
-  void_overlord:{ type: 'void_overlord', sprite: 'void_overlord', size: { w: 72, h: 72 }, hp: 1300, speed: 26, aggroRange: 360, attackRange: 88, contactDmg: 20, score: 270, boss: true, rangedCooldown: 2.4, res: { fire: 50, physical: 45, shadow: 30 }, bossSkill: 'charge' } // HD 新画,
+  void_overlord:{ type: 'void_overlord', sprite: 'void_overlord', size: { w: 72, h: 72 }, hp: 1300, speed: 26, aggroRange: 360, attackRange: 88, contactDmg: 20, score: 270, boss: true, rangedCooldown: 2.4, res: { fire: 50, physical: 45, shadow: 30 }, bossSkill: 'charge' }, // HD 新画
 };
 
 /** 主题 Boss (US-013): 每 10 连杀召唤 */
