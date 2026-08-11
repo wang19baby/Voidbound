@@ -1976,10 +1976,11 @@ function drawFrameToScreen() {
     if (sp.x + m.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + m.size.h < 0 || sp.y > state.viewport.h) continue;
     const def = MONSTER_DEFS[m.type];
+    // HD 主题专属图: <type>_<theme>_<frame> (同名怪按主题分流, 不再互相覆盖)
     const color: [number, number, number] | undefined =
       m.elite ? [1, 0.85, 0.25]
       : m.hitFlash > 0 ? [1, 0.3, 0.3]
-      : def.tint;
+      : undefined; // 主题专属图自带配色, 不再套 def.tint 二次染色
     // V1 动画: 2 帧 + 正弦挤压 (移动时 4 步行走感, 静止时轻微呼吸)
     const moving = Math.hypot(m.vel.x, m.vel.y) > 1;
     const bob = Math.sin(m.walkT * (Math.PI * 2) / 0.6) * (moving ? 1 : 0.25);
@@ -1992,9 +1993,14 @@ function drawFrameToScreen() {
     const bobH = m.size.h * (1 - bob * 0.08);
     const sz = charging ? { w: bobW * 1.15, h: bobH * 1.15 } : { w: bobW, h: bobH };
     const drawColor: [number, number, number] | undefined = charging ? [1.5, 1.25, 1.0] : color;
-    const want = `${def.sprite}_${m.walkFrame}`;
+    const runTheme = state.run?.theme ?? state.theme;
+    const want = `${m.type}_${runTheme}_${m.walkFrame}`;
     // 缺帧回退 (旧 2 帧画: 2/3 → 0/1), 新 4 帧画到即用
-    const frameSprite = resolveSprite(res, 'monsters', want) ? want : `${def.sprite}_${m.walkFrame % 2}`;
+    const frameSprite = resolveSprite(res, 'monsters', want)
+      ? want
+      : resolveSprite(res, 'monsters', `${m.type}_${runTheme}_${m.walkFrame % 2}`)
+        ? `${m.type}_${runTheme}_${m.walkFrame % 2}`
+        : `${def.sprite}_${m.walkFrame % 2}`;
     drawSprite(gl, quad, res, sp, sz, 'monsters', frameSprite, { color: drawColor, hue: m.hue ?? 0 });
     // 领主标记 (M3): HP 条上方紫色横条
     if (m.lord) {

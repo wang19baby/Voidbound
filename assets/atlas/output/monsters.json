@@ -1,85 +1,25 @@
 {
   "atlas": "monsters",
   "size": {
-    "width": 922,
-    "height": 68
+    "width": 662,
+    "height": 794
   },
-  "sprite_count": 22,
+  "sprite_count": 112,
   "sprites": [
     {
-      "name": "bat",
-      "file": "bat.png",
+      "name": "bat_forest_0",
+      "file": "bat_forest_0.png",
       "x": 2,
       "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     },
     {
-      "name": "bat_0",
-      "file": "bat_0.png",
-      "x": 38,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "bat_1",
-      "file": "bat_1.png",
-      "x": 74,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "bee_0",
-      "file": "bee_0.png",
-      "x": 110,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "bee_1",
-      "file": "bee_1.png",
-      "x": 146,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "eyeball_0",
-      "file": "eyeball_0.png",
-      "x": 182,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "eyeball_1",
-      "file": "eyeball_1.png",
-      "x": 218,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "frost_lich_0",
-      "file": "frost_lich_0.png",
-      "x": 254,
+      "name": "bat_forest_1",
+      "file": "bat_forest_1.png",
+      "x": 70,
       "y": 2,
       "frame_width": 64,
       "frame_height": 64,
@@ -87,29 +27,9 @@
       "is_animated": false
     },
     {
-      "name": "ghost_0",
-      "file": "ghost_0.png",
-      "x": 322,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "ghost_1",
-      "file": "ghost_1.png",
-      "x": 358,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "pumpking_0",
-      "file": "pumpking_0.png",
-      "x": 394,
+      "name": "bat_forest_2",
+      "file": "bat_forest_2.png",
+      "x": 138,
       "y": 2,
       "frame_width": 64,
       "frame_height": 64,
@@ -117,69 +37,9 @@
       "is_animated": false
     },
     {
-      "name": "slime",
-      "file": "slime.png",
-      "x": 462,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "slime_0",
-      "file": "slime_0.png",
-      "x": 498,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "slime_1",
-      "file": "slime_1.png",
-      "x": 534,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "small_worm",
-      "file": "small_worm.png",
-      "x": 570,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "small_worm_0",
-      "file": "small_worm_0.png",
-      "x": 606,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "small_worm_1",
-      "file": "small_worm_1.png",
-      "x": 642,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "void_overlord_0",
-      "file": "void_overlord_0.png",
-      "x": 678,
+      "name": "bat_forest_3",
+      "file": "bat_forest_3.png",
+      "x": 206,
       "y": 2,
       "frame_width": 64,
       "frame_height": 64,
@@ -187,9 +47,9 @@
       "is_animated": false
     },
     {
-      "name": "war_pharaoh_0",
-      "file": "war_pharaoh_0.png",
-      "x": 746,
+      "name": "bee_desert_0",
+      "file": "bee_desert_0.png",
+      "x": 274,
       "y": 2,
       "frame_width": 64,
       "frame_height": 64,
@@ -197,32 +57,1072 @@
       "is_animated": false
     },
     {
-      "name": "worm",
-      "file": "worm.png",
-      "x": 814,
+      "name": "bee_desert_1",
+      "file": "bee_desert_1.png",
+      "x": 342,
       "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     },
     {
-      "name": "worm_0",
-      "file": "worm_0.png",
-      "x": 850,
+      "name": "bee_desert_2",
+      "file": "bee_desert_2.png",
+      "x": 410,
       "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     },
     {
-      "name": "worm_1",
-      "file": "worm_1.png",
+      "name": "bee_desert_3",
+      "file": "bee_desert_3.png",
+      "x": 478,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_ruin_0",
+      "file": "bloat_eye_ruin_0.png",
+      "x": 546,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_ruin_1",
+      "file": "bloat_eye_ruin_1.png",
+      "x": 614,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_ruin_2",
+      "file": "bloat_eye_ruin_2.png",
+      "x": 682,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_ruin_3",
+      "file": "bloat_eye_ruin_3.png",
+      "x": 750,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_void_0",
+      "file": "bloat_eye_void_0.png",
+      "x": 818,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_void_1",
+      "file": "bloat_eye_void_1.png",
       "x": 886,
       "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_void_2",
+      "file": "bloat_eye_void_2.png",
+      "x": 954,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "bloat_eye_void_3",
+      "file": "bloat_eye_void_3.png",
+      "x": 1022,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_desert_0",
+      "file": "direwolf_desert_0.png",
+      "x": 1090,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_desert_1",
+      "file": "direwolf_desert_1.png",
+      "x": 1158,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_desert_2",
+      "file": "direwolf_desert_2.png",
+      "x": 1226,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_desert_3",
+      "file": "direwolf_desert_3.png",
+      "x": 1294,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_void_0",
+      "file": "direwolf_void_0.png",
+      "x": 1362,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_void_1",
+      "file": "direwolf_void_1.png",
+      "x": 1430,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_void_2",
+      "file": "direwolf_void_2.png",
+      "x": 1498,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "direwolf_void_3",
+      "file": "direwolf_void_3.png",
+      "x": 1566,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_desert_0",
+      "file": "eyeball_desert_0.png",
+      "x": 1634,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_desert_1",
+      "file": "eyeball_desert_1.png",
+      "x": 1702,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_desert_2",
+      "file": "eyeball_desert_2.png",
+      "x": 1770,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_desert_3",
+      "file": "eyeball_desert_3.png",
+      "x": 1838,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_void_0",
+      "file": "eyeball_void_0.png",
+      "x": 1906,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_void_1",
+      "file": "eyeball_void_1.png",
+      "x": 1974,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_void_2",
+      "file": "eyeball_void_2.png",
+      "x": 2042,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "eyeball_void_3",
+      "file": "eyeball_void_3.png",
+      "x": 2110,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_lich_ruin_0",
+      "file": "frost_lich_ruin_0.png",
+      "x": 2178,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_lich_ruin_1",
+      "file": "frost_lich_ruin_1.png",
+      "x": 2246,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_lich_ruin_2",
+      "file": "frost_lich_ruin_2.png",
+      "x": 2314,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_lich_ruin_3",
+      "file": "frost_lich_ruin_3.png",
+      "x": 2382,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_worm_ruin_0",
+      "file": "frost_worm_ruin_0.png",
+      "x": 2450,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_worm_ruin_1",
+      "file": "frost_worm_ruin_1.png",
+      "x": 2518,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_worm_ruin_2",
+      "file": "frost_worm_ruin_2.png",
+      "x": 2586,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "frost_worm_ruin_3",
+      "file": "frost_worm_ruin_3.png",
+      "x": 2654,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_forest_0",
+      "file": "ghost_forest_0.png",
+      "x": 2722,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_forest_1",
+      "file": "ghost_forest_1.png",
+      "x": 2790,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_forest_2",
+      "file": "ghost_forest_2.png",
+      "x": 2858,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_forest_3",
+      "file": "ghost_forest_3.png",
+      "x": 2926,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_ruin_0",
+      "file": "ghost_ruin_0.png",
+      "x": 2994,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_ruin_1",
+      "file": "ghost_ruin_1.png",
+      "x": 3062,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_ruin_2",
+      "file": "ghost_ruin_2.png",
+      "x": 3130,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ghost_ruin_3",
+      "file": "ghost_ruin_3.png",
+      "x": 3198,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_desert_0",
+      "file": "giant_worm_desert_0.png",
+      "x": 3266,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_desert_1",
+      "file": "giant_worm_desert_1.png",
+      "x": 3334,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_desert_2",
+      "file": "giant_worm_desert_2.png",
+      "x": 3402,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_desert_3",
+      "file": "giant_worm_desert_3.png",
+      "x": 3470,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_ruin_0",
+      "file": "giant_worm_ruin_0.png",
+      "x": 3538,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_ruin_1",
+      "file": "giant_worm_ruin_1.png",
+      "x": 3606,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_ruin_2",
+      "file": "giant_worm_ruin_2.png",
+      "x": 3674,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "giant_worm_ruin_3",
+      "file": "giant_worm_ruin_3.png",
+      "x": 3742,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ice_wisp_ruin_0",
+      "file": "ice_wisp_ruin_0.png",
+      "x": 3810,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ice_wisp_ruin_1",
+      "file": "ice_wisp_ruin_1.png",
+      "x": 3878,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ice_wisp_ruin_2",
+      "file": "ice_wisp_ruin_2.png",
+      "x": 3946,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "ice_wisp_ruin_3",
+      "file": "ice_wisp_ruin_3.png",
+      "x": 4014,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "plague_slime_forest_0",
+      "file": "plague_slime_forest_0.png",
+      "x": 4082,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "plague_slime_forest_1",
+      "file": "plague_slime_forest_1.png",
+      "x": 4150,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "plague_slime_forest_2",
+      "file": "plague_slime_forest_2.png",
+      "x": 4218,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "plague_slime_forest_3",
+      "file": "plague_slime_forest_3.png",
+      "x": 4286,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_forest_0",
+      "file": "pumpking_forest_0.png",
+      "x": 4354,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_forest_1",
+      "file": "pumpking_forest_1.png",
+      "x": 4422,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_forest_2",
+      "file": "pumpking_forest_2.png",
+      "x": 4490,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "pumpking_forest_3",
+      "file": "pumpking_forest_3.png",
+      "x": 4558,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_desert_0",
+      "file": "queen_bee_desert_0.png",
+      "x": 4626,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_desert_1",
+      "file": "queen_bee_desert_1.png",
+      "x": 4694,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_desert_2",
+      "file": "queen_bee_desert_2.png",
+      "x": 4762,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_desert_3",
+      "file": "queen_bee_desert_3.png",
+      "x": 4830,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_void_0",
+      "file": "queen_bee_void_0.png",
+      "x": 4898,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_void_1",
+      "file": "queen_bee_void_1.png",
+      "x": 4966,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_void_2",
+      "file": "queen_bee_void_2.png",
+      "x": 5034,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "queen_bee_void_3",
+      "file": "queen_bee_void_3.png",
+      "x": 5102,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scorpion_desert_0",
+      "file": "scorpion_desert_0.png",
+      "x": 5170,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scorpion_desert_1",
+      "file": "scorpion_desert_1.png",
+      "x": 5238,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scorpion_desert_2",
+      "file": "scorpion_desert_2.png",
+      "x": 5306,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "scorpion_desert_3",
+      "file": "scorpion_desert_3.png",
+      "x": 5374,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slime_forest_0",
+      "file": "slime_forest_0.png",
+      "x": 5442,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slime_forest_1",
+      "file": "slime_forest_1.png",
+      "x": 5510,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slime_forest_2",
+      "file": "slime_forest_2.png",
+      "x": 5578,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "slime_forest_3",
+      "file": "slime_forest_3.png",
+      "x": 5646,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "spore_forest_0",
+      "file": "spore_forest_0.png",
+      "x": 5714,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "spore_forest_1",
+      "file": "spore_forest_1.png",
+      "x": 5782,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "spore_forest_2",
+      "file": "spore_forest_2.png",
+      "x": 5850,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "spore_forest_3",
+      "file": "spore_forest_3.png",
+      "x": 5918,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_crawler_void_0",
+      "file": "void_crawler_void_0.png",
+      "x": 5986,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_crawler_void_1",
+      "file": "void_crawler_void_1.png",
+      "x": 6054,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_crawler_void_2",
+      "file": "void_crawler_void_2.png",
+      "x": 6122,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_crawler_void_3",
+      "file": "void_crawler_void_3.png",
+      "x": 6190,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_overlord_void_0",
+      "file": "void_overlord_void_0.png",
+      "x": 6258,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_overlord_void_1",
+      "file": "void_overlord_void_1.png",
+      "x": 6326,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_overlord_void_2",
+      "file": "void_overlord_void_2.png",
+      "x": 6394,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "void_overlord_void_3",
+      "file": "void_overlord_void_3.png",
+      "x": 6462,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "war_pharaoh_desert_0",
+      "file": "war_pharaoh_desert_0.png",
+      "x": 6530,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "war_pharaoh_desert_1",
+      "file": "war_pharaoh_desert_1.png",
+      "x": 6598,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "war_pharaoh_desert_2",
+      "file": "war_pharaoh_desert_2.png",
+      "x": 6666,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "war_pharaoh_desert_3",
+      "file": "war_pharaoh_desert_3.png",
+      "x": 6734,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "worm_forest_0",
+      "file": "worm_forest_0.png",
+      "x": 6802,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "worm_forest_1",
+      "file": "worm_forest_1.png",
+      "x": 6870,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "worm_forest_2",
+      "file": "worm_forest_2.png",
+      "x": 6938,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "worm_forest_3",
+      "file": "worm_forest_3.png",
+      "x": 7006,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_ruin_0",
+      "file": "wraith_ruin_0.png",
+      "x": 7074,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_ruin_1",
+      "file": "wraith_ruin_1.png",
+      "x": 7142,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_ruin_2",
+      "file": "wraith_ruin_2.png",
+      "x": 7210,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_ruin_3",
+      "file": "wraith_ruin_3.png",
+      "x": 7278,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_void_0",
+      "file": "wraith_void_0.png",
+      "x": 7346,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_void_1",
+      "file": "wraith_void_1.png",
+      "x": 7414,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_void_2",
+      "file": "wraith_void_2.png",
+      "x": 7482,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "wraith_void_3",
+      "file": "wraith_void_3.png",
+      "x": 7550,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     }
