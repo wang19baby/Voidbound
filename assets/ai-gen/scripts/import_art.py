@@ -123,8 +123,12 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
-        # 瓦片: 整图抠图缩放到 size (不裁 bbox, 保 seamless)
-        rgba = chroma_key_magenta(img)
+        # 瓦片: 无缝纹理铺满画布, 无品红底 → 不抠图; 仅当检测到品红底才抠 (防误食纹理边缘)
+        rgba = img.convert("RGBA")
+        small = img.resize((64, 64))
+        mag = sum(1 for c in small.getdata() if c[0] > 180 and c[2] > 170 and c[1] < 100)
+        if mag / (64 * 64) > 0.5:
+            rgba = chroma_key_magenta(img)
         if quantize_key:
             rgba = apply_quantize(rgba, quantize_key)
         resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
