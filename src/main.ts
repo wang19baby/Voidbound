@@ -1920,9 +1920,9 @@ function drawFrameToScreen() {
   // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞), 墙与地板之间
   for (const d of state.world.decor) {
     const sp = worldToScreen(state, d.pos);
-    if (sp.x + 32 < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + 32 < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, { w: 32, h: 32 }, 'world', d.sprite, d.tint ? { color: d.tint } : {});
+    if (sp.x + 64 < 0 || sp.x > state.viewport.w) continue;
+    if (sp.y + 64 < 0 || sp.y > state.viewport.h) continue;
+    drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, d.tint ? { color: d.tint } : {});
   }
 
   // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上

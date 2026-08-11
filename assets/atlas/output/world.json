@@ -1,15 +1,45 @@
 {
   "atlas": "world",
   "size": {
-    "width": 754,
+    "width": 958,
     "height": 132
   },
-  "sprite_count": 12,
+  "sprite_count": 15,
   "sprites": [
+    {
+      "name": "decor_desert",
+      "file": "decor_desert.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "decor_forest",
+      "file": "decor_forest.png",
+      "x": 70,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "decor_void",
+      "file": "decor_void.png",
+      "x": 138,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
     {
       "name": "floor",
       "file": "floor.png",
-      "x": 2,
+      "x": 206,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -19,7 +49,7 @@
     {
       "name": "floor_desert",
       "file": "floor_desert.png",
-      "x": 22,
+      "x": 226,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -29,7 +59,7 @@
     {
       "name": "floor_forest",
       "file": "floor_forest.png",
-      "x": 58,
+      "x": 262,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -39,7 +69,7 @@
     {
       "name": "floor_ruin",
       "file": "floor_ruin.png",
-      "x": 94,
+      "x": 298,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -49,7 +79,7 @@
     {
       "name": "floor_void",
       "file": "floor_void.png",
-      "x": 130,
+      "x": 334,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -59,7 +89,7 @@
     {
       "name": "grass",
       "file": "grass.png",
-      "x": 166,
+      "x": 370,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -69,7 +99,7 @@
     {
       "name": "wall",
       "file": "wall.png",
-      "x": 186,
+      "x": 390,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -79,7 +109,7 @@
     {
       "name": "wall_alt",
       "file": "wall_alt.png",
-      "x": 206,
+      "x": 410,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -89,7 +119,7 @@
     {
       "name": "wall_desert",
       "file": "wall_desert.png",
-      "x": 226,
+      "x": 430,
       "y": 2,
       "frame_width": 128,
       "frame_height": 128,
@@ -99,7 +129,7 @@
     {
       "name": "wall_forest",
       "file": "wall_forest.png",
-      "x": 358,
+      "x": 562,
       "y": 2,
       "frame_width": 128,
       "frame_height": 128,
@@ -109,7 +139,7 @@
     {
       "name": "wall_ruin",
       "file": "wall_ruin.png",
-      "x": 490,
+      "x": 694,
       "y": 2,
       "frame_width": 128,
       "frame_height": 128,
@@ -119,7 +149,7 @@
     {
       "name": "wall_void",
       "file": "wall_void.png",
-      "x": 622,
+      "x": 826,
       "y": 2,
       "frame_width": 128,
       "frame_height": 128,
