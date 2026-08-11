@@ -73,6 +73,68 @@ check('war_pharaoh 自画', MONSTER_DEFS.war_pharaoh.sprite === 'war_pharaoh');
 check('frost_lich 自画', MONSTER_DEFS.frost_lich.sprite === 'frost_lich');
 check('void_overlord 自画', MONSTER_DEFS.void_overlord.sprite === 'void_overlord');
 
+// === A-W1 五层: 增强层 + 光环系统 ===
+import { ENHANCED_HP_MULT, ENHANCED_DMG_MULT, ENHANCED_CHANCE, AURA_TYPES, AURA_DEFS, AURA_RADIUS, LORD_HP_MULT } from '../src/game/monster';
+check('增强概率 30%', ENHANCED_CHANCE === 0.3);
+check('增强 HP ×1.4', ENHANCED_HP_MULT === 1.4);
+check('增强伤害 ×1.4', ENHANCED_DMG_MULT === 1.4);
+check('光环 ×5 类型', AURA_TYPES.length === 5);
+check('光环类型唯一', new Set(AURA_TYPES).size === 5);
+for (const a of AURA_TYPES) {
+  const def = AURA_DEFS[a];
+  check(`光环 ${a} 有名字`, typeof def.name === 'string' && def.name.length > 0);
+  check(`光环 ${a} 有色`, def.color.length === 3 && def.color.every(v => v >= 0 && v <= 1));
+}
+check('光环半径 140', AURA_RADIUS === 140);
+// 层级严格递增: boss > lord > elite > enhanced > normal (HP 倍率链)
+check('层级 HP 链: lord 5× > elite 2.2× > enhanced 1.4×', LORD_HP_MULT > ELITE_HP_MULT && ELITE_HP_MULT > ENHANCED_HP_MULT);
+
+// === A-W1 营地三型 ===
+import { CAMP_TYPES, spawnCamp } from '../src/game/monster';
+check('营地三型', CAMP_TYPES.length === 3);
+check('营地类型齐全', ['aura', 'swarm', 'duo'].every(t => CAMP_TYPES.includes(t as 'aura' | 'swarm' | 'duo')));
+
+// spawnCamp 结构验证 (轻量 GameState stub)
+function makeStubState() {
+  const world = { w: 20480, h: 11520, walls: [] as { pos: { x: number; y: number }; size: { w: number; h: number } }[] };
+  const player = { pos: { x: 10240, y: 5760 }, level: 1 };
+  return {
+    player,
+    world,
+    monsters: [] as unknown[],
+    difficulty: 'normal',
+    run: { theme: 'forest' },
+  };
+}
+const pickForest = () => 'slime' as const;
+const auraCamp = spawnCamp(makeStubState() as never, { x: 10240, y: 5760, type: 'aura' }, pickForest);
+check('光环营地: 1 精英带光环 + 5 白怪', auraCamp.length === 6 && auraCamp.filter(m => m.elite).length === 1 && auraCamp.filter(m => m.elite && m.aura).length === 1);
+const swarmCamp = spawnCamp(makeStubState() as never, { x: 10240, y: 5760, type: 'swarm' }, pickForest);
+check('精英抱团: 2 精英 + 4 白怪', swarmCamp.length === 6 && swarmCamp.filter(m => m.elite).length === 2 && swarmCamp.filter(m => m.pureSupport).length === 0);
+const duoCamp = spawnCamp(makeStubState() as never, { x: 10240, y: 5760, type: 'duo' }, pickForest);
+check('双核营地: 1 精英 + 1 专职光环者 + 4 白怪', duoCamp.length === 6 && duoCamp.filter(m => m.elite).length === 1 && duoCamp.filter(m => m.pureSupport).length === 1 && duoCamp.filter(m => m.pureSupport && m.aura).length === 1);
+
+// === A-W1 门结算 ===
+import { portalActive, nearPortal, leaveThroughPortal, PORTAL_INTERACT_RANGE } from '../src/game/portal';
+check('门交互距离 56', PORTAL_INTERACT_RANGE === 56);
+function portalState(portal?: { x: number; y: number; bossType: string; used: boolean }) {
+  return {
+    run: { portal, bossKilled: !!portal },
+    player: { pos: { x: 0, y: 0 }, size: { w: 32, h: 32 } },
+  };
+}
+check('无门 → 不可交互', portalActive(portalState() as never) === false);
+const p0 = { x: 30, y: 0, bossType: 'pumpking', used: false };
+check('Boss 已杀门在场 → 可交互', portalActive(portalState(p0) as never) === true);
+const pUsed = { x: 30, y: 0, bossType: 'pumpking', used: true };
+check('门已使用 → 不可交互', portalActive(portalState(pUsed) as never) === false);
+check('玩家在门内 → near', nearPortal(portalState(p0) as never) === true);
+const pFar = { x: 500, y: 0, bossType: 'pumpking', used: false };
+check('玩家远离门 → 不 near', nearPortal(portalState(pFar) as never) === false);
+const s = portalState(p0) as { run: { portal: { used: boolean } } };
+leaveThroughPortal(s as never);
+check('回城 → 门标记已使用', s.run.portal.used === true);
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);

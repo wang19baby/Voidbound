@@ -1,5 +1,6 @@
-// 角色存档: bincode 序列化到 saves/char_0.bin (US-003 + OPT-014/015/003/029 + M5)
-// 格式: 首字节 = SAVE_FORMAT_VERSION (9), 其后 bincode(SaveData)
+// 角色存档: bincode 序列化到 saves/char_0.bin (US-003 + OPT-014/015/003/029 + M5 + A-W1)
+// 格式: 首字节 = SAVE_FORMAT_VERSION (10), 其后 bincode(SaveData)
+// v10 [A-W1]: + mode (布局模式 linear/gauntlet/extract, 迁移默认 linear)
 // v9 [M5 非目标收尾]: + passives (被动技能树等级: id, level)
 // v8 [M5 W4 C-401]: + materials (材料计数: iron_shard/arcane_core/void_fragment)
 // v7 [M5 W3 C-302]: + town (当前城镇, 读档 enterTown 还原)
@@ -14,7 +15,7 @@ use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_FORMAT_VERSION: u8 = 9;
+pub const SAVE_FORMAT_VERSION: u8 = 10;
 
 /// 当前角色 ID (OPT-029: 多角色 UI 前固定单角色)
 const CURRENT_CHAR: &str = "char_0";
@@ -188,6 +189,36 @@ pub struct SaveData {
     // v8 (M5 W4 C-401): 材料计数 (id, count)
     pub materials: Vec<(String, u32)>,
     // v9 (M5 非目标收尾): 被动技能树等级 (id, level)
+    pub passives: Vec<(String, u32)>,
+    // v10 (A-W1): 布局模式 linear/gauntlet/extract (迁移默认 linear)
+    pub mode: String,
+}
+
+/// v9 兼容结构 (无 mode 字段)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+struct SaveDataV9 {
+    pub player_x: f32,
+    pub player_y: f32,
+    pub player_hp: f32,
+    pub player_mp: f32,
+    pub facing_x: f32,
+    pub facing_y: f32,
+    pub score: u32,
+    pub world_w: f32,
+    pub world_h: f32,
+    pub level: u32,
+    pub owned: Vec<OwnedItem>,
+    pub gold: u32,
+    pub runes: Vec<RuneSlot>,
+    pub theme: String,
+    pub difficulty: String,
+    pub equipped: Vec<EquippedItem>,
+    pub skill_levels: Vec<SkillLevel>,
+    pub skill_points: u32,
+    pub exp: u32,
+    pub class: String,
+    pub town: String,
+    pub materials: Vec<(String, u32)>,
     pub passives: Vec<(String, u32)>,
 }
 
@@ -365,6 +396,7 @@ fn migrate_v1(v1: SaveDataV1) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -393,6 +425,7 @@ fn migrate_v2(v2: SaveDataV2) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -421,6 +454,7 @@ fn migrate_v3(v3: SaveDataV3) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -452,6 +486,7 @@ fn migrate_v5(v5: SaveDataV5) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -480,6 +515,7 @@ fn migrate_v4(v4: SaveDataV4) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -509,6 +545,7 @@ fn migrate_v6(v6: SaveDataV6) -> SaveData {
         town: "greenwing".into(),
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -538,6 +575,7 @@ fn migrate_v7(v7: SaveDataV7) -> SaveData {
         town: v7.town,
         materials: Vec::new(),
         passives: Vec::new(),
+        mode: "linear".into(),
     }
 }
 
@@ -567,6 +605,37 @@ fn migrate_v8(v8: SaveDataV8) -> SaveData {
         town: v8.town,
         materials: v8.materials,
         passives: Vec::new(),
+        mode: "linear".into(),
+    }
+}
+
+/// v9 → v10: 补 mode 空 (默认 linear)
+fn migrate_v9(v9: SaveDataV9) -> SaveData {
+    SaveData {
+        player_x: v9.player_x,
+        player_y: v9.player_y,
+        player_hp: v9.player_hp,
+        player_mp: v9.player_mp,
+        facing_x: v9.facing_x,
+        facing_y: v9.facing_y,
+        score: v9.score,
+        world_w: v9.world_w,
+        world_h: v9.world_h,
+        level: v9.level,
+        owned: v9.owned,
+        gold: v9.gold,
+        runes: v9.runes,
+        theme: v9.theme,
+        difficulty: v9.difficulty,
+        equipped: v9.equipped,
+        skill_levels: v9.skill_levels,
+        skill_points: v9.skill_points,
+        exp: v9.exp,
+        class: v9.class,
+        town: v9.town,
+        materials: v9.materials,
+        passives: v9.passives,
+        mode: "linear".into(),
     }
 }
 
@@ -735,9 +804,13 @@ fn decode_save(bytes: &[u8]) -> Result<(SaveData, Option<crate::account::Account
     match bytes[0] {
         SAVE_FORMAT_VERSION => {
             let data: SaveData = bincode::deserialize(&bytes[1..])
-                .map_err(|e| format!("v9 deserialize failed: {e}"))?;
+                .map_err(|e| format!("v10 deserialize failed: {e}"))?;
             Ok((data, None))
         }
+        9 => match bincode::deserialize::<SaveDataV9>(&bytes[1..]) {
+            Ok(v9) => Ok((migrate_v9(v9), None)),
+            Err(e) => Err(format!("v9 deserialize failed: {e}")),
+        },
         8 => match bincode::deserialize::<SaveDataV8>(&bytes[1..]) {
             Ok(v8) => Ok((migrate_v8(v8), None)),
             Err(e) => Err(format!("v8 deserialize failed: {e}")),
@@ -834,6 +907,7 @@ mod tests {
             town: "harbor".into(),
             materials: vec![("iron_shard".into(), 3), ("arcane_core".into(), 1)],
             passives: vec![("critRate".into(), 4), ("speed".into(), 2)],
+            mode: "linear".into(),
         }
     }
 
@@ -869,7 +943,7 @@ mod tests {
         let data = sample_v5();
         let mut bytes = vec![SAVE_FORMAT_VERSION];
         bytes.extend(bincode::serialize(&data).expect("serialize"));
-        assert_eq!(bytes[0], 9, "版本头必须为 9");
+        assert_eq!(bytes[0], 10, "版本头必须为 10");
         let back: SaveData = bincode::deserialize(&bytes[1..]).expect("deserialize");
         assert_eq!(data, back);
         assert_eq!(back.skill_levels[0].level, 12);
@@ -879,6 +953,7 @@ mod tests {
         assert_eq!(back.town, "harbor", "城镇字段 v7 往返");
         assert_eq!(back.materials[0], ("iron_shard".into(), 3), "材料字段 v8 往返");
         assert_eq!(back.passives[0], ("critRate".into(), 4), "被动字段 v9 往返");
+        assert_eq!(back.mode, "linear", "模式字段 v10 往返");
     }
 
     #[test]
@@ -1013,6 +1088,43 @@ mod tests {
         assert_eq!(out.town, "harbor", "v8 → v9 保留城镇");
         assert_eq!(out.materials[0], ("iron_shard".into(), 3), "v8 → v9 保留材料");
         assert!(out.passives.is_empty(), "v8 → v9 被动默认空");
+        assert!(account.is_none());
+    }
+
+    #[test]
+    fn migrate_v9_to_v10_defaults_mode() {
+        let v10 = sample_v5();
+        let v9 = SaveDataV9 {
+            player_x: v10.player_x,
+            player_y: v10.player_y,
+            player_hp: v10.player_hp,
+            player_mp: v10.player_mp,
+            facing_x: v10.facing_x,
+            facing_y: v10.facing_y,
+            score: v10.score,
+            world_w: v10.world_w,
+            world_h: v10.world_h,
+            level: v10.level,
+            owned: v10.owned,
+            gold: v10.gold,
+            runes: v10.runes,
+            theme: v10.theme,
+            difficulty: v10.difficulty,
+            equipped: v10.equipped,
+            skill_levels: v10.skill_levels,
+            skill_points: v10.skill_points,
+            exp: v10.exp,
+            class: v10.class,
+            town: v10.town,
+            materials: v10.materials,
+            passives: v10.passives.clone(),
+        };
+        let mut v9_bytes = vec![9u8];
+        v9_bytes.extend(bincode::serialize(&v9).unwrap());
+        let (out, account) = decode_save(&v9_bytes).unwrap();
+        assert_eq!(out.town, "harbor", "v9 → v10 保留城镇");
+        assert_eq!(out.mode, "linear", "v9 → v10 模式默认 linear");
+        assert_eq!(out.passives, v10.passives, "v9 → v10 保留被动");
         assert!(account.is_none());
     }
 

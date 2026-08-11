@@ -11,6 +11,7 @@ import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
+import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, type Wall } from './game/world';
 import { drawSprite, setViewportUniform } from './render/draw';
 import { resolveSprite } from './render/resources';
@@ -19,7 +20,7 @@ import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { ELEMENT_DEFS } from './game/element';
-import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj } from './game/monster';
+import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, type EquipType, type Equipment, type MaterialId } from './game/equipment';
 import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, runeForgePay, type TownPanel, type TownId, type MerchantStock, type MysteryStock } from './game/town';
@@ -683,6 +684,21 @@ window.addEventListener('keydown', (e) => {
     }
     return; // 暂停时忽略游戏按键
   }
+  // A-W1 门结算: Boss 死后门前 V 交互 → [回城/继续] 面板
+  if (state.screen === 'portal') {
+    const k = e.key.toLowerCase();
+    if (k === '1') {
+      // 回城: 提前结算 (战利品已保留), 进城镇
+      leaveThroughPortal(state);
+      enterTown(state);
+      inf('ui', 'portal → 回城结算');
+    } else if (k === '2' || k === 'escape') {
+      // 继续: 留在本局 (门仍在 Boss 死亡位)
+      setScreen(state, 'dungeon');
+      inf('ui', 'portal → 继续战斗');
+    }
+    return;
+  }
   // 城镇: E 交互 + 面板按键
   if (state.mode === 'town') {
     const k = e.key.toLowerCase();
@@ -715,6 +731,12 @@ window.addEventListener('keydown', (e) => {
     if (startDodge(state)) {
       dbg('player', 'dodge roll (i-frame 0.2s)');
     }
+    return;
+  }
+  // A-W1 门: V 在门前交互 → 面板 [回城/继续]
+  if (e.key.toLowerCase() === 'v' && state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
+    setScreen(state, 'portal');
+    inf('ui', 'portal 交互 → [回城/继续]');
     return;
   }
   // 技能键: Q=火球 F=多重火球(原W槽, 避免 WASD 冲突) E=回血 R=大招
@@ -1931,6 +1953,23 @@ function drawFrameToScreen() {
     drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, dopt);
   }
 
+  // A-W1 门结算: Boss 死亡位传送门 (脉冲光环, 玩家在交互范围内高亮)
+  if (state.run.portal && !state.run.portal.used) {
+    const pp = state.run.portal;
+    const sp = worldToScreen(state, { x: pp.x, y: pp.y });
+    if (sp.x > -80 && sp.x < state.viewport.w + 80 && sp.y > -80 && sp.y < state.viewport.h + 80) {
+      const pulse = 0.5 + Math.sin(performance.now() / 250) * 0.15;
+      const near = nearPortal(state);
+      const ringCol: [number, number, number] = near ? [1, 0.75, 0.4] : [0.5, 0.9, 1];
+      // 门体: 紫色旋涡
+      drawSprite(gl, quad, res, { x: sp.x - 30, y: sp.y - 30 }, { w: 60, h: 60 }, 'particles', 'spark_03', { color: [0.75, 0.4, 1], blend: 'add' });
+      // 交互光环
+      drawSprite(gl, quad, res, { x: sp.x - 42 * pulse, y: sp.y - 42 * pulse }, { w: 84 * pulse, h: 84 * pulse }, 'ui', 'slide_horizontal_color', { color: ringCol });
+      drawSprite(gl, quad, res, { x: sp.x - 3, y: sp.y - 46 }, { w: 6, h: 6 }, 'ui', 'slide_horizontal_color', { color: [1, 1, 1] });
+      // (提示文案由 HUD 层的 portal 横幅承担, 此处纯视觉)
+    }
+  }
+
   // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上
   const envColor = THEME_ENV_COLOR[state.theme];
   for (const p of state.envFx) {
@@ -1980,6 +2019,7 @@ function drawFrameToScreen() {
     const color: [number, number, number] | undefined =
       m.elite ? [1, 0.85, 0.25]
       : m.hitFlash > 0 ? [1, 0.3, 0.3]
+      : m.enhanced ? [1, 0.65, 0.3]
       : undefined; // 主题专属图自带配色, 不再套 def.tint 二次染色
     // V1 动画: 2 帧 + 正弦挤压 (移动时 4 步行走感, 静止时轻微呼吸)
     const moving = Math.hypot(m.vel.x, m.vel.y) > 1;
@@ -2005,6 +2045,11 @@ function drawFrameToScreen() {
     // 领主标记 (M3): HP 条上方紫色横条
     if (m.lord) {
       drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 9 }, { w: m.size.w, h: 2 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1] });
+    }
+    // 光环标记 (A-W1): 增强怪头顶光环色点 (先杀光环来源 = 反制点)
+    if (m.aura) {
+      const auraColor = AURA_DEFS[m.aura].color;
+      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - 4, y: sp.y - 13 }, { w: 8, h: 8 }, 'ui', 'slide_horizontal_color', { color: auraColor });
     }
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
@@ -2150,6 +2195,38 @@ function drawFrameToScreen() {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = 'bold 18px monospace';
     hudCtx.fillText('[1] 再来一局(同难度)   [2] 回城', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
+    hudCtx.textAlign = 'left';
+  }
+
+  // A-W1 门结算面板 (portal): 回城/继续
+  if (state.screen === 'portal') {
+    hudCtx.fillStyle = 'rgba(8, 8, 24, 0.85)';
+    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillStyle = '#c9aaff';
+    hudCtx.font = 'bold 40px monospace';
+    hudCtx.fillText('传 送 门', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
+    hudCtx.fillStyle = '#fff';
+    hudCtx.font = '18px monospace';
+    hudCtx.fillText('Boss 已击败 — 本局可结算', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+    hudCtx.fillStyle = '#bbb';
+    hudCtx.font = '14px monospace';
+    hudCtx.fillText('回城: 战利品/经验/材料保留 (无通关加成)', hudCanvas.width / 2, hudCanvas.height / 2);
+    hudCtx.fillText('继续: 留在本局, 门仍在 Boss 死亡位', hudCanvas.width / 2, hudCanvas.height / 2 + 26);
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = 'bold 20px monospace';
+    hudCtx.fillText('[1] 回城结算   [2] 继续战斗', hudCanvas.width / 2, hudCanvas.height / 2 + 80);
+    hudCtx.textAlign = 'left';
+    hudCtx.textBaseline = 'top';
+  }
+
+  // dungeon HUD: 门前提示 (V 交互)
+  if (state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
+    hudCtx.textAlign = 'center';
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = 'bold 15px monospace';
+    hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
     hudCtx.textAlign = 'left';
   }
 

@@ -38,6 +38,8 @@ export interface MonsterDef {
   res?: Partial<Record<DamageType, number>>;
   /** 精灵染色变体 (复用图集同 sprite) */
   tint?: [number, number, number];
+  /** 层级 (A-W1 五层): normal=白怪 / enhanced=增强(光环×1) / elite=精英 / lord=领主 / boss=Boss */
+  tier?: 'normal' | 'enhanced' | 'elite' | 'lord' | 'boss';
   /** 元素 (元素变体): 绘制时色相旋转 + 攻击伤害系 */
   element?: ElementId;
   /** 小怪独有行为 (OPT-021): dash=冲撞 / split=死亡分裂 (每主题 ≥2 只) */
@@ -125,25 +127,106 @@ export const LORD_DMG_MULT = 1.5;
 export const ELITE_HP_MULT = 2.2;
 export const ELITE_DMG_MULT = 1.5;
 
-/** 按当前主题池刷满一局地牢 (OPT-012): 清场 → RUN_POOL_SIZE 只小怪, 重置跑局计数 */
+// === A-W1 五层: 增强层 + 光环系统 ===
+/** 增强层属性倍率 (设计文档 §4: ~1.4× 白怪) */
+export const ENHANCED_HP_MULT = 1.4;
+export const ENHANCED_DMG_MULT = 1.4;
+/** 增强怪出现概率 (白怪池中) */
+export const ENHANCED_CHANCE = 0.3;
+/** 光环类型 ×5 (设计文档 §6.2): 狂暴/加速/石肤/回复/元素 */
+export type AuraType = 'frenzy' | 'haste' | 'stoneskin' | 'regen' | 'elemental';
+/** 光环效果数值 */
+export const AURA_DEFS: Record<AuraType, { name: string; color: [number, number, number] }> = {
+  frenzy:    { name: '狂暴', color: [1, 0.35, 0.2] },   // 攻速+
+  haste:     { name: '加速', color: [0.3, 0.9, 1] },    // 移速+
+  stoneskin: { name: '石肤', color: [0.8, 0.8, 0.65] }, // 减伤
+  regen:     { name: '回复', color: [0.4, 1, 0.5] },    // 回血
+  elemental: { name: '元素', color: [1, 0.7, 0.2] },    // 攻击附伤
+};
+export const AURA_TYPES: AuraType[] = ['frenzy', 'haste', 'stoneskin', 'regen', 'elemental'];
+/** 光环半径 (px): 增强怪光环覆盖周围白怪 */
+export const AURA_RADIUS = 140;
+
+/** 按当前主题池刷满一局地牢 (OPT-012): 清场 → RUN_POOL_SIZE 只小怪, 重置跑局计数
+ *  A-W1 营地三型: 玩家周围生成 4 个营地 (光环/精英抱团/双核随机), 每营地聚簇 */
 export function spawnRunPool(state: GameState): void {
   state.monsters.length = 0;
   const pool = THEME_MONSTER_POOL[state.theme];
-  for (let i = 0; i < RUN_POOL_SIZE; i++) {
-    state.monsters.push(spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]));
+  const pick = () => pool[Math.floor(Math.random() * pool.length)];
+
+  // 4 个营地锚点: 玩家周围 500-900px, 互不重叠 (角度均匀分布)
+  const campCount = 4;
+  const centers: { x: number; y: number; type: CampType }[] = [];
+  const baseA = Math.random() * Math.PI * 2;
+  for (let i = 0; i < campCount; i++) {
+    const a = baseA + (i * Math.PI * 2) / campCount;
+    const r = 500 + Math.random() * 400;
+    centers.push({
+      x: state.player.pos.x + Math.cos(a) * r,
+      y: state.player.pos.y + Math.sin(a) * r,
+      type: CAMP_TYPES[i % CAMP_TYPES.length], // 光环/抱团/双核 轮转保证三型都出现
+    });
   }
+
+  for (const c of centers) {
+    const members = spawnCamp(state, c, pick);
+    for (const m of members) state.monsters.push(m);
+  }
+  // 兜底: 营地成员可能因撞墙失败不足额 → 补散怪到 RUN_POOL_SIZE
+  while (state.monsters.length < RUN_POOL_SIZE) {
+    state.monsters.push(spawnMonster(state, pick()));
+  }
+
   state.run.total = RUN_POOL_SIZE;
   state.run.alive = RUN_POOL_SIZE;
   state.run.bossAlive = false;
   state.run.bossKilled = false;
   state.run.victoryShown = false;
+  state.run.portal = undefined;
   state.run.kills = 0;
   state.run.collectedLoot = 0;
   state.run.theme = state.theme;
   // M3 元素地图: 50% 概率本局整体元素染色 (地板/墙/装饰 + Boss 变体)
   state.run.element = Math.random() < 0.5 ? randomElement() : undefined;
   state.run.t0 = performance.now();
-  inf('world', `run pool spawned: ${RUN_POOL_SIZE} (theme=${state.theme})`);
+  inf('world', `run pool spawned: ${RUN_POOL_SIZE} (theme=${state.theme}, camps=${campCount})`);
+}
+
+// === A-W1 营地三型 (设计文档 §5) ===
+
+export type CampType = 'aura' | 'swarm' | 'duo';
+/** 营地类型轮转: 三型都出现 (随机起始, 环形) */
+export const CAMP_TYPES: CampType[] = ['aura', 'swarm', 'duo'];
+
+/** 生成一个营地成员列表
+ *  aura: 1 精英(带光环) + 5 白怪 → 先杀精英, 小怪失光环节能
+ *  swarm: 2 精英 + 4 白怪, 无光环, 数量压
+ *  duo: 1 精英 + 1 专职光环者(不攻击) + 4 白怪 → 拆解优先级: 光环者 → 精英 → 白怪
+ */
+export function spawnCamp(state: GameState, center: { x: number; y: number; type: CampType }, pick: () => MonsterType): Monster[] {
+  const out: Monster[] = [];
+  const at = { x: center.x, y: center.y };
+  const auraOf = () => AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)];
+  switch (center.type) {
+    case 'aura': {
+      out.push(spawnMonster(state, pick(), at, { eliteAura: auraOf(), forceElite: true }));
+      for (let i = 0; i < 5; i++) out.push(spawnMonster(state, pick(), at, {})); // 白怪固定普通层
+      break;
+    }
+    case 'swarm': {
+      for (let i = 0; i < 2; i++) out.push(spawnMonster(state, pick(), at, { forceElite: true }));
+      for (let i = 0; i < 4; i++) out.push(spawnMonster(state, pick(), at, {}));
+      break;
+    }
+    case 'duo': {
+      out.push(spawnMonster(state, pick(), at, { forceElite: true }));
+      // 专职光环者: 不攻击, 只提供光环 (pureSupport)
+      out.push(spawnMonster(state, pick(), at, { pureSupport: true }));
+      for (let i = 0; i < 4; i++) out.push(spawnMonster(state, pick(), at, {}));
+      break;
+    }
+  }
+  return out;
 }
 
 export interface Monster {
@@ -181,6 +264,14 @@ export interface Monster {
   elite: boolean;
   /** 领主标记 (M3): 元素变体 + 体型 ×1.6 + HP×5, 精英之上 Boss 之下 */
   lord: boolean;
+  /** 增强标记 (A-W1): 白怪 30% 概率, HP/伤 ×1.4 + 携带 1 光环 */
+  enhanced: boolean;
+  /** 携带光环 (A-W1): 增强怪 1 个; 光环覆盖半径内白怪 */
+  aura?: AuraType;
+  /** 回复光环累积计时 (A-W1) */
+  regenAccum: number;
+  /** 专职光环者 (A-W1 双核营地): 不攻击, 只提供光环; 死亡后光环消失 */
+  pureSupport: boolean;
   /** 元素色相旋转 (度): def.element 或领主随机元素 */
   hue: number;
   /** 元素 id (绘制/文案用) */
@@ -189,24 +280,36 @@ export interface Monster {
 
 let nextMonsterId = 1;
 
-/** 在玩家周围 (安全距离外) 随机 spawn 一只怪物; 避开墙 */
-export function spawnMonster(state: GameState, type: MonsterType): Monster {
+/** 在玩家周围 (安全距离外) 随机 spawn 一只怪物; 避开墙
+ *  at: 营地生成锚点 (该点附近 80px 聚簇); 缺省 = 玩家周围 600-1200px
+ *  camp: 营地生成选项 (A-W1 三型营地) */
+export function spawnMonster(state: GameState, type: MonsterType, at?: { x: number; y: number }, camp?: { eliteAura?: AuraType; pureSupport?: boolean; forceElite?: boolean }): Monster {
   const def = MONSTER_DEFS[type];
   const lvScale = levelMonsterScale(state.player.level);
-  // 领主 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5; 精英仅非领主时 roll; Boss 也滚元素变体
-  const isLord = !def.boss && Math.random() < LORD_CHANCE;
-  const elite = !def.boss && !isLord && rollElite(Math.random);
+  // 层级: camp 生成 = 组成确定 (forceElite→精英 / pureSupport→增强光环者 / 其余→白怪);
+  // 无 camp = 全图散怪, 才滚随机 领主 4% / 精英 8% / 增强 30%
+  const isLord = !camp && !def.boss && Math.random() < LORD_CHANCE;
+  const elite = camp ? !!camp.forceElite : !def.boss && !isLord && rollElite(Math.random);
+  const enhanced = camp ? !!camp.pureSupport : !def.boss && !isLord && !elite && Math.random() < ENHANCED_CHANCE;
+  // 光环: camp 精英带 eliteAura; 专职光环者随机 1 光环; 散怪增强带随机光环
+  const aura: AuraType | undefined = camp
+    ? (camp.eliteAura ?? (camp.pureSupport ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined))
+    : (enhanced ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined);
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
   const baseHp = Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * lvScale);
-  const hp = Math.round(baseHp * (elite ? ELITE_HP_MULT : 1) * (isLord ? LORD_HP_MULT : 1));
-  // 半径 600-1200 px, 超出 aggroRange, 不立刻追杀
+  const hp = Math.round(
+    baseHp * (elite ? ELITE_HP_MULT : 1) * (isLord ? LORD_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1),
+  );
+  const center = at ?? { x: state.player.pos.x, y: state.player.pos.y };
+  const ringR = at ? 80 : 600;
+  // 半径 600-1200 px (或营地聚簇 80px), 超出 aggroRange, 不立刻追杀
   for (let i = 0; i < 30; i++) {
     const a = Math.random() * Math.PI * 2;
-    const r = 600 + Math.random() * 600;
-    const x = state.player.pos.x + Math.cos(a) * r;
-    const y = state.player.pos.y + Math.sin(a) * r;
+    const r = ringR + Math.random() * (at ? 120 : 600);
+    const x = center.x + Math.cos(a) * r;
+    const y = center.y + Math.sin(a) * r;
     if (x < 64 || y < 64 || x > state.world.w - 64 || y > state.world.h - 64) continue;
     // 验证 spawn 点不撞墙
     let blocked = false;
@@ -238,23 +341,27 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
       aiSpawned: 0,
       elite,
       lord: isLord,
+      enhanced,
+      aura,
+      regenAccum: 0,
+      pureSupport: camp?.pureSupport ?? false,
       hue,
       elementId: element,
     };
     return m;
   }
-  // 兜底: 玩家北 800
+  // 兜底: 中心北 800
   return {
     id: nextMonsterId++,
     type,
-    pos: { x: state.player.pos.x, y: state.player.pos.y - 800 },
+    pos: { x: center.x, y: center.y - 800 },
     vel: { x: 0, y: 0 },
     hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
     maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
     phase: 1,
     burnT: 0, burnDps: 0, burnAccum: 0,
     size: { w: 32, h: 32 },
-    wanderTarget: { x: state.player.pos.x, y: state.player.pos.y - 1000 },
+    wanderTarget: { x: center.x, y: center.y - 1000 },
     wanderTimer: 3,
     attackCd: 0,
     hitFlash: 0,
@@ -265,6 +372,10 @@ export function spawnMonster(state: GameState, type: MonsterType): Monster {
     aiSpawned: 0,
     elite: false,
     lord: false,
+    enhanced: false,
+    aura: undefined,
+    regenAccum: 0,
+    pureSupport: false,
     hue: 0,
   };
 }
@@ -316,6 +427,17 @@ function slideAxis(rect: { x: number; y: number; w: number; h: number }, walls: 
   return { x: fx, y: fy };
 }
 
+/** 怪物是否处于任何增强光环覆盖下 (A-W1): 附近有增强怪携带同光环 → 生效; 自身为增强怪也受益 */
+function auraActive(state: GameState, m: Monster, aura: AuraType): boolean {
+  if (m.aura === aura) return true;
+  for (const o of state.monsters) {
+    if (o === m || o.hp <= 0 || o.aura !== aura) continue;
+    const d = Math.hypot(o.pos.x - m.pos.x, o.pos.y - m.pos.y);
+    if (d <= AURA_RADIUS + o.size.w / 2) return true;
+  }
+  return false;
+}
+
 /** AI 更新 (wander/chase/attack); dt 秒 */
 export function updateMonsters(state: GameState, dt: number): void {
   const p = state.player.pos;
@@ -325,6 +447,15 @@ export function updateMonsters(state: GameState, dt: number): void {
     const dx = p.x - m.pos.x;
     const dy = p.y - m.pos.y;
     const dist = Math.hypot(dx, dy);
+
+    // A-W1 光环: 每 0.5s 回复 (光环覆盖内回血)
+    if (m.hp > 0 && auraActive(state, m, 'regen')) {
+      m.regenAccum = (m.regenAccum ?? 0) + dt;
+      if (m.regenAccum >= 0.5) {
+        m.regenAccum -= 0.5;
+        m.hp = Math.min(m.maxHp, m.hp + Math.max(1, Math.round(m.maxHp * 0.012)));
+      }
+    }
 
     if (m.attackCd > 0) m.attackCd -= dt;
     if (m.hitFlash > 0) m.hitFlash -= dt;
@@ -362,8 +493,8 @@ export function updateMonsters(state: GameState, dt: number): void {
       inf('combat', `${m.type} enters PHASE 2 (狂暴)`);
     }
 
-    // 远程攻击: 朝玩家发射投射物 (二阶段双发)
-    if (def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
+    // 远程攻击: 朝玩家发射投射物 (二阶段双发); 专职光环者不攻击
+    if (!m.pureSupport && def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
       spawnEnemyProjectile(state, m, def.contactDmg);
       if (m.phase === 2) spawnEnemyProjectile(state, m, def.contactDmg, 0.22);
       m.attackCd = m.phase === 2 ? 1.6 : def.rangedCooldown;
@@ -395,19 +526,30 @@ export function updateMonsters(state: GameState, dt: number): void {
     }
 
     const charging = m.aiT > 0;
-    const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1);
+    const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
+    const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste;
     if (dist < def.aggroRange) {
       if (dist > 0.01) {
         m.vel.x = (dx / dist) * spd;
         m.vel.y = (dy / dist) * spd;
       }
-      if (dist < def.attackRange && m.attackCd <= 0 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+      if (dist < def.attackRange && m.attackCd <= 0 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0 && !m.pureSupport) {
         const lvScale = levelMonsterScale(state.player.level);
-        state.player.hp -= def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1);
-        m.attackCd = 1.0;
+        // A-W1 光环: frenzy 攻速+ (冷却-30%); stoneskin 减伤 30%; elemental 攻击附元素伤
+        const frenzyMult = auraActive(state, m, 'frenzy') ? 0.7 : 1;
+        const stoneskin = auraActive(state, m, 'stoneskin');
+        const elemental = auraActive(state, m, 'elemental');
+        let dmg = def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1);
+        if (stoneskin) dmg *= 0.7;
+        state.player.hp -= dmg;
+        m.attackCd = 1.0 * frenzyMult;
         state.lastKiller = m.type;  // 死亡结算显示
         state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 5);  // OPT-026
-        dbg('monster', `${m.type} hit player for ${def.contactDmg} (hp=${state.player.hp.toFixed(0)})`);
+        if (elemental) {
+          // 元素附伤: 额外一次小型伤害数字 (纯粹视觉标记, 数值已含在 dmg)
+          spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, '⚡', '#ffb74d');
+        }
+        dbg('monster', `${m.type} hit player for ${Math.round(dmg)} (hp=${state.player.hp.toFixed(0)})`);
       }
     } else {
       m.wanderTimer -= dt;
@@ -447,8 +589,11 @@ export function killMonster(state: GameState, m: Monster): void {
   state.killsTotal = (state.killsTotal ?? 0) + 1;
   state.run.kills = (state.run.kills ?? 0) + 1;
   // 跑局推进 (OPT-012): Boss 被杀 → 通关条件; 小怪被杀 → alive--
-  if (def.boss) state.run.bossKilled = true;
-  else if (state.run.alive > 0) state.run.alive--;
+  if (def.boss) {
+    state.run.bossKilled = true;
+    // A-W1 门结算: Boss 死亡位置生门 (玩家可交互回城/继续)
+    state.run.portal = { x: cx, y: cy, bossType: m.type, used: false };
+  } else if (state.run.alive > 0) state.run.alive--;
   const ups = gainExp(state, Math.round(def.score * 2 * DIFFICULTY_MODS[state.difficulty].expMult));
   if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
   if (Math.random() < 0.12) {
@@ -627,7 +772,7 @@ function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle =
     pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
     vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
     size: { w: 12, h: 12 },
-    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1)),
+    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1)),
     life: 2.0,
     fromId: m.id,
   });

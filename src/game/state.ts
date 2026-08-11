@@ -84,6 +84,7 @@ export type Screen =
   | 'town'                       // 城镇 (子面板: townPanel)
   | 'equipment'                  // Tab 装备面板 (覆盖在 dungeon 上)
   | 'pause'                      // Esc 菜单 (覆盖 dungeon/town 上; settingsOpen 为子状态)
+  | 'portal'                     // A-W1 门结算: Boss 死亡位门前 [回城/继续] 面板
   | 'death' | 'victory';         // 结算 (OPT-011/012 接入)
 
 /** 状态机最小接口 (setScreen 只依赖这些字段; GameState 结构满足) */
@@ -126,6 +127,11 @@ export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
       if (k === '3') return 'title';
       if (k === '4') return 'town';
       if (k === 'escape' || k === '1') return 'dungeon';
+      return null;
+    case 'portal':
+      // 1 回城结算 / 2·Esc 继续 (留在本局, 门在场)
+      if (k === '1') return 'town';
+      if (k === '2' || k === 'escape') return 'dungeon';
       return null;
     case 'title':
       if (k === '1') return 'newgame';
@@ -173,6 +179,8 @@ export interface RunState {
   collectedLoot: number;
   /** 各难度最佳通关秒数 (账号层, OPT-015 持久化) */
   best: Partial<Record<Difficulty, number>>;
+  /** A-W1 门结算: Boss 死亡位置生门; 交互 → 面板 [回城/继续]; 持续到本局结束 */
+  portal?: { x: number; y: number; bossType: string; used: boolean };
 }
 
 export type RunPhase = 'clearing' | 'boss' | 'won';
@@ -190,6 +198,7 @@ export function emptyRun(theme: Theme): RunState {
     theme, total: 0, alive: 0,
     bossAlive: false, bossKilled: false, victoryShown: false,
     t0: performance.now(), timeSec: 0, kills: 0, best: {}, collectedLoot: 0,
+    portal: undefined,
   };
 }
 
