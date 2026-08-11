@@ -26,7 +26,16 @@ export const ELEMENT_DEFS: Record<ElementId, ElementDef> = {
 
 export const ELEMENT_IDS = Object.keys(ELEMENT_DEFS) as ElementId[];
 
+/** 挑战模式四方向位固定主元素 (未决项拍板: 火/冰/毒/影, 排除雷) */
+export const EXTRACT_ELEMENT_ORDER: ElementId[] = ['fire', 'ice', 'poison', 'shadow'];
+
 /** 领主元素随机 (不重复遍历用) */
 export function randomElement(r: () => number = Math.random): ElementId {
   return ELEMENT_IDS[Math.floor(r() * ELEMENT_IDS.length)];
+}
+
+/** 随机副元素 (≠ 主元素; 双元素组合增强 Boss) */
+export function randomSubElement(main: ElementId, r: () => number = Math.random): ElementId {
+  const others = ELEMENT_IDS.filter(e => e !== main);
+  return others[Math.floor(r() * others.length)];
 }

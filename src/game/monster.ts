@@ -296,6 +296,8 @@ export interface Monster {
   hue: number;
   /** 元素 id (绘制/文案用) */
   elementId?: ElementId;
+  /** 副元素 (双元素 Boss): 攻击附加副元素伤; 主元素决定 hue */
+  subElement?: ElementId;
 }
 
 let nextMonsterId = 1;
@@ -381,6 +383,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       enrageT: 0,
       hue,
       elementId: element,
+      subElement: undefined,
     };
     return m;
   }
@@ -419,6 +422,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     laserT: 0,
     enrageT: 0,
     hue: 0,
+    subElement: undefined,
   };
 }
 
@@ -766,6 +770,16 @@ export function updateMonsters(state: GameState, dt: number): void {
         if (elemental) {
           // 元素附伤: 额外一次小型伤害数字 (纯粹视觉标记, 数值已含在 dmg)
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, '⚡', '#ffb74d');
+        }
+        // A-W4 双元素 Boss: 副元素附伤 (额外 40% 副元素伤害, 独立抗性/数字)
+        if (m.subElement && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+          const subDef = ELEMENT_DEFS[m.subElement];
+          const subDmg = Math.max(1, Math.round(dmg * 0.4));
+          state.player.hp -= subDmg;
+          state.lastKiller = m.type;
+          const subColor = DAMAGE_TYPE_COLORS[subDef.dmgType];
+          spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 22, `-${subDmg}`, subColor);
+          dbg('monster', `${m.type} sub(${subDef.name}) hit player for ${subDmg}`);
         }
         dbg('monster', `${m.type} hit player for ${Math.round(dmg)} (hp=${state.player.hp.toFixed(0)})`);
       }

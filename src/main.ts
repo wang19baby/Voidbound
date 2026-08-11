@@ -19,7 +19,7 @@ import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
-import { ELEMENT_DEFS, randomElement } from './game/element';
+import { ELEMENT_DEFS, EXTRACT_ELEMENT_ORDER, randomSubElement } from './game/element';
 import { rollBossSkill3 } from './game/mech';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
 import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
@@ -1128,14 +1128,18 @@ function loopImpl(now: number) {
     if (ph === 'boss') {
       const isExtract = state.run.mode === 'extract';
       if (isExtract && state.run.bossStage === 0) {
-        // A-W4 挑战模式: 四方向区各 1 元素 Boss (池内随机 4 只, 强元素化) → 全清后中央最终 Boss
+        // A-W4 挑战模式: 四方向区各 1 元素 Boss (未决项拍板: 火/冰/毒/影 固定方向位)
+        // 双元素增强: 每只随机副元素 ≠ 主元素 (附伤 + 可读组合)
         const pool = THEME_MONSTER_POOL[state.run.theme];
         for (let i = 0; i < 4; i++) {
           const t = pool[Math.floor(Math.random() * pool.length)];
           const ob = spawnMonster(state, t);
-          ob.elite = true;           // 外层 Boss 级: 精英倍率 + 随机元素
-          ob.elementId = randomElement();
-          ob.hue = ob.elementId ? ELEMENT_DEFS[ob.elementId].hue : 0;
+          ob.elite = true;           // 外层 Boss 级: 精英倍率
+          const mainElem = EXTRACT_ELEMENT_ORDER[i];  // 方向位固定主元素
+          const subElem = randomSubElement(mainElem);
+          ob.elementId = mainElem;
+          ob.subElement = subElem;
+          ob.hue = ELEMENT_DEFS[mainElem].hue;
           ob.size = { w: ob.size.w * 1.5, h: ob.size.h * 1.5 };
           ob.hp = Math.round(ob.hp * 3);
           ob.maxHp = ob.hp;
@@ -1147,14 +1151,14 @@ function loopImpl(now: number) {
             y: state.player.pos.y + Math.sin(a) * 1400 + (Math.random() * 300 - 150),
           };
           state.monsters.push(ob);
-          const elemTag = ob.elementId ? `[${ELEMENT_DEFS[ob.elementId].name}] ` : '';
-          pushToast(state, `${elemTag}元素 Boss 出现: ${t} (${i + 1}/4)`, '#ff9530');
+          const elemTag = `[${ELEMENT_DEFS[mainElem].name}+${ELEMENT_DEFS[subElem].name}]`;
+          pushToast(state, `${elemTag} 元素 Boss: ${t} (${i + 1}/4)`, '#ff9530');
         }
         state.run.bossStage = 1;
         state.run.bossAlive = false;  // 4 只外层 Boss 走 alive-- (死后触发下一阶段)
         state.run.alive = 4;          // 4 只外层 Boss 计入 alive (killMonster 递减)
         playSfxClient('boss_roar');
-        triggerBossIntro(state, '元素 Boss ×4', '四个方向的外来者迫近…');
+        triggerBossIntro(state, '元素 Boss ×4', '火/冰/毒/影 四方位迫近 — 双元素组合');
         inf('world', `extract: 4 outer boss summoned (${state.run.theme})`);
       } else if (isExtract && state.run.bossStage === 1) {
         // 4 外层 Boss 全清 → 中央最终主题 Boss
@@ -2195,6 +2199,11 @@ function drawFrameToScreen() {
     if (m.aura) {
       const auraColor = AURA_DEFS[m.aura].color;
       drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - 4, y: sp.y - 13 }, { w: 8, h: 8 }, 'ui', 'slide_horizontal_color', { color: auraColor });
+    }
+    // A-W4 双元素标记: 副元素色点 (主元素已由 hue 染色整图, 副元素在头顶右偏)
+    if (m.subElement) {
+      const subColor = ELEMENT_DEFS[m.subElement].color;
+      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 + 5, y: sp.y - 13 }, { w: 7, h: 7 }, 'ui', 'slide_horizontal_color', { color: subColor });
     }
     // 机制标记 (A-W3 包2): 精英/领主头像下色条 (盾=青 爆炸=橙 荆棘=绿 诅咒=紫 死亡=红)
     if (m.mech) {

@@ -82,6 +82,19 @@ eq('0 外层→boss(段1触发)', runPhase(0, false, false), 'boss');
 eq('中央 Boss 在场→clearing', runPhase(0, true, false), 'clearing');
 eq('中央已杀→won', runPhase(0, true, true), 'won');
 
+// === 双元素 Boss (未决项拍板: 火/冰/毒/影 固定方向位 + 随机副元素) ===
+import { ELEMENT_IDS, EXTRACT_ELEMENT_ORDER, randomSubElement } from '../src/game/element';
+check('四方向位元素 = 火/冰/毒/影', JSON.stringify(EXTRACT_ELEMENT_ORDER) === JSON.stringify(['fire', 'ice', 'poison', 'shadow']));
+check('方向位元素唯一', new Set(EXTRACT_ELEMENT_ORDER).size === 4);
+check('方向位元素都是合法系', EXTRACT_ELEMENT_ORDER.every(e => ELEMENT_IDS.includes(e)));
+for (const main of EXTRACT_ELEMENT_ORDER) {
+  for (let i = 0; i < 20; i++) {
+    const sub = randomSubElement(main);
+    check(`副元素≠主 (${main} → ${sub})`, sub !== main);
+    check(`副元素合法 (${sub})`, ELEMENT_IDS.includes(sub));
+  }
+}
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
