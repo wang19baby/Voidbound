@@ -170,7 +170,7 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
         rgba.save(out, format="PNG")
         out_done.append(str(out.relative_to(BASE.parent)))
     elif rel_dir == "monsters":
-        is_sheet = img.width >= img.height * 1.8
+        is_sheet = img.width >= img.height * 2.5  # 单图(≤2:1)不再误判为 4 帧 sheet
         # 清理旧帧残留 (防新旧混帧)
         for stale in ATLAS_IN.glob(f"monsters/{name}.png"):
             stale.unlink()

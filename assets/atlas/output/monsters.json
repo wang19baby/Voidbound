@@ -1,10 +1,10 @@
 {
   "atlas": "monsters",
   "size": {
-    "width": 722,
-    "height": 36
+    "width": 922,
+    "height": 68
   },
-  "sprite_count": 20,
+  "sprite_count": 22,
   "sprites": [
     {
       "name": "bat",
@@ -77,9 +77,19 @@
       "is_animated": false
     },
     {
+      "name": "frost_lich_0",
+      "file": "frost_lich_0.png",
+      "x": 254,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "ghost_0",
       "file": "ghost_0.png",
-      "x": 254,
+      "x": 322,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -89,7 +99,7 @@
     {
       "name": "ghost_1",
       "file": "ghost_1.png",
-      "x": 290,
+      "x": 358,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -99,27 +109,17 @@
     {
       "name": "pumpking_0",
       "file": "pumpking_0.png",
-      "x": 326,
+      "x": 394,
       "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
-      "frames": 1,
-      "is_animated": false
-    },
-    {
-      "name": "pumpking_1",
-      "file": "pumpking_1.png",
-      "x": 362,
-      "y": 2,
-      "frame_width": 32,
-      "frame_height": 32,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     },
     {
       "name": "slime",
       "file": "slime.png",
-      "x": 398,
+      "x": 462,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -129,7 +129,7 @@
     {
       "name": "slime_0",
       "file": "slime_0.png",
-      "x": 434,
+      "x": 498,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -139,7 +139,7 @@
     {
       "name": "slime_1",
       "file": "slime_1.png",
-      "x": 470,
+      "x": 534,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -149,7 +149,7 @@
     {
       "name": "small_worm",
       "file": "small_worm.png",
-      "x": 506,
+      "x": 570,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -159,7 +159,7 @@
     {
       "name": "small_worm_0",
       "file": "small_worm_0.png",
-      "x": 542,
+      "x": 606,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -169,7 +169,7 @@
     {
       "name": "small_worm_1",
       "file": "small_worm_1.png",
-      "x": 578,
+      "x": 642,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -177,9 +177,29 @@
       "is_animated": false
     },
     {
+      "name": "void_overlord_0",
+      "file": "void_overlord_0.png",
+      "x": 678,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "war_pharaoh_0",
+      "file": "war_pharaoh_0.png",
+      "x": 746,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "worm",
       "file": "worm.png",
-      "x": 614,
+      "x": 814,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -189,7 +209,7 @@
     {
       "name": "worm_0",
       "file": "worm_0.png",
-      "x": 650,
+      "x": 850,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
@@ -199,7 +219,7 @@
     {
       "name": "worm_1",
       "file": "worm_1.png",
-      "x": 686,
+      "x": 886,
       "y": 2,
       "frame_width": 32,
       "frame_height": 32,
