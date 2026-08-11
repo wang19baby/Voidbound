@@ -365,11 +365,13 @@ export interface PlayerSprite {
 export function pickPlayerSprite(state: GameState, mouseScreenX: number): PlayerSprite {
   const vpCx = state.viewport.w / 2;
   const dx = mouseScreenX - vpCx;
+  // 职业 → 站立 sprite (HD 美术接入; 图集含全部 6 职业 _stand)
+  const name = `${state.player.classId ?? 'sorceress'}_stand`;
   // 鼠标明显在右边 → R, 明显在左边 → L, 中心 ±8px → 用键盘
-  if (dx > 8) return { name: 'sorceress_stand', flipX: false, rot: 0 };
-  if (dx < -8) return { name: 'sorceress_stand', flipX: true, rot: 0 };
+  if (dx > 8) return { name, flipX: false, rot: 0 };
+  if (dx < -8) return { name, flipX: true, rot: 0 };
   const flip = state.player.flipDir;
-  return { name: 'sorceress_stand', flipX: flip === 'L', rot: 0 };
+  return { name, flipX: flip === 'L', rot: 0 };
 }
 
 // re-export

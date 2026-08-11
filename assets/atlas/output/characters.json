@@ -1,8 +1,8 @@
 {
   "atlas": "characters",
   "size": {
-    "width": 422,
-    "height": 20
+    "width": 470,
+    "height": 68
   },
   "sprite_count": 21,
   "sprites": [
@@ -31,15 +31,15 @@
       "file": "barbarian_stand.png",
       "x": 42,
       "y": 2,
-      "frame_width": 16,
-      "frame_height": 16,
+      "frame_width": 64,
+      "frame_height": 64,
       "frames": 1,
       "is_animated": false
     },
     {
       "name": "barbarian_stand_east",
       "file": "barbarian_stand_east.png",
-      "x": 62,
+      "x": 110,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -49,7 +49,7 @@
     {
       "name": "barbarian_stand_north",
       "file": "barbarian_stand_north.png",
-      "x": 82,
+      "x": 130,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -59,7 +59,7 @@
     {
       "name": "barbarian_stand_west",
       "file": "barbarian_stand_west.png",
-      "x": 102,
+      "x": 150,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -69,7 +69,7 @@
     {
       "name": "barbarian_walk",
       "file": "barbarian_walk.png",
-      "x": 122,
+      "x": 170,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -79,7 +79,7 @@
     {
       "name": "necromancer_stand",
       "file": "necromancer_stand.png",
-      "x": 142,
+      "x": 190,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -89,7 +89,7 @@
     {
       "name": "necromancer_walk",
       "file": "necromancer_walk.png",
-      "x": 162,
+      "x": 210,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -99,7 +99,7 @@
     {
       "name": "paladin_stand",
       "file": "paladin_stand.png",
-      "x": 182,
+      "x": 230,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -109,7 +109,7 @@
     {
       "name": "paladin_walk",
       "file": "paladin_walk.png",
-      "x": 202,
+      "x": 250,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -119,7 +119,7 @@
     {
       "name": "ranger_stand",
       "file": "ranger_stand.png",
-      "x": 222,
+      "x": 270,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -129,7 +129,7 @@
     {
       "name": "ranger_walk",
       "file": "ranger_walk.png",
-      "x": 242,
+      "x": 290,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -139,7 +139,7 @@
     {
       "name": "sorceress_stand",
       "file": "sorceress_stand.png",
-      "x": 262,
+      "x": 310,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -149,7 +149,7 @@
     {
       "name": "sorceress_stand_east",
       "file": "sorceress_stand_east.png",
-      "x": 282,
+      "x": 330,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -159,7 +159,7 @@
     {
       "name": "sorceress_stand_north",
       "file": "sorceress_stand_north.png",
-      "x": 302,
+      "x": 350,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -169,7 +169,7 @@
     {
       "name": "sorceress_stand_west",
       "file": "sorceress_stand_west.png",
-      "x": 322,
+      "x": 370,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -179,7 +179,7 @@
     {
       "name": "sorceress_walk",
       "file": "sorceress_walk.png",
-      "x": 342,
+      "x": 390,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -189,7 +189,7 @@
     {
       "name": "sorceress_walk_east",
       "file": "sorceress_walk_east.png",
-      "x": 362,
+      "x": 410,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -199,7 +199,7 @@
     {
       "name": "sorceress_walk_north",
       "file": "sorceress_walk_north.png",
-      "x": 382,
+      "x": 430,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
@@ -209,7 +209,7 @@
     {
       "name": "sorceress_walk_west",
       "file": "sorceress_walk_west.png",
-      "x": 402,
+      "x": 450,
       "y": 2,
       "frame_width": 16,
       "frame_height": 16,
