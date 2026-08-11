@@ -2127,6 +2127,26 @@ function drawFrameToScreen() {
       drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: m.size.w, h: m.size.h }, 'ui', 'slide_horizontal_color', { color: [0.75, 0.65, 0.4] });
     }
 
+    // A-W3 激光预警条 (laser): 蓄力 0.8s 方向线可见 → 站开躲避
+    if (m.laserT > 0) {
+      const lx = state.player.pos.x - m.pos.x;
+      const ly = state.player.pos.y - m.pos.y;
+      const len = Math.hypot(lx, ly) || 1;
+      const nx = lx / len, ny = ly / len;
+      const x0 = sp.x + m.size.w / 2;
+      const y0 = sp.y + m.size.h / 2;
+      const x1 = x0 + nx * 300;
+      const y1 = y0 + ny * 300;
+      // 用细长条近似激光方向 (分段画)
+      for (let seg = 0; seg < 10; seg++) {
+        const t0 = seg / 10, t1 = (seg + 1) / 10;
+        const sx = x0 + (x1 - x0) * t0 - 2;
+        const sy = y0 + (y1 - y0) * t0;
+        drawSprite(gl, quad, res, { x: sx, y: sy }, { w: 4, h: 30 }, 'ui', 'slide_horizontal_color', { color: [1, 0.3, 0.3] });
+        void t1;
+      }
+    }
+
     // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
     if (charging) {
       const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;

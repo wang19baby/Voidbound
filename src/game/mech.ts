@@ -45,3 +45,45 @@ export const DEATH_POOL_T = 3.0;
 export function rollMech(r: () => number = Math.random): MechType {
   return MECH_TYPES[Math.floor(r() * MECH_TYPES.length)];
 }
+
+// === A-W3 包3 Boss 技能 (设计文档 §6.3) ===
+
+export type BossSkill3 = 'spiral' | 'laser' | 'nova' | 'summon_elites' | 'enrage';
+
+export const BOSS_SKILLS3: readonly BossSkill3[] = ['spiral', 'laser', 'nova', 'summon_elites', 'enrage'];
+
+export const BOSS_SKILL3_NAMES: Record<BossSkill3, string> = {
+  spiral: '螺旋弹幕',
+  laser: '激光扫射',
+  nova: '新星爆发',
+  summon_elites: '召唤精英',
+  enrage: '狂暴',
+};
+
+/** 螺旋弹幕: 越转越密 (内圈贴脸/外圈躲) */
+export const SPIRAL_BULLETS = 8;
+export const SPIRAL_TURNS = 3;
+export const SPIRAL_CD = 6.0;
+
+/** 激光: 方向预警条 0.8s → 直线扫射 */
+export const LASER_WINDUP = 0.8;
+export const LASER_CD = 7.0;
+export const LASER_DMG_MULT = 2.5;
+export const LASER_WIDTH = 26;
+
+/** 新星: 全向爆发弹幕 (中距最优解) */
+export const NOVA_BULLETS = 14;
+export const NOVA_CD = 5.0;
+
+/** 召唤精英: 非小怪 (精英 2 只) */
+export const SUMMON_ELITES_CD = 9.0;
+export const SUMMON_ELITES_COUNT = 1;
+
+/** 狂暴: 低血攻速 1.8× 持续 */
+export const ENRAGE_HP = 0.3;
+export const ENRAGE_SPEED_MULT = 1.8;
+
+/** 随机 Boss 技能包3 (波3: 每 Boss 配 1 个新增, 与原 bossSkill 组合) */
+export function rollBossSkill3(r: () => number = Math.random): BossSkill3 {
+  return BOSS_SKILLS3[Math.floor(r() * BOSS_SKILLS3.length)];
+}

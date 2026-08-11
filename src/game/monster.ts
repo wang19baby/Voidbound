@@ -13,7 +13,7 @@ import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from './c
 import { skillDamageScale, advanceCombo, comboScoreMult } from './skill';
 import { DIFFICULTY_MODS } from './difficulty';
 import { ELEMENT_DEFS, randomElement, type ElementId } from './element';
-import { rollMech, MECH_TYPES, SHIELD_UP_T, SHIELD_DOWN_T, SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, THORNS_REFLECT, THORNS_FLAT, CURSE_SLOW_MULT, CURSE_DURATION, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_DPS, DEATH_POOL_RADIUS, DEATH_POOL_T, type MechType } from './mech';
+import { rollMech, rollBossSkill3, MECH_TYPES, SHIELD_UP_T, SHIELD_DOWN_T, SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, THORNS_REFLECT, THORNS_FLAT, CURSE_SLOW_MULT, CURSE_DURATION, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_DPS, DEATH_POOL_RADIUS, DEATH_POOL_T, BOSS_SKILLS3, SPIRAL_BULLETS, SPIRAL_TURNS, SPIRAL_CD, LASER_WINDUP, LASER_CD, LASER_DMG_MULT, LASER_WIDTH, NOVA_BULLETS, NOVA_CD, SUMMON_ELITES_CD, SUMMON_ELITES_COUNT, ENRAGE_HP, ENRAGE_SPEED_MULT, type MechType, type BossSkill3 } from './mech';
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT, type MoveAI } from './moveai';
 
 export type MonsterType =
@@ -46,8 +46,8 @@ export interface MonsterDef {
   element?: ElementId;
   /** 小怪独有行为 (OPT-021): dash=冲撞 / split=死亡分裂 (每主题 ≥2 只) */
   ai?: 'dash' | 'split';
-  /** Boss 独有机制 (OPT-022): summon=召唤小怪 / ring=弹幕环 / charge=冲锋 (每 Boss 不同) */
-  bossSkill?: 'summon' | 'ring' | 'charge';
+  /** Boss 独有机制 (OPT-022 + A-W3 包3): summon=召唤小怪 / ring=弹幕环 / charge=冲锋 / spiral=螺旋弹幕 / laser=激光 / nova=新星 / summon_elites=召精英 / enrage=狂暴 */
+  bossSkill?: 'summon' | 'ring' | 'charge' | 'spiral' | 'laser' | 'nova' | 'summon_elites' | 'enrage';
 }
 
 /** 技能基础伤害面板 (D-04; US-004 技能等级化后移入 SkillDef) */
@@ -285,6 +285,12 @@ export interface Monster {
   burrowT: number;
   /** 护盾状态机 (A-W3): >0 = 开盾, <=0 = 破盾虚弱窗口 */
   shieldT: number;
+  /** Boss 技能包3 (A-W3): spawn 时随机 1 个, 与原 bossSkill 组合 */
+  skill3?: BossSkill3;
+  /** 激光蓄力剩余 (s, 预警条) */
+  laserT: number;
+  /** 狂暴剩余 (s) */
+  enrageT: number;
   /** 元素色相旋转 (度): def.element 或领主随机元素 */
   hue: number;
   /** 元素 id (绘制/文案用) */
@@ -312,6 +318,8 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   const mech: MechType | undefined = (elite || isLord) && !def.boss ? rollMech() : undefined;
   // 移动 AI (A-W3 包1): 领主专属
   const moveAI: MoveAI | undefined = isLord && !def.boss ? rollMoveAI() : undefined;
+  // Boss 技能包3 (A-W3): Boss 额外随机 1 个, 与原 bossSkill 组合 (每 Boss 不同)
+  const skill3: BossSkill3 | undefined = def.boss ? rollBossSkill3() : undefined;
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
@@ -367,6 +375,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       leapT: 0,
       burrowT: 0,
       shieldT: 0,
+      skill3,
+      laserT: 0,
+      enrageT: 0,
       hue,
       elementId: element,
     };
@@ -403,6 +414,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     leapT: 0,
     burrowT: 0,
     shieldT: 0,
+    skill3: undefined,
+    laserT: 0,
+    enrageT: 0,
     hue: 0,
   };
 }
@@ -626,22 +640,101 @@ export function updateMonsters(state: GameState, dt: number): void {
     if (def.boss && m.phase === 2) {
       m.aiCd -= dt;
       if (m.aiCd <= 0) {
-        if (def.bossSkill === 'summon' && (m.aiSpawned ?? 0) < 3) {
-          const pool = THEME_MONSTER_POOL[state.run.theme];
-          const minion = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
-          minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
-          m.aiSpawned = (m.aiSpawned ?? 0) + 1;
-          m.aiCd = 4.0;
-        } else if (def.bossSkill === 'ring') {
-          for (let k = 0; k < 10; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 10);
-          m.aiCd = 6.0;
+        const didBase = (() => {
+          if (def.bossSkill === 'summon' && (m.aiSpawned ?? 0) < 3) {
+            const pool = THEME_MONSTER_POOL[state.run.theme];
+            const minion = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
+            minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
+            m.aiSpawned = (m.aiSpawned ?? 0) + 1;
+            m.aiCd = 4.0;
+            return true;
+          } else if (def.bossSkill === 'ring') {
+            for (let k = 0; k < 10; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 10);
+            m.aiCd = 6.0;
+            return true;
+          }
+          return false;
+        })();
+        // A-W3 包3 技能 (与原技能交替: 基础技能先放, 包3 冷却略长)
+        if (!didBase && m.skill3) {
+          switch (m.skill3) {
+            case 'spiral': {
+              // 螺旋弹幕: 8 发 × 3 圈, 每圈偏角递增 → 越转越密
+              for (let turn = 0; turn < SPIRAL_TURNS; turn++) {
+                const base = turn * 0.35;
+                for (let k = 0; k < SPIRAL_BULLETS; k++) {
+                  spawnEnemyProjectile(state, m, Math.round(def.contactDmg * 0.6), base + (k * Math.PI * 2) / SPIRAL_BULLETS);
+                }
+              }
+              m.aiCd = SPIRAL_CD;
+              break;
+            }
+            case 'laser': {
+              // 激光: 预警条 0.8s → 沿玩家方向直线扫射 (预警时站开)
+              m.laserT = LASER_WINDUP;
+              m.aiCd = LASER_CD;
+              break;
+            }
+            case 'nova': {
+              // 新星: 全向爆发
+              for (let k = 0; k < NOVA_BULLETS; k++) {
+                spawnEnemyProjectile(state, m, Math.round(def.contactDmg * 0.7), (k * Math.PI * 2) / NOVA_BULLETS);
+              }
+              m.aiCd = NOVA_CD;
+              break;
+            }
+            case 'summon_elites': {
+              // 召唤精英: 1-2 只精英 (优先处理召唤物)
+              for (let k = 0; k < SUMMON_ELITES_COUNT + 1; k++) {
+                const pool = THEME_MONSTER_POOL[state.run.theme];
+                const e = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)], undefined, { forceElite: true });
+                e.pos = { x: m.pos.x + (Math.random() * 120 - 60), y: m.pos.y + (Math.random() * 120 - 60) };
+                state.monsters.push(e);
+              }
+              m.aiCd = SUMMON_ELITES_CD;
+              break;
+            }
+            case 'enrage': {
+              // 狂暴: 低血攻速 1.8× 持续 (爆发窗口 / 风筝)
+              m.enrageT = 6;
+              m.aiCd = 12;
+              spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'ENRAGE!', '#ff4530');
+              break;
+            }
+          }
         }
       }
+      // 激光扫射: 预警结束 → 命中线伤害
+      if (m.laserT > 0) {
+        m.laserT -= dt;
+        if (m.laserT <= 0) {
+          // 沿玩家方向直线 260px 宽 LASER_WIDTH 判定
+          const lx = state.player.pos.x - m.pos.x;
+          const ly = state.player.pos.y - m.pos.y;
+          const len = Math.hypot(lx, ly) || 1;
+          const nx = lx / len, ny = ly / len;
+          // 垂直距离判定 (点到直线)
+          const px = state.player.pos.x - m.pos.x;
+          const py = state.player.pos.y - m.pos.y;
+          const proj = px * nx + py * ny;
+          const perp = Math.abs(px * ny - py * nx);
+          if (proj > 0 && proj < 300 && perp < LASER_WIDTH / 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
+            const ldmg = Math.round(def.contactDmg * LASER_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level));
+            state.player.hp -= ldmg;
+            state.lastKiller = m.type;
+            spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff7043');
+            state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+          }
+          spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 10, 'LASER!', '#ff7043');
+        }
+      }
+      // 狂暴衰减
+      if (m.enrageT > 0) m.enrageT -= dt;
     }
 
     const charging = m.aiT > 0;
     const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
-    const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste;
+    const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste * (m.enrageT > 0 ? ENRAGE_SPEED_MULT : 1);
     // A-W3 移动 AI 接管移动: flee (残血逃窜) / burrow (遁地中) / leap (蓄力扑击) 时跳过普通追击
     const moveAIActive =
       (m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD) ||

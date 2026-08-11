@@ -177,6 +177,23 @@ check('遁地 CD 5s / 持续 1.6s', BURROW_CD === 5.0 && BURROW_TIME === 1.6);
 check('逃窜阈值 30%', FLEE_HP_THRESHOLD === 0.3);
 check('侧移半径 150', STRAFE_RADIUS === 150);
 
+// === A-W3 包3 Boss 技能 ===
+import { BOSS_SKILLS3, BOSS_SKILL3_NAMES, rollBossSkill3, SPIRAL_BULLETS, NOVA_BULLETS, LASER_WINDUP, ENRAGE_HP } from '../src/game/mech';
+check('Boss 技能包3 ×5', BOSS_SKILLS3.length === 5);
+check('Boss 技能唯一', new Set(BOSS_SKILLS3).size === 5);
+check('Boss 技能名齐全', ['spiral', 'laser', 'nova', 'summon_elites', 'enrage'].every(s => BOSS_SKILLS3.includes(s as 'spiral')));
+for (const s of BOSS_SKILLS3) check(`Boss 技能 ${s} 有名`, typeof BOSS_SKILL3_NAMES[s] === 'string' && BOSS_SKILL3_NAMES[s].length > 0);
+check('rollBossSkill3 在池内', BOSS_SKILLS3.includes(rollBossSkill3(() => 0.25)));
+check('螺旋 8 发/圈', SPIRAL_BULLETS === 8);
+check('新星 14 发', NOVA_BULLETS === 14);
+check('激光预警 0.8s', LASER_WINDUP === 0.8);
+check('狂暴阈值 30%', ENRAGE_HP === 0.3);
+// Boss spawn 时带 skill3 (非 Boss 不带)
+const bossM = spawnMonster(makeStubState() as never, 'pumpking');
+check('Boss 带 skill3', bossM.skill3 !== undefined);
+check('Boss 带原 bossSkill', MONSTER_DEFS.pumpking.bossSkill === 'summon');
+check('小怪不带 skill3', spawnMonster(makeStubState() as never, 'slime', undefined, {}).skill3 === undefined);
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
