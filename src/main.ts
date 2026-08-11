@@ -14,7 +14,7 @@ import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldTo
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
 import { drawSprite, setViewportUniform } from './render/draw';
-import { resolveSprite } from './render/resources';
+import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
@@ -101,6 +101,11 @@ canvas.addEventListener('webglcontextrestored', () => {
 const quad = createQuadBuffer(gl, VERT, FRAG);
 setViewportUniform(gl, quad, VW, VH);
 inf('gl', 'shader program + quad VAO ready');
+
+// B-V3 粒子 instancing: 环境/死亡/挥砍粒子合并单 draw call (5k 基准护栏, 容量 2048)
+import { InstancedBatch } from './render/instanced';
+const particleBatch = new InstancedBatch(gl, 2048);
+inf('gl', `instanced particle batch ready (cap 2048)`);
 
 inf('atlas', 'loading 6 atlases...');
   invoke('js_log', { msg: '[boot] loading atlases' }).catch(() => {});
@@ -2061,51 +2066,79 @@ function drawFrameToScreen() {
     for (const pk of pools) {
       const sp = worldToScreen(state, { x: pk.x, y: pk.y });
       if (sp.x > -pk.r && sp.x < state.viewport.w + pk.r && sp.y > -pk.r && sp.y < state.viewport.h + pk.r) {
-        const fade = Math.min(0.5, pk.t / 3);
         drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: pk.r, h: pk.r }, 'particles', 'spark_03', { color: [0.2, 0.9, 0.3], blend: 'add' });
-        void fade;
       }
     }
   }
 
-  // 环境粒子 (OPT-027): 主题色微尘, 世界图层之上
+  // B-V3: 环境/挥砍/弹幕/死亡粒子 → instanced batch (同 atlas 单 draw call)
+  const instUv = (spriteName: string): [number, number, number, number] | null => {
+    const bundle = res.atlases.get('particles');
+    if (!bundle) return null;
+    const sprite = bundle.sprites.get(spriteName);
+    return sprite ? spriteUv(sprite, bundle.atlas.width, bundle.atlas.height) : null;
+  };
+  const addInst = (uv: [number, number, number, number] | null, sp: { x: number; y: number }, w: number, h: number, rot = 0): void => {
+    if (!uv) return;
+    particleBatch.add(sp.x, sp.y, w, h, uv, rot);
+  };
+  // 同 atlas 一次绑定纹理 + 程序; 颜色按组 flush
+  gl.useProgram(particleBatch.program);
+  gl.activeTexture(gl.TEXTURE0);
+  const pbundle = res.atlases.get('particles');
+  if (pbundle) gl.bindTexture(gl.TEXTURE_2D, pbundle.texture);
+  const flushGroup = (color: [number, number, number]) => {
+    if (particleBatch.pending() > 0) {
+      particleBatch.setColor(color[0], color[1], color[2]);
+      particleBatch.flush({ w: state.viewport.w, h: state.viewport.h });
+    }
+  };
+  const envUv = instUv('spark_03');
   const envColor = THEME_ENV_COLOR[state.theme];
   for (const p of state.envFx) {
     const sp = worldToScreen(state, p);
-    drawSprite(gl, quad, res, sp, { w: 6, h: 6 }, 'particles', 'spark_03', { color: envColor, blend: 'add' });
+    addInst(envUv, sp, 6, 6);
   }
+  flushGroup(envColor);
 
   // 近战挥击 (slash particle, 在玩家前)
+  const slashUv = instUv('slash_01');
   for (const s of getSwings(state)) {
     const sp = worldToScreen(state, s.pos);
     if (sp.x + s.size.w < 0 || sp.x > state.viewport.w) continue;
-    drawSprite(gl, quad, res, sp, s.size, 'particles', 'slash_01', { blend: 'add' });
+    addInst(slashUv, sp, s.size.w, s.size.h);
   }
+  flushGroup([1, 1, 1]);
 
+  // 玩家火球 / 敌弹 / 死亡粒子: 颜色各异, 逐组 flush
+  const magicUv = instUv('magic_01');
   for (const f of state.fireballs) {
     const sp = worldToScreen(state, f.pos);
     const rc = f.rune && f.rune !== 'none' ? RUNE_DEFS[f.rune].color : hexToRgb01(DAMAGE_TYPE_COLORS[f.dmgType]);
-    drawSprite(gl, quad, res, sp, f.size, 'particles', 'magic_01', { color: rc, blend: 'add' });
+    addInst(magicUv, sp, f.size.w, f.size.h);
+    flushGroup(rc);
   }
-
-  // 怪物远程投射物 (红色小点)
+  const projUv = instUv('magic_05');
+  const projCol: [number, number, number] = [1, 0.3, 0.3];
   for (const p of getEnemyProj(state)) {
     const sp = worldToScreen(state, p.pos);
     if (sp.x + p.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + p.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, p.size, 'particles', 'magic_05', { color: [1, 0.3, 0.3], blend: 'add' });
+    addInst(projUv, sp, p.size.w, p.size.h);
   }
+  flushGroup(projCol);
 
   // 死亡粒子 (在世界图层之后, 怪物之前)
+  const dUv = instUv('slash_02');
   for (const fx of getDeathFx(state)) {
     const sp = worldToScreen(state, fx.pos);
     if (sp.x + fx.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + fx.size.h < 0 || sp.y > state.viewport.h) continue;
     const lifeFrac = Math.max(0, fx.life / fx.maxLife);
-    // 后期变小
     const sz = fx.size.w * (0.4 + 0.6 * lifeFrac);
-    drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: sz, h: sz }, 'particles', 'slash_02', { rot: fx.rot, blend: 'add' });
+    addInst(dUv, { x: sp.x, y: sp.y }, sz, sz, fx.rot);
   }
+  flushGroup([0.9, 0.9, 0.95]);
 
   // 怪物 (受击时变红闪烁, 复用 color tint)
   for (const m of state.monsters) {
