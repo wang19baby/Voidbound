@@ -32,9 +32,33 @@ precision mediump float;
 in vec2 v_uv;
 uniform sampler2D u_tex;
 uniform vec3 u_color;
+uniform float u_hue; // 色相旋转 (度, 0=不变): 元素变体用 — RGB→HSL→旋转→RGB
 out vec4 outColor;
+
+vec3 hslToRgb(float h, float s, float l) {
+  vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
+}
+
+vec3 hueRotate(vec3 c, float deg) {
+  float mx = max(c.r, max(c.g, c.b));
+  float mn = min(c.r, min(c.g, c.b));
+  float l = (mx + mn) * 0.5;
+  float d = mx - mn;
+  if (d < 0.001) return c; // 灰: 无色相
+  float s = d / max(0.0001, 1.0 - abs(2.0 * l - 1.0));
+  float h;
+  if (mx == c.r) h = mod((c.g - c.b) / d, 6.0);
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else h = (c.r - c.g) / d + 4.0;
+  h = h / 6.0 + deg / 360.0;
+  return hslToRgb(mod(h, 1.0), s, l);
+}
+
 void main() {
   vec4 tex = texture(u_tex, v_uv);
-  outColor = vec4(tex.rgb * u_color, tex.a);
+  vec3 rgb = tex.rgb * u_color;
+  if (abs(u_hue) > 0.01) rgb = hueRotate(rgb, u_hue);
+  outColor = vec4(rgb, tex.a);
 }
 `;
