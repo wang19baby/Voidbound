@@ -1891,44 +1891,30 @@ function drawFrameToScreen() {
   // 设置 reticle 位置给 drawHud 用
   setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
 
-  // V1 地板瓦片: 16x16 贴图按 32px 世界格平铺 (2x 像素, 比 64px 更细腻)
-  // 主题混铺 + 暗石点缀 + 主题色 (虚空瓦片是沙色 bug, 用紫色 tint 桥接等 AI 新画)
+    // V1 地板瓦片: HD 32px 格平铺 (旧桥接: tint/混铺已随 HD 落地移除)
   const FLOOR_TILE = 32;
-  const FLOOR_THEME_TINT: Partial<Record<Theme, [number, number, number]>> = {
-    ruin: [0.82, 0.88, 1.05], // 旧地板微冷蓝; HD 落地后移除
-  };
   const t0x = Math.max(0, Math.floor(state.camera.x / FLOOR_TILE));
   const t0y = Math.max(0, Math.floor(state.camera.y / FLOOR_TILE));
   const t1x = Math.min(Math.floor(WORLD_W / FLOOR_TILE), Math.ceil((state.camera.x + state.viewport.w) / FLOOR_TILE));
   const t1y = Math.min(Math.floor(WORLD_H / FLOOR_TILE), Math.ceil((state.camera.y + state.viewport.h) / FLOOR_TILE));
   const floorBase = `floor_${state.theme}`;
-  const floorTint = FLOOR_THEME_TINT[state.theme];
   for (let ty = t0y; ty < t1y; ty++) {
     for (let tx = t0x; tx < t1x; tx++) {
-      // 位置哈希 → 伪随机点缀 (有机散点, 非条纹)
+      // 位置哈希 → 10% 微暗增深度 (HD 纹理自带细节, 不需混铺)
       const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
       const r = (h % 1000) / 1000;
-      const name = r < 0.14 ? 'floor' : floorBase; // 14% 暗石混铺破单调
-      const opt: { color?: [number, number, number] } = {};
-      if (floorTint) opt.color = floorTint;
-      else if (r > 0.82) opt.color = [0.9, 0.9, 0.96]; // 其余 8% 微暗增深度
-      drawSprite(gl, quad, res, { x: tx * FLOOR_TILE - state.camera.x, y: ty * FLOOR_TILE - state.camera.y }, { w: FLOOR_TILE, h: FLOOR_TILE }, 'world', name, opt);
+      const opt: { color?: [number, number, number] } = r > 0.9 ? { color: [0.9, 0.9, 0.96] } : {};
+      drawSprite(gl, quad, res, { x: tx * FLOOR_TILE - state.camera.x, y: ty * FLOOR_TILE - state.camera.y }, { w: FLOOR_TILE, h: FLOOR_TILE }, 'world', floorBase, opt);
     }
   }
 
-  // V1 墙: 石主题混 wall_alt 破单调; 虚空 wall_void 是全透明 bug → 用暗石 + 紫 tint 桥接
-  const wallBase = `wall_${state.theme}`;
-  const stoneTheme = state.theme === 'desert' || state.theme === 'ruin';
-  const voidTint: [number, number, number] = [0.66, 0.52, 1.0];
+  // V1 墙: HD 主题墙 128px 1:1 (旧桥接: void tint / wall_alt 混搭已随 HD 落地移除)
+  const wallName = `wall_${state.theme}`;
   for (const w of state.world.walls) {
     const sp = worldToScreen(state, w.pos);
     if (sp.x + w.size.w < 0 || sp.x > state.viewport.w) continue;
     if (sp.y + w.size.h < 0 || sp.y > state.viewport.h) continue;
-    const h = (Math.round(w.pos.x / w.size.w) * 73856093 ^ Math.round(w.pos.y / w.size.h) * 19349663) >>> 0;
-    let name: string;
-    if (state.theme === 'void') name = (h & 3) === 0 ? 'wall_alt' : 'wall';
-    else name = stoneTheme && (h & 3) === 0 ? 'wall_alt' : wallBase;
-    drawSprite(gl, quad, res, sp, w.size, 'world', name, state.theme === 'void' ? { color: voidTint } : undefined);
+    drawSprite(gl, quad, res, sp, w.size, 'world', wallName);
   }
 
   // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞), 墙与地板之间

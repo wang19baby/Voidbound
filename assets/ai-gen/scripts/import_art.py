@@ -147,6 +147,8 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
+        # 瓦片尺寸自动: 墙 128 (128px 块 1:1) / 地板 32 (32px 格) / 其余 64
+        size = 128 if name.startswith("wall") else (32 if name.startswith("floor") else 64)
         # 瓦片: 无缝纹理铺满画布, 无品红底 → 不抠图; 仅当检测到品红底才抠 (防误食纹理边缘)
         # 中心方裁: 模型常给非正方形, 先裁中心正方形再缩放 (防拉伸变形)
         w0, h0 = img.size
