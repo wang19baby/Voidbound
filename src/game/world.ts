@@ -79,7 +79,7 @@ export function worldToChunk(x: number, y: number): { cx: number; cy: number } {
  *   - 外圈 (row 0/7, col 0/7) 强制空 → 保证相邻 chunk 跨边界连通
  *   - 内部 6x6 范围 18% 密度墙
  */
-export function generateChunkWalls(cx: number, cy: number, density: number = 0.18): Wall[] {
+export function generateChunkWalls(cx: number, cy: number, density: number = 0.18, mode: MapMode = 'linear'): Wall[] {
   const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xcafef00d);
   const walls: Wall[] = [];
   // 默认全空, 然后随机填墙
@@ -104,6 +104,10 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
     }
     isWall.push(row);
   }
+
+  // === A-W2 地标雕刻 pass (设计文档 §2.4): 模式专属结构覆盖随机墙 ===
+  applyLandmarkCarve(isWall, cx, cy, mode);
+
   // 转 walls
   const ox = cx * CHUNK_SIZE;
   const oy = cy * CHUNK_SIZE;
@@ -117,15 +121,68 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
   return walls;
 }
 
-/** chunk 缓存 (同 chunk 同墙, 避免重复生成); A-W2 按密度分键 (模式切换清缓存) */
-const chunkCache = new Map<string, Wall[]>();
-function chunkKey(cx: number, cy: number, density: number): string { return `${cx},${cy}:${density}`; }
+/** 地标雕刻: 覆盖随机墙, 建立模式结构
+ *  linear  : 主轴带 (y 中部 2 块高) 全空 → 左→右主走廊; 主带两侧随机留墙 (分支感)
+ *  gauntlet: 中央 2x2 清空成竞技场 + 周边环墙 (外→内递进终点); 四角领主区清空小块
+ *  extract : 中央 2x2 清空成出生竞技场; 四方向区保留随机 (密度梯度由 density 承担)
+ */
+function applyLandmarkCarve(isWall: boolean[][], cx: number, cy: number, mode: MapMode): void {
+  const midC = Math.floor((WORLD_W / CHUNK_SIZE) / 2);
+  const midR = Math.floor((WORLD_H / CHUNK_SIZE) / 2);
+  const clearBlock = (r0: number, c0: number, rows: number, cols: number) => {
+    for (let r = Math.max(1, r0); r < Math.min(CHUNK_BLOCKS - 1, r0 + rows); r++) {
+      for (let c = Math.max(1, c0); c < Math.min(CHUNK_BLOCKS - 1, c0 + cols); c++) isWall[r][c] = false;
+    }
+  };
+  if (mode === 'linear') {
+    // 主轴带: y 中部 2 块高, 全图水平贯通 (出生左 → Boss 右)
+    if (cy === midR || cy === midR - 1) {
+      for (let r = 3; r <= 4; r++) for (let c = 0; c < CHUNK_BLOCKS; c++) isWall[r][c] = false;
+    }
+    // 分支密室: 主带两侧偶发死路 pocket (1 块宽 2 块深, 藏宝)
+    const pocketRng = mulberry32(cx * 99371 ^ cy * 1913 ^ 0xabcd);
+    const pocketChance = pocketRng();
+    if (pocketChance < 0.25 && cy !== midR && cy !== midR - 1) {
+      const side = cy < midR - 1 ? 0 : 1;  // 主带上/下侧
+      const c0 = 1 + Math.floor(Math.random() * 5);
+      if (side === 0) { for (let c = c0; c < c0 + 2; c++) isWall[2][c] = false; isWall[3][c0 - 1] = true; }
+      else { for (let c = c0; c < c0 + 2; c++) isWall[5][c] = false; isWall[4][c0 - 1] = true; }
+    }
+  } else if (mode === 'gauntlet') {
+    // 中央竞技场: 2x2 清空 + 环墙 (外圈是墙)
+    if (Math.abs(cx - midC) <= 1 && Math.abs(cy - midR) <= 1) {
+      clearBlock(2, 2, 4, 4);  // 内部 4x4 清空
+      for (let r = 1; r < CHUNK_BLOCKS - 1; r++) {
+        for (let c = 1; c < CHUNK_BLOCKS - 1; c++) {
+          if (r === 1 || r === CHUNK_BLOCKS - 2 || c === 1 || c === CHUNK_BLOCKS - 2) isWall[r][c] = true;  // 环墙
+        }
+      }
+    }
+    // 四角领主区: 角 chunk 清空小块 (守卫群位置)
+    const corner = (cx === 0 || cx === Math.floor(WORLD_W / CHUNK_SIZE) - 1) && (cy === 0 || cy === Math.floor(WORLD_H / CHUNK_SIZE) - 1);
+    if (corner) {
+      clearBlock(2, 2, 2, 2);
+      for (let r = 1; r < 4; r++) for (let c = 1; c < 4; c++) {
+        if (r === 1 || c === 1) isWall[r][c] = true;
+      }
+    }
+  } else if (mode === 'extract') {
+    // 中央出生竞技场: 2x2 清空 (回中央决战)
+    if (Math.abs(cx - midC) <= 1 && Math.abs(cy - midR) <= 1) {
+      clearBlock(2, 2, 4, 4);
+    }
+  }
+}
 
-export function getChunkWalls(cx: number, cy: number, density: number = 0.18): Wall[] {
-  const k = chunkKey(cx, cy, density);
+/** chunk 缓存 (同 chunk 同墙, 避免重复生成); A-W2 按 密度+模式 分键 (模式切换清缓存) */
+const chunkCache = new Map<string, Wall[]>();
+function chunkKey(cx: number, cy: number, density: number, mode: MapMode): string { return `${cx},${cy}:${density}:${mode}`; }
+
+export function getChunkWalls(cx: number, cy: number, density: number = 0.18, mode: MapMode = 'linear'): Wall[] {
+  const k = chunkKey(cx, cy, density, mode);
   let w = chunkCache.get(k);
   if (!w) {
-    w = generateChunkWalls(cx, cy, density);
+    w = generateChunkWalls(cx, cy, density, mode);
     chunkCache.set(k, w);
   }
   return w;
@@ -142,6 +199,7 @@ export function getActiveWalls(state: GameState, radius = 2): Wall[] {
   const center = worldToChunk(state.player.pos.x, state.player.pos.y);
   const out: Wall[] = [];
   const density = densityForMode(state.run.mode ?? 'linear');
+  const mode = state.run.mode ?? 'linear';
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const cx = center.cx + dx;
@@ -149,7 +207,7 @@ export function getActiveWalls(state: GameState, radius = 2): Wall[] {
       const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
       const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
       if (cx < 0 || cy < 0 || cx > maxCx || cy > maxCy) continue;
-      out.push(...getChunkWalls(cx, cy, density));
+      out.push(...getChunkWalls(cx, cy, density, mode));
     }
   }
   return out;
@@ -191,10 +249,10 @@ const decorCache = new Map<string, Decor[]>();
 function decorKey(cx: number, cy: number, theme: Theme): string { return `${cx},${cy}:${theme}`; }
 
 /** 生成单个 chunk 的装饰 (种子化, 与墙布局共享 RNG 种子系, 避开墙块) */
-export function generateChunkDecor(cx: number, cy: number, theme: Theme, density: number = 0.18): Decor[] {
+export function generateChunkDecor(cx: number, cy: number, theme: Theme, density: number = 0.18, mode: MapMode = 'linear'): Decor[] {
   const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xdec0de5);
   const cfg = THEME_DECOR[theme];
-  const walls = getChunkWalls(cx, cy, density);
+  const walls = getChunkWalls(cx, cy, density, mode);
   const out: Decor[] = [];
   const ox = cx * CHUNK_SIZE;
   const oy = cy * CHUNK_SIZE;
@@ -213,11 +271,11 @@ export function generateChunkDecor(cx: number, cy: number, theme: Theme, density
   return out;
 }
 
-export function getChunkDecor(cx: number, cy: number, theme: Theme, density: number = 0.18): Decor[] {
-  const k = `${decorKey(cx, cy, theme)}:${density}`;
+export function getChunkDecor(cx: number, cy: number, theme: Theme, density: number = 0.18, mode: MapMode = 'linear'): Decor[] {
+  const k = `${decorKey(cx, cy, theme)}:${density}:${mode}`;
   let d = decorCache.get(k);
   if (!d) {
-    d = generateChunkDecor(cx, cy, theme, density);
+    d = generateChunkDecor(cx, cy, theme, density, mode);
     decorCache.set(k, d);
   }
   return d;
@@ -228,6 +286,7 @@ export function getActiveDecor(state: GameState, radius = 2): Decor[] {
   const center = worldToChunk(state.player.pos.x, state.player.pos.y);
   const out: Decor[] = [];
   const density = densityForMode(state.run.mode ?? 'linear');
+  const mode = state.run.mode ?? 'linear';
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       const cx = center.cx + dx;
@@ -235,7 +294,7 @@ export function getActiveDecor(state: GameState, radius = 2): Decor[] {
       const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
       const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
       if (cx < 0 || cy < 0 || cx > maxCx || cy > maxCy) continue;
-      out.push(...getChunkDecor(cx, cy, state.theme, density));
+      out.push(...getChunkDecor(cx, cy, state.theme, density, mode));
     }
   }
   return out;

@@ -56,6 +56,24 @@ check('线性密度 0.18', densityForMode('linear') === 0.18);
 check('高级密度 0.22', densityForMode('gauntlet') === 0.22);
 check('挑战密度 0.16', densityForMode('extract') === 0.16);
 
+// === A-W2 地标雕刻 pass ===
+import { generateChunkWalls, CHUNK_SIZE, CHUNK_BLOCKS, BLOCK } from '../src/game/world';
+function chunkHasWall(gridWalls: ReturnType<typeof generateChunkWalls>, br: number, bc: number, origin: { x: number; y: number }): boolean {
+  return gridWalls.some(w => Math.round((w.pos.x - origin.x) / BLOCK) === bc && Math.round((w.pos.y - origin.y) / BLOCK) === br);
+}
+// 线性: 主轴带 (cy=midR) 的 row 3-4 全空 → 水平主走廊
+const midR = Math.floor((WORLD_H / CHUNK_SIZE) / 2);
+const linWalls = generateChunkWalls(5, midR, 0.18, 'linear');
+check('线性主轴 row3-4 全空', [3, 4].every(r => [0, 1, 2, 5, 6, 7].every(c => !chunkHasWall(linWalls, r, c, { x: 5 * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
+// 高级: 中央竞技场内部清空 + 环墙
+const midC = Math.floor((WORLD_W / CHUNK_SIZE) / 2);
+const gaWalls = generateChunkWalls(midC, midR, 0.22, 'gauntlet');
+check('高级中央内部清空', [2, 3, 4, 5].every(r => [2, 3, 4, 5].every(c => !chunkHasWall(gaWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
+check('高级中央环墙存在', [1, CHUNK_BLOCKS - 2].some(r => [1, CHUNK_BLOCKS - 2].some(c => chunkHasWall(gaWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
+// 挑战: 中央清空无环墙 (出生竞技场开放)
+const exWalls = generateChunkWalls(midC, midR, 0.16, 'extract');
+check('挑战中央清空', [2, 3, 4, 5].every(r => [2, 3, 4, 5].every(c => !chunkHasWall(exWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);
