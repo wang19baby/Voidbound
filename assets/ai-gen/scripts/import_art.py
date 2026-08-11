@@ -27,14 +27,14 @@ from gemini_generate import chroma_key_magenta  # noqa: E402
 BASE = Path(__file__).parent.parent          # assets/ai-gen
 IMPORT = BASE / "import"
 ATLAS_IN = BASE.parent / "atlas" / "input"   # assets/atlas/input
-SIZE = 64
+SIZE = 64  # 默认输出贴图尺寸 (px); 可 --size 覆盖 (小怪/瓦片按显示尺寸烘焙)
 
 
-def bbox_crop(img: Image.Image) -> Image.Image:
-    """按 alpha 非零区域裁剪, 扩展为正方形 (居中)"""
+def bbox_crop(img: Image.Image, size: int = SIZE) -> Image.Image:
+    """按 alpha 非零区域裁剪, 扩展为正方形 (居中), 缩放到 size (降采样用 BOX 保质量)"""
     bbox = img.getchannel("A").getbbox()
     if bbox is None:
-        return Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+        return Image.new("RGBA", (size, size), (0, 0, 0, 0))
     x0, y0, x1, y1 = bbox
     w, h = x1 - x0, y1 - y0
     side = max(w, h)
@@ -48,10 +48,14 @@ def bbox_crop(img: Image.Image) -> Image.Image:
     ex, ey = min(img.width, left + side), min(img.height, top + side)
     region = img.crop((sx, sy, ex, ey))
     canvas.paste(region, (ox + sx - left, oy + sy - top))
-    return canvas.resize((SIZE, SIZE), Image.Resampling.NEAREST)
+    if canvas.width == size:
+        return canvas
+    # 降采样用 BOX (像素平均), 升采样用 NEAREST (保持像素边)
+    resample = Image.Resampling.BOX if canvas.width > size else Image.Resampling.NEAREST
+    return canvas.resize((size, size), resample)
 
 
-def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool):
+def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool, size: int = SIZE):
     out_stem.parent.mkdir(parents=True, exist_ok=True)
     rgba = chroma_key_magenta(img)
     if is_sheet:
@@ -66,15 +70,17 @@ def save_frames(img: Image.Image, out_stem: Path, is_sheet: bool):
         rgba.save(f"{out_stem}_0.png", format="PNG")
 
 
-def process(path: Path, rel_dir: str) -> list[str]:
+def process(path: Path, rel_dir: str, size: int) -> list[str]:
     """处理单个文件 → 输出文件列表"""
     name = path.stem
     img = Image.open(path).convert("RGBA")
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
-        # 瓦片: 整图抠图缩放到 64 (不裁 bbox, 保 seamless)
-        rgba = chroma_key_magenta(img).resize((SIZE, SIZE), Image.Resampling.NEAREST)
+        # 瓦片: 整图抠图缩放到 size (不裁 bbox, 保 seamless)
+        rgba = chroma_key_magenta(img)
+        resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
+        rgba = rgba.resize((size, size), resample)
         out = ATLAS_IN / "world" / f"{name}.png"
         rgba.save(out, format="PNG")
         out_done.append(str(out.relative_to(BASE.parent)))
@@ -86,21 +92,21 @@ def process(path: Path, rel_dir: str) -> list[str]:
         for stale in ATLAS_IN.glob(f"monsters/{name}_*.png"):
             stale.unlink()
         out = ATLAS_IN / "monsters" / name
-        save_frames(img, out, is_sheet)
+        save_frames(img, out, is_sheet, size)
         out_done.extend(str(p) for p in sorted(ATLAS_IN.glob(f"monsters/{name}_*.png")))
     elif rel_dir == "characters":
         # 站立单帧 → 以基础名保存 (游戏 pickPlayerSprite 用 sorceress_stand 无后缀)
         if name.endswith("_stand"):
             for stale in ATLAS_IN.glob(f"characters/{name}.png"):
                 stale.unlink()
-            rgba = bbox_crop(chroma_key_magenta(img))
+            rgba = bbox_crop(chroma_key_magenta(img), size)
             rgba.save(ATLAS_IN / "characters" / f"{name}.png", format="PNG")
             out_done.append(f"characters/{name}.png")
         else:
             # _walk sheet → _0..3
             for stale in ATLAS_IN.glob(f"characters/{name}_*.png"):
                 stale.unlink()
-            save_frames(img, ATLAS_IN / "characters" / name, True)
+            save_frames(img, ATLAS_IN / "characters" / name, True, size)
             out_done.extend(str(p) for p in sorted(ATLAS_IN.glob(f"characters/{name}_*.png")))
     return out_done
 
@@ -110,6 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description="Voidbound 美术导入")
     parser.add_argument("group", nargs="?", choices=["characters", "monsters", "world", "all"])
     parser.add_argument("--all", action="store_true", help="处理全部 (等价于省略参数)")
+    parser.add_argument("--size", type=int, default=SIZE, help=f"输出贴图尺寸, 默认 {SIZE} (小怪/瓦片按显示尺寸烘焙, 如 --size 32)")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -129,7 +136,7 @@ def main():
                 total += 1
                 continue
             try:
-                outs = process(p, rel)
+                outs = process(p, rel, args.size)
                 print(f"✓ {p.relative_to(IMPORT)} -> " + ", ".join(o.split('/')[-1] for o in outs))
                 total += len(outs)
             except Exception as e:  # noqa: BLE001
