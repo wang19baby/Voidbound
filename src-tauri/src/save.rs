@@ -817,6 +817,9 @@ pub struct CharacterSummary {
     pub level: u32,
     pub difficulty: String,
     pub theme: String,
+    /// 最近游玩时间 (unix 秒, 存档文件 mtime; 0 = 未知)
+    #[serde(default)]
+    pub last_played: u64,
 }
 
 /// 角色列表 (C-201): 读 account.characters + 各档摘要; 无存档的角色跳过摘要字段用默认
@@ -830,6 +833,16 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
     let mut out = Vec::new();
     for id in ids {
         let id = sanitize_char_id(&id);
+        // 最近游玩时间 = 存档文件 mtime (每次保存自动更新, 零 schema 迁移)
+        let last_played = match save_path(&id) {
+            Ok(p) if p.exists() => fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            _ => 0,
+        };
         let summary = match save_path(&id) {
             Ok(p) if p.exists() => match fs::read(&p) {
                 Ok(bytes) if !bytes.is_empty() => match decode_save(&bytes) {
@@ -839,6 +852,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                         difficulty: data.difficulty,
                         theme: data.theme,
                         id,
+                        last_played,
                     },
                     Err(_) => CharacterSummary {
                         class: "barbarian".into(),
@@ -846,6 +860,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                         difficulty: "normal".into(),
                         theme: "forest".into(),
                         id,
+                        last_played,
                     },
                 },
                 _ => CharacterSummary {
@@ -854,6 +869,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                     difficulty: "normal".into(),
                     theme: "forest".into(),
                     id,
+                    last_played,
                 },
             },
             _ => CharacterSummary {
@@ -862,6 +878,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                 difficulty: "normal".into(),
                 theme: "forest".into(),
                 id,
+                last_played,
             },
         };
         out.push(summary);

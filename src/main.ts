@@ -350,12 +350,12 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  // 标题画面 (GAME_FLOW §1.2): 1 开始 / 2 设置 / R 读档 / Esc 关设置
+  // 标题画面 (GAME_FLOW §1.2): 有存档 1 继续 / 2 新游戏 / 3 设置; 无存档 1 新游戏 / 2 设置; R 角色管理
   if (state.screen === 'title') {
     const k = e.key.toLowerCase();
-    if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
+    const hasSave = state.charList.length > 0;
     if (state.settingsOpen) {
-      if (k === 'escape') { state.settingsOpen = false; return; }
+      if (k === '2' || k === 'escape') { state.settingsOpen = false; return; }
       if (k === 'r') { resetKeybinds(); pushToast(state, '键位已恢复默认', '#9cf'); return; }
       if (k === 'n') { requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared)); state.titleMsg = `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`; return; }
       if (k === 'f') { void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs))); return; }
@@ -363,14 +363,23 @@ window.addEventListener('keydown', (e) => {
       if (k === '-' || k === '_') { state.volume = Math.max(0, state.volume - 0.05); setVolumeClient(state.volume); return; }
       return;
     }
-    if (k === '1') {
+    const startNewgame = () => {
       state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
       state.ngFrom = 'title';
       setScreen(state, 'newgame');
       state.titleMsg = '';
       inf('ui', '新游戏 → 选择屏');
+    };
+    if (k === '1') {
+      if (hasSave) { continueLastSave(); } else { startNewgame(); }
+      return;
     }
-    else if (k === 'r') {
+    if (k === '2') {
+      if (hasSave) { startNewgame(); } else { state.settingsOpen = true; }
+      return;
+    }
+    if (k === '3' && hasSave) { state.settingsOpen = true; return; }
+    if (k === 'r') {
       // C-202 角色管理: 拉列表进角色屏
       listCharacters().then(list => {
         state.charList = list;
@@ -909,6 +918,7 @@ let frameCount = 0;
 let lastFpsT = performance.now();
 let loopStartedLogged = false;
 let loopCrashCooldown = 0;
+let titleListAt = 0;  // title 屏角色列表节流刷新 (最近游玩 mtime 变化)
 function loop(now: number) {
   // 心跳 (每帧可被 js_log 确认): 首帧 + 崩溃转发, 防止 rAF 内异常静默冻结
   if (!loopStartedLogged) {
@@ -917,6 +927,14 @@ function loop(now: number) {
   }
   try {
     if (state.screen === 'title') {
+      // 每 5s 最多一次: 刷新最近游玩排序 (玩完回首页时卡片次序最新)
+      if (now - titleListAt > 5000) {
+        titleListAt = now;
+        listCharacters().then(list => {
+          state.charList = list;
+          state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
+        }).catch(() => { /* 列表刷新失败忽略: 沿用旧列表 */ });
+      }
       drawTitle();
     } else if (state.screen === 'newgame') {
       drawNewgame();
@@ -1903,6 +1921,7 @@ function confirmCreateCharacter(state: GameState): void {
   state.currentChar = name;
   state.charList = [...state.charList, {
     id: name, class: state.charNamingClass, level: 1, difficulty: state.charCreateDiff, theme: 'forest',
+    last_played: Math.floor(Date.now() / 1000),
   }];
   state.charCreating = false;
   state.charNameInput = '';
@@ -1944,6 +1963,9 @@ function charDiffStep(dir: 1 | -1): void {
   }
 }
 
+/** 主题显示名 (卡片摘要用) */
+const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
+
 /** 标题画面 (GAME_FLOW §1.2): 主菜单 */
 function drawTitle() {
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
@@ -1963,51 +1985,64 @@ function drawTitle() {
   const my = mouse.state().pos.y;
   const lmb = mouse.state().buttons.LMB;
   const menuRects: Array<[number, number, number, number]> = [];
-  // v4: 有存档 → 金色"继续游戏"大按钮置首 + 摘要; 菜单随之重排
-  const recent = state.charList.length > 0
-    ? (state.charList.find(c => c.id === state.currentChar) ?? state.charList[0])
-    : null;
-  const hasSave = !!recent;
-  if (hasSave) {
-    const contY = hudCanvas.height / 2 - 70, contW = 480, contH = 46;
-    const contX = hudCanvas.width / 2 - contW / 2;
-    const rep = CLASS_DEFS[(recent!.class as ClassId) ?? 'barbarian'];
-    const hit = inRect(mx, my, contX, contY, contW, contH);
+  const hasSave = state.charList.length > 0;
+  // 最近存档排序: 按 last_played 降序取前 5 (0/缺失排最后)
+  const recentCards = hasSave
+    ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
+    : [];
+  // 右侧最近存档卡片区 (与主菜单左右分区)
+  const cardX = hudCanvas.width - 460, cardW = 360, cardY0 = 330, cardH = 42, cardGap = 6;
+  recentCards.forEach((c, i) => {
+    const cy = cardY0 + i * (cardH + cardGap);
+    const hit = inRect(mx, my, cardX, cy, cardW, cardH);
     const down = hit && lmb;
-    hudCtx.fillStyle = down ? 'rgba(255,214,74,0.35)' : hit ? 'rgba(255,214,74,0.16)' : 'rgba(40,34,10,0.55)';
-    hudCtx.fillRect(contX, contY, contW, contH);
-    hudCtx.strokeStyle = down ? '#fff' : '#ffd64a';
-    hudCtx.lineWidth = down ? 3 : hit ? 2 : 1;
-    hudCtx.strokeRect(contX, contY, contW, contH);
-    hudCtx.fillStyle = hit ? '#fff' : '#ffd64a';
-    hudCtx.font = 'bold 20px monospace';
-    hudCtx.fillText('▶ 继续游戏', hudCanvas.width / 2, contY + contH / 2 - 9);
-    hudCtx.fillStyle = '#caa';
+    hudCtx.fillStyle = down ? 'rgba(102,204,255,0.30)' : hit ? 'rgba(102,204,255,0.13)' : '#14141f';
+    hudCtx.fillRect(cardX, cy, cardW, cardH);
+    hudCtx.strokeStyle = hit ? '#66ccff' : '#2a2a3a';
+    hudCtx.lineWidth = hit ? 2 : 1;
+    hudCtx.strokeRect(cardX, cy, cardW, cardH);
+    const rep = CLASS_DEFS[(c.class as ClassId) ?? 'barbarian'];
+    hudCtx.textAlign = 'left';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillStyle = rep?.color ?? '#eee';
+    hudCtx.font = 'bold 16px monospace';
+    hudCtx.fillText(`${rep?.name ?? c.class} ${c.id}`, cardX + 14, cy + 14);
+    hudCtx.fillStyle = hit ? '#fff' : '#caa';
     hudCtx.font = '13px monospace';
-    hudCtx.fillText(`${rep.name} ${recent!.id} · Lv${recent!.level} · ${recent!.theme} · ${DIFFICULTY_MODS[recent!.difficulty]?.name ?? recent!.difficulty}`, hudCanvas.width / 2, contY + contH / 2 + 13);
-    menuRects.push([contX, contY, contW, contH]);
-  }
-  const baseY = hasSave ? -2 : -30;
-  const menuItems: Array<[number, string]> = [
-    [hudCanvas.height / 2 + baseY, '[1] 新游戏'],
-    [hudCanvas.height / 2 + baseY + 40, '[2] 设置'],
-    [hudCanvas.height / 2 + baseY + 80, '[R] 角色管理'],
-  ];
-  for (const [y, label] of menuItems) {
+    hudCtx.textAlign = 'right';
+    hudCtx.fillText(`Lv${c.level} · ${THEME_NAMES[c.theme] ?? c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}`, cardX + cardW - 14, cy + 14);
+    menuRects.push([cardX, cy, cardW, cardH]);
+  });
+  // 主菜单: 有存档 → 继续游戏置首 (金色主 CTA); 无存档 → 原 3 项
+  const menuY0 = hudCanvas.height / 2 - 30;
+  const menuItems: Array<[number, string, boolean]> = hasSave
+    ? [[menuY0, '[1] ▶ 继续游戏', true], [menuY0 + 40, '[2] 新游戏', false], [menuY0 + 80, '[3] 设置', false], [menuY0 + 120, '[R] 角色管理', false]]
+    : [[menuY0, '[1] 新游戏', false], [menuY0 + 40, '[2] 设置', false], [menuY0 + 80, '[R] 角色管理', false]];
+  for (const [y, label, primary] of menuItems) {
     const ry = y - 19, rw = 320, rh = 38;
     const hit = inRect(mx, my, hudCanvas.width / 2 - rw / 2, ry, rw, rh);
     const down = hit && lmb;  // 按下反馈: 松开瞬间已触发动作, 视觉加深
-    if (hit) {
+    if (primary) {
+      // 金色主 CTA 盒
+      hudCtx.fillStyle = down ? 'rgba(255,214,74,0.35)' : hit ? 'rgba(255,214,74,0.16)' : 'rgba(40,34,10,0.55)';
+      hudCtx.fillRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
+      hudCtx.strokeStyle = down ? '#fff' : '#ffd64a';
+      hudCtx.lineWidth = down ? 2 : hit ? 2 : 1;
+      hudCtx.strokeRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
+      hudCtx.fillStyle = hit ? '#fff' : '#ffd64a';
+    } else if (hit) {
       hudCtx.fillStyle = down ? 'rgba(102,204,255,0.32)' : 'rgba(102,204,255,0.13)';
       hudCtx.fillRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
+      hudCtx.fillStyle = down ? '#fff' : '#66ccff';
+    } else {
+      hudCtx.fillStyle = '#eee';
     }
-    hudCtx.fillStyle = hit ? (down ? '#fff' : '#66ccff') : '#eee';  // hover=蓝字, 其余保持白字
     hudCtx.fillText(label, hudCanvas.width / 2, y);
     menuRects.push([hudCanvas.width / 2 - rw / 2, ry, rw, rh]);
   }
   hudCtx.fillStyle = '#666';
   hudCtx.font = '14px monospace';
-  hudCtx.fillText(keyHintMain(), hudCanvas.width / 2, hudCanvas.height / 2 + 140);
+  hudCtx.fillText(keyHintMain(), hudCanvas.width / 2, hasSave ? 660 : 500);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
 
@@ -2016,7 +2051,7 @@ function drawTitle() {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '16px monospace';
     hudCtx.textAlign = 'center';
-    hudCtx.fillText(state.titleMsg, hudCanvas.width / 2, hudCanvas.height / 2 + 190);
+    hudCtx.fillText(state.titleMsg, hudCanvas.width / 2, hasSave ? 690 : 550);
     hudCtx.textAlign = 'left';
   }
 
@@ -3513,30 +3548,52 @@ function handleUiClick(state: GameState, mx: number, my: number): boolean {
     case 'title': {
       const cx = w / 2, btnW = 320, btnH = 38;
       const hasSave = state.charList.length > 0;
-      const baseY = hasSave ? -2 : -30;
-      // 继续游戏大按钮 (有存档时)
-      if (hasSave && inRect(mx, my, cx - 240, h / 2 - 70, 480, 46)) {
-        continueLastSave();
-        return true;
+      // 右侧最近存档卡片 (与 drawTitle 同布局)
+      const cards = hasSave
+        ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
+        : [];
+      for (let i = 0; i < cards.length; i++) {
+        if (inRect(mx, my, w - 460, 330 + i * 48, 360, 42)) { enterTargetCharacter(state, cards[i]); return true; }
       }
-      const items: Array<{ y: number; action: () => void }> = [
-        { y: h / 2 + baseY - btnH / 2, action: () => {
-          state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-          state.ngFrom = 'title';
-          setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
-        { y: h / 2 + baseY + 40 - btnH / 2, action: () => { state.settingsOpen = !state.settingsOpen; } },
-        { y: h / 2 + baseY + 80 - btnH / 2, action: () => {
-          listCharacters().then(list => {
-            state.charList = list;
-            state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
-            state.charCreating = false;
-            state.charConfirmDel = false;
-            setScreen(state, 'characters');
-            state.titleMsg = '';
-            inf('ui', `角色管理: ${list.length} 个角色`);
-          }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
-        } },
-      ];
+      const menuY0 = h / 2 - 30;
+      const items: Array<{ y: number; action: () => void }> = hasSave
+        ? [
+            { y: menuY0 - btnH / 2, action: () => { continueLastSave(); } },
+            { y: menuY0 + 40 - btnH / 2, action: () => {
+              state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+              state.ngFrom = 'title';
+              setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
+            { y: menuY0 + 80 - btnH / 2, action: () => { state.settingsOpen = true; } },
+            { y: menuY0 + 120 - btnH / 2, action: () => {
+              listCharacters().then(list => {
+                state.charList = list;
+                state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
+                state.charCreating = false;
+                state.charConfirmDel = false;
+                setScreen(state, 'characters');
+                state.titleMsg = '';
+                inf('ui', `角色管理: ${list.length} 个角色`);
+              }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
+            } },
+          ]
+        : [
+            { y: menuY0 - btnH / 2, action: () => {
+              state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+              state.ngFrom = 'title';
+              setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
+            { y: menuY0 + 40 - btnH / 2, action: () => { state.settingsOpen = true; } },
+            { y: menuY0 + 80 - btnH / 2, action: () => {
+              listCharacters().then(list => {
+                state.charList = list;
+                state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
+                state.charCreating = false;
+                state.charConfirmDel = false;
+                setScreen(state, 'characters');
+                state.titleMsg = '';
+                inf('ui', `角色管理: ${list.length} 个角色`);
+              }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
+            } },
+          ];
       // C (P3-10): 设置面板键位条目命中 (优先于菜单项)
       if (state.settingsOpen && handleSettingsClick(mx, my)) return true;
       for (const it of items) {

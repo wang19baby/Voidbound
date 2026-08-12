@@ -96,6 +96,8 @@ export interface CharacterSummary {
   level: number;
   difficulty: Difficulty;
   theme: Theme;
+  /** 最近游玩时间 (unix 秒, 存档文件 mtime; 0 = 未知) */
+  last_played: number;
 }
 
 export function saveGame(data: SaveData, charId?: string): Promise<string> {
