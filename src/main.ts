@@ -23,13 +23,13 @@ import { ELEMENT_DEFS, EXTRACT_ELEMENT_ORDER, randomSubElement } from './game/el
 import { rollBossSkill3 } from './game/mech';
 import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
 import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
-import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type SaveData, type SaveAccount, type CharacterSummary } from './ipc/save';
+import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, SET_BONUSES, type EquipType, type Equipment, type MaterialId } from './game/equipment';
 import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buyItem, sellItem, rerollOwned, buyPotion, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, TOWN_IDS, runeForgePay, type TownPanel, type TownId, type MerchantStock, type MysteryStock, type NpcKind } from './game/town';
 import { RUNE_FORGE_COST } from './game/equipment';
 import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
-import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
+import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, cycleDifficulty, cycleDifficultyGated, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
 import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
 import { rrect, hexToRgb01 } from './ui/primitives';
@@ -38,8 +38,10 @@ import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, re
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
 import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
-import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp } from './app/save';
+import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp, continueLastSave, resumeFromSave, enterTargetCharacter, type SaveCtx } from './app/save';
 import { handleUiClick as handleUiClickDispatch, buildUiCtx, type UiCtx } from './app/uiDispatch';
+import { handleHudClick } from './app/actions/hud';
+import { notifyCastFail, requestDifficulty as requestDifficultyApp, hardcoreWipe as hardcoreWipeApp, revivePlayer as revivePlayerApp } from './app/actions/player';
 import {
   handleScreenKey,
   getTitleFocus, isCloseConfirmOpen, setCloseConfirmOpen,
@@ -56,7 +58,7 @@ import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, no
 // TS-008: 版本号来自 package.json (esbuild JSON loader 内联, 树摇后仅留 version)
 import { version as GAME_VERSION } from '../package.json';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
-import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint, recomputePassives, type PassiveId } from './game/passive';
+import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint, type PassiveId } from './game/passive';
 import { getSkillCooldowns } from './game/cooldown';
 import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
 import { getVfx, updateVfx } from './game/vfx';
@@ -304,10 +306,27 @@ loadAccount().then(a => {
 
 // === US-026 screenKeyCtx: 屏路由集中器的依赖注入 (19 个 main.ts 副作用函数) ===
 // 函数声明被 JS hoisting, 此处引用安全
+const saveCtx: SaveCtx = { ensureDungeonRun, startRun };
+// uiCallbacks: 鼠标 UI 点击分发回调 (US-031 内联, handleUiClick 包装层已删除)
+const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
+  confirmCloseSave, confirmCloseCancel,
+  continueLastSave: () => continueLastSave(state, saveCtx),
+  enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
+  titleAct,
+  handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
+  handleTownPanelKey,
+  startFromNewgame: () => startFromNewgame(state),
+  startCreateNewgame: () => startCreateNewgame(state),
+  enterTown, startRun,
+  hardcoreWipe: (s) => hardcoreWipeApp(s),
+  revivePlayer: (s) => revivePlayerApp(s),
+  leaveThroughPortal, setScreen, resumeScreen,
+  deathGoldPenalty, loadLastNg: () => loadLastNg(),
+};
 const screenKeyCtx: ScreenKeyContext = {
   confirmCloseSave,
   confirmCloseCancel,
-  continueLastSave,
+  continueLastSave: () => continueLastSave(state, saveCtx),
   openCharactersList: () => openCharactersList(state),
   saveLastNg: () => saveLastNg(state),
   loadLastNg: () => loadLastNg(),
@@ -315,7 +334,7 @@ const screenKeyCtx: ScreenKeyContext = {
   startNewgameFromTitle: () => startNewgameFromTitle(state),
   startFromNewgame: () => startFromNewgame(state),
   doLaunchRun: () => doLaunchRun(state, startRun),
-  enterTargetCharacter,
+  enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
   persistNow: () => persistNowApp(state),
   fadeBgm,
   startRun,
@@ -325,8 +344,8 @@ const screenKeyCtx: ScreenKeyContext = {
   formatTime,
   interactTown,
   handleTownPanelKey,
-  revivePlayer,
-  hardcoreWipe,
+  revivePlayer: (s) => revivePlayerApp(s),
+  hardcoreWipe: (s) => hardcoreWipeApp(s),
 };
 
 // v4: 标题"继续游戏"进度摘要用 — 预加载角色列表 (失败静默, 无角色时继续按钮隐藏)
@@ -468,7 +487,7 @@ if (e.key === 'o' || e.key === 'O') {
       restoreMaterialsApp(state, d);  // M5 W4 C-401
       restorePassivesApp(state, d);  // v9 被动技能树
       inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
-      resumeFromSave(state, d);  // v11: 场景分派 (上次在城镇 → 回城镇整理)
+      resumeFromSave(state, d, saveCtx);  // v11: 场景分派 (上次在城镇 → 回城镇整理)
       return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
     }).then(a => {
       state.cleared = a.cleared ?? [];
@@ -584,7 +603,7 @@ function handleScreenClick(): void {
     }
     canvas.style.cursor = (yH || nH) ? 'pointer' : 'default';
   } else if (mouse.wasClicked('LMB')) {
-    handleUiClick(state, mouse.state().pos.x, mouse.state().pos.y);
+    handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
   }
   mouse.reset();
 }
@@ -1914,7 +1933,7 @@ function drawFrame() {
     }
     }
   } else if (mouse.wasClicked('LMB')) {
-    handleUiClick(state, mouse.state().pos.x, mouse.state().pos.y);
+    handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
   }
   // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
 
@@ -2199,237 +2218,10 @@ function updateEnvFx(state: GameState, dt: number): void {
   state.envFx = nxt;
 }
 
-/** 当前局完整快照 → 存档负载 (OPT-002: P 键 / 回菜单 / 关窗共用) */
-function buildSavePayload(state: GameState): SaveData {
-  return buildSavePayloadApp(state);
-}
-
-/** 继续最近角色 (标题 [O], 键盘/点击共用): 读最近角色档 → 按场景分派 */
-function continueLastSave(): void {
-  let loadedD: SaveData | null = null;
-  loadAccount().then(a => {
-    const last = (a.last_char && a.last_char.length > 0) ? a.last_char : 'char_0';
-    state.currentChar = last;
-    return loadGame(last);
-  }).then(d => {
-    loadedD = d;
-    bindClass(state, (d.class as ClassId) ?? 'barbarian');
-    if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterialsApp(state, d);  // M5 W4 C-401
-    restorePassivesApp(state, d);  // v9 被动技能树
-    return loadAccount();
-  }).then(a => {
-    state.cleared = a.cleared ?? [];
-    state.run.best = {};
-    for (const b of a.best ?? []) state.run.best[b.difficulty] = b.ms;
-    state.legacy = a.legacy ?? [];
-    state.warehouse = (a.warehouse ?? []).map(it => ({
-      id: allocEquipmentId(),
-      name: it.name,
-      rarity: it.rarity,
-      type: it.eq_type,
-      pos: { x: 0, y: 0 },
-      size: { w: 24, h: 24 },
-      affixes: it.affixes.map(a2 => ({ stat: a2.stat, value: a2.value, element: a2.element })),
-      pickedUp: true,
-      setName: it.setName,
-    }));
-    if (loadedD) resumeFromSave(state, loadedD);
-    state.titleMsg = '';
-    inf('save', `读档并继续 (角色 ${state.currentChar}, 含账号层)`);
-  }).catch((err: unknown) => { state.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
-}
-
-/** 读档场景分派 (v11): 上次在城镇 → 进城镇整理; 否则进地牢继续 */
-function resumeFromSave(state: GameState, d: { scene?: string }): void {
-  if (d.scene === 'town') {
-    state.mode = 'town';
-    state.townPanel = null;
-    state.player.pos = { x: 560, y: 500 };
-    setScreen(state, 'town');
-    inf('ui', `读档 → 城镇 (${TOWN_DEFS[state.townId]?.name ?? state.townId})`);
-  } else {
-    ensureDungeonRun(state);
-    setScreen(state, 'dungeon');
-    inf('ui', '读档 → 地牢继续');
-  }
-}
-
-/** 进入/切换角色 (v4 复用: 列表 Enter / 大按钮 / 最近 3 快捷卡) */
-function enterTargetCharacter(state: GameState, target: CharacterSummary): void {
-  if (target.id === state.currentChar) {
-    // 同一角色: 按内存场景直接回位 (城镇整理 / 地牢继续)
-    if (state.mode === 'town') {
-      state.townPanel = null;
-      setScreen(state, 'town');
-    } else {
-      ensureDungeonRun(state);
-      setScreen(state, 'dungeon');
-    }
-    state.titleMsg = '';
-    inf('ui', `继续角色 ${target.id}`);
-    return;
-  }
-  // 切换角色: 先存当前, 再读目标
-  state.currentChar = target.id;
-  loadGame(target.id).then(d => {
-    bindClass(state, (d.class as ClassId) ?? 'barbarian');
-    state.player.pos.x = d.player_x; state.player.pos.y = d.player_y;
-    state.player.hp = d.player_hp; state.player.mp = d.player_mp;
-    state.player.facing.x = d.facing_x; state.player.facing.y = d.facing_y;
-    state.score = d.score; state.player.gold = d.gold ?? 0;
-    state.player.level = d.level ?? 1;
-    state.player.skillPoints = d.skill_points ?? 0;
-    state.player.exp = d.exp ?? 0;
-    const owned = getOwned(state);
-    owned.length = 0;
-    for (const it of d.owned) {
-      owned.push({
-        id: allocEquipmentId(), name: it.name, rarity: it.rarity, type: it.eq_type,
-        pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
-        affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-        pickedUp: true, setName: it.setName,
-      });
-    }
-    state.player.equipped = {};
-    for (const eq of d.equipped ?? []) {
-      state.player.equipped[eq.slot] = {
-        id: allocEquipmentId(), name: eq.item.name, rarity: eq.item.rarity, type: eq.slot,
-        pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
-        affixes: eq.item.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-        pickedUp: true, setName: eq.item.setName,
-      };
-    }
-    recomputeCombat(state);
-    for (const rr of d.runes ?? []) {
-      const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
-      if (sk) sk.rune = rr.rune;
-    }
-    if (d.theme) state.theme = d.theme;
-    if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
-    state.run.mode = validMapMode(d.mode ?? 'linear');  // A-W2 v10 模式还原
-    if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterialsApp(state, d);  // M5 W4 C-401
-    restorePassivesApp(state, d);  // v9 被动技能树
-    for (const sl of d.skill_levels ?? []) {
-      const sk = getSkill(sl.slot);
-      if (sk) sk.level = sl.level;
-    }
-    resumeFromSave(state, d);
-    state.titleMsg = '';
-    void persistNowApp(state);  // 更新 last_char
-    inf('save', `切换到角色 ${target.id} (Lv${d.level ?? 1} ${d.class ?? 'barbarian'})`);
-  }).catch((err: unknown) => {
-    // 新建但未开局的角色无存档: 直接以该职业开新局 (normal/forest)
-    const cls = (target.class as ClassId) ?? 'barbarian';
-    bindClass(state, cls);
-    startRun(state, 'forest', 'normal');
-    setScreen(state, 'dungeon');
-    state.titleMsg = '';
-    void persistNowApp(state);
-    inf('save', `角色 ${target.id} 无存档, 以 ${CLASS_DEFS[cls].name} 开新局 (${String(err)})`);
-  });
-}
-
-/** 施法失败反馈 (OPT-007): toast 区分 MP/CD; 主技能槽 0.4s 红闪 */
-function notifyCastFail(state: GameState, slot: SkillSlot): void {
-  const sk = getSkill(slot);
-  const msg = state.player.mp < sk.mpCost ? 'MP 不足' : '冷却中';
-  pushToast(state, `${sk.name}: ${msg}`, '#ff5555');
-  if (slot === 'Q' || slot === 'W' || slot === 'E' || slot === 'R') {
-    state.castFailFlash = { slot, t: 0.4 };
-  }
-}
-
-/** 战斗 HUD 按钮点击 (技能栏 4 槽 / 药水 HP·MP / 翻滚): 与键盘 Q·F·E·R / 1·2 / Space 同行为 */
-function handleHudClick(state: GameState, key: string, aimDir: { x: number; y: number }, nowSec: number): void {
-  if (key.startsWith('skill')) {
-    const idx = Number(key.slice(5));
-    const slot = SKILL_SLOTS[2 + idx];  // 显示 Q/F/E/R → 内部 Q/W/E/R
-    if (slot && tryCastSlot(slot, state, aimDir, nowSec)) {
-      invoke('play_sfx', { name: 'swing' }).catch(() => {});
-    } else {
-      notifyCastFail(state, slot ?? 'Q');
-    }
-    return;
-  }
-  if (key === 'potionHp') {
-    if (usePotion(state, 'hp')) playSfxClient('hit');
-    else wrn('skill', 'potion HP failed (cd or empty)');
-    return;
-  }
-  if (key === 'potionMp') {
-    if (usePotion(state, 'mp')) playSfxClient('hit');
-    else wrn('skill', 'potion MP failed (cd or empty)');
-    return;
-  }
-  if (key === 'dodge') {
-    startDodge(state);
-    return;
-  }
-}
-
-/** 鼠标 UI 点击 (C-501): 命中测试各屏关键 UI, 返回是否消费 */
-/** 鼠标点击主入口: 委托给 app/uiDispatch.ts (US-031) */
-function handleUiClick(state: GameState, mx: number, my: number): boolean {
-  const uiCtx = buildUiCtx(state, mx, my, {
-    confirmCloseSave, confirmCloseCancel, continueLastSave,
-    enterTargetCharacter, titleAct,
-    handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
-    handleTownPanelKey,
-    startFromNewgame: () => startFromNewgame(state),
-    startCreateNewgame: () => startCreateNewgame(state),
-    enterTown, startRun,
-    hardcoreWipe, revivePlayer, leaveThroughPortal, setScreen, resumeScreen,
-    deathGoldPenalty, loadLastNg: () => loadLastNg(),
-  });
-  return handleUiClickDispatch(uiCtx);
-}
-
-/** 难度切换入口 (OPT-015): 未解锁拒绝 + toast; 硬核走二段确认 (OPT-006) */
-function requestDifficulty(state: GameState, d: Difficulty): void {
-  if (d === state.difficulty) return;
-  if (!unlockedDifficulty(state.cleared, d)) {
-    pushToast(state, `${DIFFICULTY_MODS[d].name} 未解锁 (通关前置)`, '#f66');
-    return;
-  }
-  if (d === 'hardcore') {
-    state.pendingDifficulty = d;
-    state.confirmHardcore = true;
-    return;
-  }
-  state.difficulty = d;
-  inf('game', `难度 → ${DIFFICULTY_MODS[d].name}`);
-}
-
-/** 硬核永久死亡 (D-09): 清空装备/等级/技能/符文 (OPT-011 死亡结算"重开"路径调用) */
-function hardcoreWipe(state: GameState): void {
-  getOwned(state).length = 0;
-  recomputeCombat(state);
-  state.player.level = 1;
-  state.player.exp = 0;
-  state.player.skillPoints = 0;
-  state.materials = emptyMaterials();  // M5 W4 C-401: 硬核清档含材料
-  state.player.passives = {};
-  recomputePassives(state);  // v9: 硬核清档含被动
-  for (const slot of SKILL_SLOTS) {
-    const sk = getSkill(slot);
-    sk.level = 1;
-    sk.rune = null;
-  }
-  state.rejectedRunes.length = 0;
-  inf('game', 'HARDCORE: 永久死亡, 进度已清空');
-}
-
-/** 原地复活 (OPT-011): 满血蓝 + 5s 无敌, 药水不补 (死亡不再自动补满) */
-function revivePlayer(state: GameState): void {
-  state.player.hp = 100;
-  state.player.mp = 100;
-  state.reviveInvuln = 5;
-  state.player.dodgeT = 0;
-  state.player.dodgeCd = 0;
-  state.fireballs.length = 0;
-  inf('gl', 'revived in place (5s invuln)');
-}
+// 已搬到 app/actions/* + app/save.ts (US-027-b):
+// - notifyCastFail, handleHudClick → app/actions/{hud,player}.ts
+// - requestDifficulty, hardcoreWipe, revivePlayer → app/actions/player.ts
+// - buildSavePayload 包装层, continueLastSave, resumeFromSave, enterTargetCharacter → app/save.ts
+// - handleUiClick 包装层 → 内联到 drawFrame 调用点
 
 requestAnimationFrame(loop);
