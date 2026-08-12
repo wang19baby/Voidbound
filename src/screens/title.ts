@@ -6,12 +6,29 @@
 //   后续 US-024-b 可单独把整块 drawTitle 拆出
 // - 所有函数首参 ctx (显式依赖注入, 与 ui/primitives/ui/keycap 保持一致)
 //
-// 依赖: ui/primitives (rrect), input/keyboard (keyLabel, Keybinds)
+// 依赖: ui/primitives (rrect), input/keyboard (keyLabel, Keybinds), game/toast, game/class, render/draw
 
 import { rrect } from '../ui/primitives';
 import { inRect } from '../game/uigrid';
+import type { MouseHandle } from '../input/mouse';
+import type { GameState } from '../game/state';
+import type { ClassId } from '../game/class';
 import type { Keybinds } from '../game/keybind';
-import { keyLabel } from '../game/keybind';
+import { keyLabel, loadKeybinds, keyHintMainText, keyHintSkillsText } from '../game/keybind';
+import { setScreen } from '../game/state';
+import { CLASS_IDS, CLASS_SPRITES } from '../game/class';
+import { DIFFICULTIES, DIFFICULTY_MODS } from '../game/difficulty';
+import type { RenderResources } from '../render/resources';
+import { drawSprite } from '../render/draw';
+import { pushToast } from '../game/toast';
+import { listCharacters } from '../ipc/save';
+import { setNgLaunchT, setNgNaming } from '../app/screenMachine';
+import { MAP_MODES } from '../game/mapmode';
+import { THEMES } from '../game/state';
+import { inf, wrn } from '../util/log';
+
+type GL = WebGL2RenderingContext;
+type QuadBuffer = ReturnType<typeof import('../render/gl/resources').createQuadBuffer>;
 
 /** 微尘粒子状态 (从 main.ts 模块级迁移; 仅本模块使用) */
 interface TitleDust { x: number; y: number; vx: number; vy: number; t: number; life: number; }
@@ -171,3 +188,147 @@ export function drawInfoBand(
   });
   ctx.textAlign = 'center';
 }
+
+// ===== 从 main.ts 搬出的标题/设置/立绘/光标函数 (US-024-b) =====
+
+/** 键位提示 (A 收敛): 单点生成, 键位自定义后即时反映 (纯函数) */
+export function keyHintMain(): string {
+  return keyHintMainText(loadKeybinds());
+}
+/** 设置面板技能名行 (键位动态) */
+export function keyHintSkills(): string {
+  return keyHintSkillsText(loadKeybinds());
+}
+
+/** 新游戏 → 新局选择屏 (职业/难度/主题预填当前) — ctx callback */
+export function startNewgameFromTitle(state: GameState): void {
+  state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+  state.ngFrom = 'title';
+  setNgLaunchT(-1);
+  setNgNaming(false);
+  setScreen(state, 'newgame');
+  state.titleMsg = '';
+  inf('ui', '新游戏 → 选择屏');
+}
+
+/** 角色管理列表 (拉取后进屏) — ctx callback */
+export function openCharactersList(state: GameState): void {
+  listCharacters().then(list => {
+    state.charList = list;
+    state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
+    state.charConfirmDel = false;
+    setScreen(state, 'characters');
+    state.titleMsg = '';
+    inf('ui', `角色管理: ${list.length} 个角色`);
+  }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
+}
+
+/** C (P3-10): 键位条目几何 (绘制与命中共用) */
+export function settingsKeyRects(hudCanvas: HTMLCanvasElement): Array<{ key: string; label: string; value: string; x: number; y: number; w: number; h: number }> {
+  const kb = loadKeybinds();
+  const y0 = hudCanvas.height / 2 - 130;
+  const rows: Array<Array<{ key: string; label: string; value: string }>> = [
+    [{ key: 'dodge', label: '翻滚', value: keyLabel(kb.dodge) }, { key: 'interact', label: '交互', value: keyLabel(kb.interact) }, { key: 'equip', label: '装备', value: keyLabel(kb.equip) }],
+    [{ key: 'potionHp', label: '药水HP', value: keyLabel(kb.potionHp) }, { key: 'potionMp', label: '药水MP', value: keyLabel(kb.potionMp) }],
+    [{ key: 'skills.Q', label: '技能1', value: keyLabel(kb.skills.Q) }, { key: 'skills.W', label: '技能2', value: keyLabel(kb.skills.W) }, { key: 'skills.E', label: '技能3', value: keyLabel(kb.skills.E) }, { key: 'skills.R', label: '技能4', value: keyLabel(kb.skills.R) }],
+  ];
+  const out: Array<{ key: string; label: string; value: string; x: number; y: number; w: number; h: number }> = [];
+  const itemW = 148, gap = 10;
+  let ry = y0 + 216;
+  for (const row of rows) {
+    const x0 = hudCanvas.width / 2 - (row.length * (itemW + gap) - gap) / 2;
+    row.forEach((it, i) => {
+      out.push({ key: it.key, label: it.label, value: it.value, x: x0 + i * (itemW + gap), y: ry, w: itemW, h: 26 });
+    });
+    ry += 36;
+  }
+  return out;
+}
+
+/** C (P3-10): 设置面板键位条目点击 → 进入编辑捕获 */
+export function handleSettingsClick(state: GameState, hudCanvas: HTMLCanvasElement, mx: number, my: number): boolean {
+  for (const r of settingsKeyRects(hudCanvas)) {
+    if (inRect(mx, my, r.x, r.y, r.w, r.h)) {
+      state.keybindEdit = r.key;
+      pushToast(state, `按新键绑定「${r.label}」 (Esc 取消)`, '#9cf');
+      return true;
+    }
+  }
+  return false;
+}
+
+/** 设置面板 (C8 合并标题/暂停两处绘制 + 键位自定义区) */
+export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingContext2D, hudCanvas: HTMLCanvasElement): void {
+  const w = hudCanvas.width;
+  const y0 = hudCanvas.height / 2 - 130;
+  hudCtx.fillStyle = 'rgba(0,0,0,0.72)';
+  hudCtx.fillRect(0, y0, w, 440);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#ffd';
+  hudCtx.font = 'bold 26px monospace';
+  hudCtx.fillText('设置', w / 2, y0 + 40);
+  hudCtx.font = '18px monospace';
+  hudCtx.fillStyle = '#fff';
+  hudCtx.fillText(`音量: ${Math.round(state.volume * 100)}%   [+]/[-] 或拖动滑条`, w / 2, y0 + 82);
+  // 音量滑块 (拖动逻辑在 loopImpl)
+  const sliderX = w / 2 - 120;
+  const sliderY = y0 + 106;
+  hudCtx.fillStyle = '#333';
+  hudCtx.fillRect(sliderX, sliderY, 240, 10);
+  hudCtx.fillStyle = '#c9aaff';
+  hudCtx.fillRect(sliderX, sliderY, 240 * state.volume, 10);
+  hudCtx.strokeStyle = '#888';
+  hudCtx.strokeRect(sliderX, sliderY, 240, 10);
+  hudCtx.fillStyle = '#fff';
+  hudCtx.font = '16px monospace';
+  hudCtx.fillText(`全屏: [F] 切换`, w / 2, y0 + 138);
+  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}  [N] 循环`, w / 2, y0 + 164);
+
+  // 键位区 (P3-10)
+  hudCtx.fillStyle = '#9cf';
+  hudCtx.font = 'bold 15px monospace';
+  hudCtx.fillText('键位 — 点击条目后按新键 · [R] 恢复默认', w / 2, y0 + 194);
+  for (const r of settingsKeyRects(hudCanvas)) {
+    const edit = state.keybindEdit === r.key;
+    hudCtx.fillStyle = edit ? 'rgba(102,204,255,0.22)' : 'rgba(24,26,36,0.95)';
+    hudCtx.fillRect(r.x, r.y, r.w, r.h);
+    hudCtx.strokeStyle = edit ? '#66ccff' : '#3a3a4a';
+    hudCtx.lineWidth = edit ? 2 : 1;
+    hudCtx.strokeRect(r.x, r.y, r.w, r.h);
+    hudCtx.fillStyle = '#ddd';
+    hudCtx.font = edit ? 'bold 13px monospace' : '12px monospace';
+    hudCtx.fillText(edit ? '按新键…' : `${r.label}: ${r.value}`, r.x + r.w / 2, r.y + r.h / 2);
+  }
+
+  hudCtx.fillStyle = '#999';
+  hudCtx.font = '13px monospace';
+  hudCtx.fillText('高级: Ctrl+1..6 技能点 · P 存档 · O 读档 · L 日志级别', w / 2, y0 + 326);
+  hudCtx.fillStyle = '#b99';
+  hudCtx.font = '13px monospace';
+  hudCtx.fillText(`技能: ${keyHintSkills()} (键位可改)`, w / 2, y0 + 350);
+  hudCtx.fillStyle = '#888';
+  hudCtx.font = '14px monospace';
+  hudCtx.fillText('[Esc] 返回', w / 2, y0 + 372);
+  if (state.confirmHardcore) {
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = 'bold 15px monospace';
+    hudCtx.fillText('[Y] 确认切到硬核(永久死亡)  [Esc] 取消', w / 2, y0 + 396);
+  }
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
+}
+
+/** UI 屏职业立绘: 刷 WebGL 层 (2D 层对应区域须 clearRect 挖孔露出) */
+export function drawUiPortrait(gl: GL, quad: QuadBuffer, res: RenderResources, classId: ClassId, x: number, y: number, w: number, h: number): void {
+  gl.clearColor(0.043, 0.043, 0.071, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  drawSprite(gl, quad, res, { x, y }, { w, h }, 'characters', CLASS_SPRITES[classId] ?? CLASS_SPRITES.barbarian, {});
+}
+
+/** 悬停光标: 命中任一交互矩形 → pointer (每帧由绘制函数调用) */
+export function uiCursor(canvas: HTMLCanvasElement, mouse: MouseHandle, rects: Array<[number, number, number, number]>): void {
+  const p = mouse.state().pos;
+  canvas.style.cursor = rects.some(r => inRect(p.x, p.y, r[0], r[1], r[2], r[3])) ? 'pointer' : 'default';
+}
+

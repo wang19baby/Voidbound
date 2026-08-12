@@ -1,0 +1,147 @@
+// screens/characters.ts — 角色管理屏 (US-026 伴随 T1c)
+//
+// 拆分动机: main.ts 1896-2001 + 2010-2087 角色屏 + 收集总览两屏, 拆分后暂留 ctx 注入
+//
+// 设计选择 (与 screens/town 一致):
+// - drawCharacters 整块原样搬移, 闭包引用 → ctx 字段
+// - drawCollectionPanel 按同样惯例拆 screens/collection.ts, 由 ctx.drawCollectionPanel 注入
+// - uiCursor 是 main.ts 私有 (line 1587), 由 ctx 注入
+// - CLASS_DEFS / DIFFICULTY_MODS / inRect 直接从 game/* import
+//
+// 依赖: game/class + game/difficulty + game/uigrid (inRect) + ctx 注入
+
+import type { GameState } from '../game/state';
+import { CLASS_DEFS, type ClassId } from '../game/class';
+import { DIFFICULTY_MODS } from '../game/difficulty';
+import { inRect } from '../game/uigrid';
+import type { MouseHandle } from '../input/mouse';
+import type { CollectionCtx } from './collection';
+
+// ============================================================================
+// Ctx
+// ============================================================================
+
+export interface CharactersCtx {
+  state: GameState;
+  hudCtx: CanvasRenderingContext2D;
+  hudCanvas: HTMLCanvasElement;
+  mouse: MouseHandle;
+  /** drawCollectionPanel 回调 (从 screens/collection 注入; 避免 screens/characters → screens/collection 单向依赖) */
+  drawCollectionPanel: (ctx: CollectionCtx) => void;
+  /** main.ts line 1587: 悬停光标 (命中任一矩形 → pointer) */
+  uiCursor: (rects: Array<[number, number, number, number]>) => void;
+}
+
+// ============================================================================
+// 绘制
+// ============================================================================
+
+/** 角色管理屏 (C-202): 列表(职业/等级/难度) + 新建(N) + 删除(D 二次确认) + Enter 切换 */
+export function drawCharacters(ctx: CharactersCtx): void {
+  const { state, hudCtx, hudCanvas, mouse, drawCollectionPanel, uiCursor } = ctx;
+  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.fillStyle = '#0b0b12';
+  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#c9aaff';
+  hudCtx.font = 'bold 44px monospace';
+  hudCtx.fillText('角色管理', hudCanvas.width / 2, 64);
+  const cx = hudCanvas.width / 2;
+
+  // C (P1-4): 右上"收集进度"按钮 (删除确认之外均可点)
+  if (!state.charConfirmDel) {
+    const cbR: [number, number, number, number] = [hudCanvas.width - 150, 20, 130, 30];
+    const cbHit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cbR);
+    hudCtx.fillStyle = cbHit ? 'rgba(201,170,255,0.18)' : 'rgba(30,30,42,0.9)';
+    hudCtx.fillRect(...cbR);
+    hudCtx.strokeStyle = cbHit ? '#c9aaff' : '#4a4a5a';
+    hudCtx.lineWidth = cbHit ? 2 : 1;
+    hudCtx.strokeRect(...cbR);
+    hudCtx.fillStyle = '#c9aaff';
+    hudCtx.font = 'bold 13px monospace';
+    hudCtx.fillText('收集进度', hudCanvas.width - 85, 36);
+  }
+  // C (P1-4): 收集总览覆盖层
+  if (state.collectOpen) {
+    drawCollectionPanel(ctx);
+    return;
+  }
+
+  if (state.charConfirmDel) {
+    const target = state.charList[state.charSel];
+    hudCtx.fillStyle = '#ff6a6a';
+    hudCtx.font = 'bold 22px monospace';
+    hudCtx.fillText(`删除角色 ${target ? target.id : ''}?`, cx, hudCanvas.height / 2 - 20);
+    hudCtx.fillStyle = '#f88';
+    hudCtx.font = '16px monospace';
+    hudCtx.fillText('[Y] 确认删除 (存档不可恢复) · [Esc] 取消', cx, hudCanvas.height / 2 + 20);
+    hudCtx.textAlign = 'left';
+    hudCtx.textBaseline = 'top';
+    return;
+  }
+
+  // v4 最近 3 角色快捷横排 (顶部卡片, 单击进入; 命中在 handleUiClick)
+  const recent3 = state.charList.slice(0, 3);
+  if (recent3.length > 0) {
+    const cy0 = 128;
+    hudCtx.textAlign = 'left';
+    hudCtx.fillStyle = '#889';
+    hudCtx.font = '12px monospace';
+    hudCtx.fillText('最近角色 (单击进入)', cx - 640, cy0 - 20);
+    hudCtx.textAlign = 'center';
+    const rm = mouse.state().pos;
+    recent3.forEach((c, i) => {
+      const cx2 = cx - 320 + i * 240;
+      const def = CLASS_DEFS[c.class as ClassId] ?? CLASS_DEFS.barbarian;
+      const isCur = c.id === state.currentChar;
+      const hit = inRect(rm.x, rm.y, cx2, cy0, 220, 86);
+      hudCtx.fillStyle = hit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.92)';
+      hudCtx.fillRect(cx2, cy0, 220, 86);
+      hudCtx.strokeStyle = hit ? '#66ccff' : isCur ? '#ffd64a' : '#3a3a48';
+      hudCtx.lineWidth = hit ? 2 : 1;
+      hudCtx.strokeRect(cx2, cy0, 220, 86);
+      hudCtx.fillStyle = def.color;
+      hudCtx.font = 'bold 18px monospace';
+      hudCtx.fillText(def.name, cx2 + 110, cy0 + 26);
+      hudCtx.fillStyle = hit ? '#fff' : '#bbb';
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText(`${c.id} · Lv${c.level}`, cx2 + 110, cy0 + 50);
+      hudCtx.fillStyle = '#99a';
+      hudCtx.font = '12px monospace';
+      hudCtx.fillText(`${c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}${isCur ? ' · 当前' : ''}`, cx2 + 110, cy0 + 68);
+    });
+    uiCursor(recent3.map((_, i) => [cx - 320 + i * 240, cy0, 220, 86] as [number, number, number, number]));
+  }
+
+  // 列表
+  if (state.charList.length === 0) {
+    hudCtx.fillStyle = '#888';
+    hudCtx.font = '18px monospace';
+    hudCtx.fillText('暂无角色 · 按 [N] 新建', cx, hudCanvas.height / 2);
+  } else {
+    const rows = Math.min(state.charList.length, 8);
+    const y0 = hudCanvas.height / 2 - rows * 26;
+    state.charList.slice(0, rows).forEach((c, i) => {
+      const sel = i === state.charSel;
+      const def = CLASS_DEFS[c.class as ClassId] ?? CLASS_DEFS.barbarian;
+      const isCur = c.id === state.currentChar;
+      hudCtx.font = 'bold 18px monospace';
+      hudCtx.fillStyle = sel ? '#ffd64a' : '#bbb';
+      hudCtx.fillText(`${sel ? '▶ ' : '  '}${c.id}${isCur ? ' (当前)' : ''}`, cx - 200, y0 + i * 52);
+      hudCtx.font = '14px monospace';
+      hudCtx.fillStyle = sel ? '#fda' : '#889';
+      hudCtx.fillText(`${def.name} · Lv${c.level} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty} · ${c.theme}`, cx + 60, y0 + i * 52);
+    });
+  }
+  hudCtx.fillStyle = '#fff';
+  hudCtx.font = 'bold 15px monospace';
+  hudCtx.fillText('[↑/↓] 选择 · [Enter] 进入/切换 · [N] 新建 · [D] 删除 · [Esc] 返回', cx, hudCanvas.height - 46);
+  if (state.titleMsg) {
+    hudCtx.fillStyle = '#ffd64a';
+    hudCtx.font = '14px monospace';
+    hudCtx.fillText(state.titleMsg, cx, hudCanvas.height - 80);
+  }
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
+}

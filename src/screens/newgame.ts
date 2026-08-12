@@ -11,20 +11,25 @@
 
 import type { GameState, Theme } from '../game/state';
 import type { MouseHandle } from '../input/mouse';
-import { CLASS_DEFS, CLASS_IDS, type ClassId } from '../game/class';
-import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, unlockedDifficulty } from '../game/difficulty';
-import { MAP_MODES, MAP_MODE_NAMES, MAP_MODE_DESC } from '../game/mapmode';
+import { bindClass, CLASS_DEFS, CLASS_IDS, type ClassId } from '../game/class';
+import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, unlockedDifficulty, type Difficulty } from '../game/difficulty';
+import { MAP_MODES, MAP_MODE_NAMES, MAP_MODE_DESC, type MapMode } from '../game/mapmode';
 import { THEME_MONSTER_POOL, THEME_BOSS, MONSTER_DEFS } from '../game/monster';
 import { SKILL_SPECS } from '../game/skill';
-import { themeUnlocked } from '../game/newgame';
-import { THEMES } from '../game/state';
+import { themeUnlocked, ngResolve, type NewgameSel } from '../game/newgame';
+import { setScreen, THEMES } from '../game/state';
 import { inRect } from '../game/uigrid';
+import { pushToast } from '../game/toast';
+import { playSfxClient } from '../ipc/sfx';
+import { persistNowApp } from '../app/save';
+import { setNgLaunchT, setNgNaming } from '../app/screenMachine';
+import { inf } from '../util/log';
 
-/** 主题中文名 (与 main.ts 内部副本同步; 后续可移到 game/state) */
-const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
+/** 主题中文名 (统一导出, main.ts 副本已删除) */
+export const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
 
-/** 主属性中文名 (与 main.ts 内部副本同步) */
-const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
+/** 主属性中文名 (统一导出, main.ts 副本已删除) */
+export const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
 
 /** 新局屏布局 (绘制与鼠标命中共用): x 相对 w/2, y 相对 cy=h/2-110 */
 export const NG_LAYOUT = {
@@ -348,4 +353,81 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
   uiCursor(rects);
+}
+
+// ===== 从 main.ts 搬出的新局/角色创建/出发流程 (US-025-b) =====
+
+/** 上次配置记忆 (localStorage) */
+export const NG_LAST_KEY = 'voidbound.lastNg';
+
+/** 保存上次配置 (新局出发后调用) */
+export function saveLastNg(state: GameState): void {
+  try {
+    localStorage.setItem(NG_LAST_KEY, JSON.stringify(state.ngSel));
+  } catch { /* 隐私/禁用时静默 */ }
+}
+
+/** 读上次配置 (启动/新局屏右上"复用"按钮) */
+export function loadLastNg(): NewgameSel | null {
+  try {
+    const raw = localStorage.getItem(NG_LAST_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as NewgameSel;
+    if (typeof p?.classIdx === 'number' && typeof p?.diffIdx === 'number' && typeof p?.themeIdx === 'number' && typeof p?.modeIdx === 'number') return p;
+    return null;
+  } catch { return null; }
+}
+
+/** 创建角色确认 (C-202): 校验命名 → 入列表 → 进新局选择屏 (职业/难度已预填) */
+/** 创建角色 (newgame 出发前调用, ngFrom==='create'): 成功返回 true, 名字冲突等失败 false */
+export function createCharacterNow(state: GameState): boolean {
+  let name = state.charNameInput.trim();
+  if (name.length === 0) name = `char_${state.charList.length}`;
+  // 安全化: 只留字母数字下划线, 防存档路径穿越
+  name = name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
+  if (name.length === 0) name = `char_${state.charList.length}`;
+  const used = new Set(state.charList.map(c => c.id));
+  if (used.has(name)) { pushToast(state, `角色名 ${name} 已存在`, '#f66'); return false; }
+  const { classId, difficulty } = ngResolve(state.ngSel);
+  state.currentChar = name;
+  state.charList = [...state.charList, {
+    id: name, class: classId, level: 1, difficulty, theme: 'forest',
+    last_played: Math.floor(Date.now() / 1000),
+  }];
+  state.charNameInput = '';
+  pushToast(state, `新建角色: ${name} (${DIFFICULTY_MODS[difficulty].name})`, '#9cf');
+  void persistNowApp(state);
+  inf('ui', `新建角色 ${name} → 出发`);
+  return true;
+}
+
+/** 新建角色 (角色管理 [N]): 直接进新局选择屏, 命名框融入 (ngFrom='create') */
+export function startCreateNewgame(state: GameState): void {
+  state.charNameInput = '';
+  state.ngSel = { classIdx: 0, diffIdx: 0, themeIdx: 0, modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+  state.ngFrom = 'create';
+  setNgLaunchT(-1);
+  setNgNaming(true);
+  setScreen(state, 'newgame');
+  state.titleMsg = '';
+  inf('ui', '新建角色 → 新局选择屏 (输入名字)');
+}
+
+/** 新局出发 (键盘 Enter / 鼠标开始 / 命名确认共用): 解锁校验 → 创建模式先建角色 → 0.7s 过场 */
+export function startFromNewgame(state: GameState): void {
+  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
+  if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return; }
+  if (!themeUnlocked(state.cleared, theme)) { pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66'); return; }
+  if (state.ngFrom === 'create' && !createCharacterNow(state)) return;  // 创建失败(重名等)留在选择屏
+  saveLastNg(state);
+  setNgLaunchT(NG_LAUNCH_MS);
+  playSfxClient('ui_click');
+  inf('ui', `出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
+}
+
+/** 过场结束真正开跑 (loop newgame 分支倒计时触发)。startRun 由 main.ts 注入 */
+export function doLaunchRun(state: GameState, startRun: (state: GameState, theme: Theme, difficulty: Difficulty, mode?: MapMode) => void): void {
+  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
+  bindClass(state, classId);  // M5 C-103: 新局绑定职业
+  startRun(state, theme, difficulty, mode);
 }

@@ -34,10 +34,10 @@ import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNu
 import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
 import { rrect, hexToRgb01 } from './ui/primitives';
 import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
-import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime } from './screens/title';
+import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor } from './screens/title';
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
-import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, drawNewgame as drawNewgameScreen, type NewgameCtx } from './screens/newgame';
+import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
 import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp } from './app/save';
 import { handleUiClick as handleUiClickDispatch, buildUiCtx, type UiCtx } from './app/uiDispatch';
 import {
@@ -52,7 +52,7 @@ import { pushToast, getToasts, updateToasts } from './game/toast';
 import { deathSummary, deathGoldPenalty, type DeathSummary } from './game/deathSettle';
 import { moveSelection, ngResolve, ngDefault, themeUnlocked, type NewgameSel } from './game/newgame';
 import { bindClass, CLASS_DEFS, CLASS_IDS, CLASS_SPRITES, type ClassId } from './game/class';
-import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, keyLabel, normKey, keyHintMainText, keyHintSkillsText, type Keybinds } from './game/keybind';
+import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, normKey, type Keybinds } from './game/keybind';
 // TS-008: 版本号来自 package.json (esbuild JSON loader 内联, 树摇后仅留 version)
 import { version as GAME_VERSION } from '../package.json';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
@@ -190,6 +190,15 @@ const state = {
   fireballSize: 32,
   monsters: [] as import('./game/monster').Monster[],
   vfx: [] as import('./game/vfx').Vfx[],
+  // A.1 收口: 8 个类型逃逸字段改为正规 GameState 字段
+  _pools: [] as import('./game/monster').PoisonPool[],
+  _dmgNums: [] as import('./game/damageNum').DamageNum[],
+  _deathFx: [] as import('./game/deathFx').DeathFx[],
+  _swing: [] as import('./game/skill').MeleeSwing[],
+  _loot: [] as import('./game/equipment').Equipment[],
+  _owned: [] as import('./game/equipment').Equipment[],
+  _toasts: [] as import('./game/toast').Toast[],
+  _enemyProj: [] as import('./game/monsters/proj').EnemyProjectile[],
   score: 0,
   paused: false,
   dying: false,
@@ -299,13 +308,13 @@ const screenKeyCtx: ScreenKeyContext = {
   confirmCloseSave,
   confirmCloseCancel,
   continueLastSave,
-  openCharactersList,
-  saveLastNg,
-  loadLastNg,
-  createCharacterNow,
-  startNewgameFromTitle,
-  startFromNewgame,
-  doLaunchRun,
+  openCharactersList: () => openCharactersList(state),
+  saveLastNg: () => saveLastNg(state),
+  loadLastNg: () => loadLastNg(),
+  createCharacterNow: () => createCharacterNow(state),
+  startNewgameFromTitle: () => startNewgameFromTitle(state),
+  startFromNewgame: () => startFromNewgame(state),
+  doLaunchRun: () => doLaunchRun(state, startRun),
   enterTargetCharacter,
   persistNow: () => persistNowApp(state),
   fadeBgm,
@@ -550,6 +559,9 @@ function confirmCloseCancel(): void {
 }
 
 inf('loop', 'main loop start');
+// A.3: 安装战斗 FX 订阅者 (跨域渲染/日志副作用走事件)
+import { installCombatFxService } from './application/combatFxService';
+installCombatFxService();
 
 let last = performance.now();
 let frameCount = 0;
@@ -598,7 +610,7 @@ function loop(now: number) {
       // 出发过场倒计时: 期间冻结选择交互, 结束后开跑
       if (getNgLaunchT() > 0) {
         setNgLaunchT(getNgLaunchT() - 16.67);
-        if (getNgLaunchT() <= 0) doLaunchRun();
+        if (getNgLaunchT() <= 0) doLaunchRun(state, startRun);
       } else {
         handleScreenClick();
       }
@@ -787,7 +799,7 @@ function loopImpl(now: number) {
   // A-W3 诅咒系 (滚动/时间清除)
   if (state.player.curseT > 0) state.player.curseT -= dt;
   // A-W3 毒池 (death_trigger): 站内每秒伤害
-  const pools = (state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> })._pools;
+  const pools = state._pools;
   if (pools && pools.length > 0) {
     for (let pi = pools.length - 1; pi >= 0; pi--) {
       const pk = pools[pi];
@@ -1422,235 +1434,16 @@ function formatTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** 主属性显示名 (新建角色信息卡) */
-const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
-
-/** 按键提示 (A 收敛): 单点生成, 键位自定义后即时反映 (纯函数在 keybind.ts) */
-function keyHintMain(): string {
-  return keyHintMainText(loadKeybinds());
-}
-/** 设置面板技能名行 (键位动态) */
-function keyHintSkills(): string {
-  return keyHintSkillsText(loadKeybinds());
-}
-
 // ===== 标题屏打磨 (TS-001~009, 2026-08-12) =====
 
 /** TS-008: 存档格式标签 (与 src-tauri/src/save.rs SAVE_FORMAT_VERSION=11 同步维护) */
 const SAVE_FMT_LABEL = 'v11';
 
-/** US-026: getTitleFocus()/closeConfirmOpen/getNgLaunchT()/isNgNaming() 已移至 app/screenMachine.ts 模块状态
- *  本地不再保留副本, 所有读用 getter, 所有写用 setter。
- *  syncTitleFocus/moveTitleFocus/titleAct 三个函数由 screenMachine.ts 导出 (签名带 state+ctx)。
- *  startNewgameFromTitle/openCharactersList 仍在本文件 (ctx 引用, 也被 drawTitle 等使用)。
- */
-/** 新游戏 → 新局选择屏 (职业/难度/主题预填当前) — ctx callback */
-function startNewgameFromTitle(): void {
-  state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-  state.ngFrom = 'title';
-  setNgLaunchT(-1);
-  setNgNaming(false);
-  setScreen(state, 'newgame');
-  state.titleMsg = '';
-  inf('ui', '新游戏 → 选择屏');
-}
-
-/** 角色管理列表 (拉取后进屏) — ctx callback */
-function openCharactersList(): void {
-  listCharacters().then(list => {
-    state.charList = list;
-    state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
-    state.charConfirmDel = false;
-    setScreen(state, 'characters');
-    state.titleMsg = '';
-    inf('ui', `角色管理: ${list.length} 个角色`);
-  }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
-}
-
-
-/** C (P3-10): 键位条目几何 (绘制与命中共用) */
-function settingsKeyRects(): Array<{ key: string; label: string; value: string; x: number; y: number; w: number; h: number }> {
-  const kb = loadKeybinds();
-  const y0 = hudCanvas.height / 2 - 130;
-  const rows: Array<Array<{ key: string; label: string; value: string }>> = [
-    [{ key: 'dodge', label: '翻滚', value: keyLabel(kb.dodge) }, { key: 'interact', label: '交互', value: keyLabel(kb.interact) }, { key: 'equip', label: '装备', value: keyLabel(kb.equip) }],
-    [{ key: 'potionHp', label: '药水HP', value: keyLabel(kb.potionHp) }, { key: 'potionMp', label: '药水MP', value: keyLabel(kb.potionMp) }],
-    [{ key: 'skills.Q', label: '技能1', value: keyLabel(kb.skills.Q) }, { key: 'skills.W', label: '技能2', value: keyLabel(kb.skills.W) }, { key: 'skills.E', label: '技能3', value: keyLabel(kb.skills.E) }, { key: 'skills.R', label: '技能4', value: keyLabel(kb.skills.R) }],
-  ];
-  const out: Array<{ key: string; label: string; value: string; x: number; y: number; w: number; h: number }> = [];
-  const itemW = 148, gap = 10;
-  let ry = y0 + 216;
-  for (const row of rows) {
-    const x0 = hudCanvas.width / 2 - (row.length * (itemW + gap) - gap) / 2;
-    row.forEach((it, i) => {
-      out.push({ key: it.key, label: it.label, value: it.value, x: x0 + i * (itemW + gap), y: ry, w: itemW, h: 26 });
-    });
-    ry += 36;
-  }
-  return out;
-}
-
-/** C (P3-10): 设置面板键位条目点击 → 进入编辑捕获 */
-function handleSettingsClick(mx: number, my: number): boolean {
-  for (const r of settingsKeyRects()) {
-    if (inRect(mx, my, r.x, r.y, r.w, r.h)) {
-      state.keybindEdit = r.key;
-      pushToast(state, `按新键绑定「${r.label}」 (Esc 取消)`, '#9cf');
-      return true;
-    }
-  }
-  return false;
-}
-
-/** 设置面板 (C8 合并标题/暂停两处绘制 + 键位自定义区) */
-function drawSettingsPanel() {
-  const w = hudCanvas.width;
-  const y0 = hudCanvas.height / 2 - 130;
-  hudCtx.fillStyle = 'rgba(0,0,0,0.72)';
-  hudCtx.fillRect(0, y0, w, 440);
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#ffd';
-  hudCtx.font = 'bold 26px monospace';
-  hudCtx.fillText('设置', w / 2, y0 + 40);
-  hudCtx.font = '18px monospace';
-  hudCtx.fillStyle = '#fff';
-  hudCtx.fillText(`音量: ${Math.round(state.volume * 100)}%   [+]/[-] 或拖动滑条`, w / 2, y0 + 82);
-  // 音量滑块 (拖动逻辑在 loopImpl)
-  const sliderX = w / 2 - 120;
-  const sliderY = y0 + 106;
-  hudCtx.fillStyle = '#333';
-  hudCtx.fillRect(sliderX, sliderY, 240, 10);
-  hudCtx.fillStyle = '#c9aaff';
-  hudCtx.fillRect(sliderX, sliderY, 240 * state.volume, 10);
-  hudCtx.strokeStyle = '#888';
-  hudCtx.strokeRect(sliderX, sliderY, 240, 10);
-  hudCtx.fillStyle = '#fff';
-  hudCtx.font = '16px monospace';
-  hudCtx.fillText(`全屏: [F] 切换`, w / 2, y0 + 138);
-  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}  [N] 循环`, w / 2, y0 + 164);
-
-  // 键位区 (P3-10)
-  hudCtx.fillStyle = '#9cf';
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText('键位 — 点击条目后按新键 · [R] 恢复默认', w / 2, y0 + 194);
-  for (const r of settingsKeyRects()) {
-    const edit = state.keybindEdit === r.key;
-    hudCtx.fillStyle = edit ? 'rgba(102,204,255,0.22)' : 'rgba(24,26,36,0.95)';
-    hudCtx.fillRect(r.x, r.y, r.w, r.h);
-    hudCtx.strokeStyle = edit ? '#66ccff' : '#3a3a4a';
-    hudCtx.lineWidth = edit ? 2 : 1;
-    hudCtx.strokeRect(r.x, r.y, r.w, r.h);
-    hudCtx.fillStyle = '#ddd';
-    hudCtx.font = edit ? 'bold 13px monospace' : '12px monospace';
-    hudCtx.fillText(edit ? '按新键…' : `${r.label}: ${r.value}`, r.x + r.w / 2, r.y + r.h / 2);
-  }
-
-  hudCtx.fillStyle = '#999';
-  hudCtx.font = '13px monospace';
-  hudCtx.fillText('高级: Ctrl+1..6 技能点 · P 存档 · O 读档 · L 日志级别', w / 2, y0 + 326);
-  hudCtx.fillStyle = '#b99';
-  hudCtx.font = '13px monospace';
-  hudCtx.fillText(`技能: ${keyHintSkills()} (键位可改)`, w / 2, y0 + 350);
-  hudCtx.fillStyle = '#888';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText('[Esc] 返回', w / 2, y0 + 372);
-  if (state.confirmHardcore) {
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 15px monospace';
-    hudCtx.fillText('[Y] 确认切到硬核(永久死亡)  [Esc] 取消', w / 2, y0 + 396);
-  }
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-}
-
-/** UI 屏职业立绘: 刷 WebGL 层 (2D 层对应区域须 clearRect 挖孔露出) */
-function drawUiPortrait(classId: ClassId, x: number, y: number, w: number, h: number): void {
-  gl.clearColor(0.043, 0.043, 0.071, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  drawSprite(gl, quad, res, { x, y }, { w, h }, 'characters', CLASS_SPRITES[classId] ?? CLASS_SPRITES.barbarian, {});
-}
-
-/** 悬停光标: 命中任一交互矩形 → pointer (每帧由绘制函数调用) */
-function uiCursor(rects: Array<[number, number, number, number]>): void {
-  const p = mouse.state().pos;
-  canvas.style.cursor = rects.some(r => inRect(p.x, p.y, r[0], r[1], r[2], r[3])) ? 'pointer' : 'default';
-}
-
-/** 创建角色确认 (C-202): 校验命名 → 入列表 → 进新局选择屏 (职业/难度已预填) */
-/** 创建角色 (newgame 出发前调用, ngFrom==='create'): 成功返回 true, 名字冲突等失败 false */
-function createCharacterNow(): boolean {
-  let name = state.charNameInput.trim();
-  if (name.length === 0) name = `char_${state.charList.length}`;
-  // 安全化: 只留字母数字下划线, 防存档路径穿越
-  name = name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
-  if (name.length === 0) name = `char_${state.charList.length}`;
-  const used = new Set(state.charList.map(c => c.id));
-  if (used.has(name)) { pushToast(state, `角色名 ${name} 已存在`, '#f66'); return false; }
-  const { classId, difficulty } = ngResolve(state.ngSel);
-  state.currentChar = name;
-  state.charList = [...state.charList, {
-    id: name, class: classId, level: 1, difficulty, theme: 'forest',
-    last_played: Math.floor(Date.now() / 1000),
-  }];
-  state.charNameInput = '';
-  pushToast(state, `新建角色: ${name} (${DIFFICULTY_MODS[difficulty].name})`, '#9cf');
-  void persistNowApp(state);
-  inf('ui', `新建角色 ${name} → 出发`);
-  return true;
-}
-
-/** 新建角色 (角色管理 [N]): 直接进新局选择屏, 命名框融入 (ngFrom='create') */
-function startCreateNewgame(): void {
-  state.charNameInput = '';
-  state.ngSel = { classIdx: 0, diffIdx: 0, themeIdx: 0, modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-  state.ngFrom = 'create';
-  setNgLaunchT(-1);
-  setNgNaming(true);
-  setScreen(state, 'newgame');
-  state.titleMsg = '';
-  inf('ui', '新建角色 → 新局选择屏 (输入名字)');
-}
-
-// === 新局出发流程 (US-026: getNgLaunchT()/isNgNaming() 移至 app/screenMachine.ts) ===
-const NG_LAST_KEY = 'voidbound.lastNg';  // 上次配置记忆 (localStorage)
-
-function saveLastNg(): void {
-  try {
-    localStorage.setItem(NG_LAST_KEY, JSON.stringify(state.ngSel));
-  } catch { /* 隐私/禁用时静默 */ }
-}
-function loadLastNg(): NewgameSel | null {
-  try {
-    const raw = localStorage.getItem(NG_LAST_KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw) as NewgameSel;
-    if (typeof p?.classIdx === 'number' && typeof p?.diffIdx === 'number' && typeof p?.themeIdx === 'number' && typeof p?.modeIdx === 'number') return p;
-    return null;
-  } catch { return null; }
-}
-
-/** 新局出发 (键盘 Enter / 鼠标开始 / 命名确认共用): 解锁校验 → 创建模式先建角色 → 0.7s 过场 */
-function startFromNewgame(): void {
-  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
-  if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return; }
-  if (!themeUnlocked(state.cleared, theme)) { pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66'); return; }
-  if (state.ngFrom === 'create' && !createCharacterNow()) return;  // 创建失败(重名等)留在选择屏
-  saveLastNg();
-  setNgLaunchT(NG_LAUNCH_MS);
-  playSfxClient('ui_click');
-  inf('ui', `出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
-}
-
-/** 过场结束真正开跑 (loop newgame 分支倒计时触发) */
-function doLaunchRun(): void {
-  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
-  bindClass(state, classId);  // M5 C-103: 新局绑定职业
-  startRun(state, theme, difficulty, mode);
-}
-
-/** 主题显示名 (卡片摘要用) */
-const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
+/** US-024-b/025-b: startNewgameFromTitle/openCharactersList/settingsKeyRects/handleSettingsClick/
+ *  drawSettingsPanel/drawUiPortrait/uiCursor/keyHintMain/keyHintSkills 移到 screens/title.ts;
+ *  saveLastNg/loadLastNg/startFromNewgame/doLaunchRun/createCharacterNow/startCreateNewgame/
+ *  NG_LAST_KEY/ATTR_NAMES/THEME_NAMES 移到 screens/newgame.ts。
+ *  0 行为变更: 函数体原样搬移, 闭包依赖显式参数化 (state/hudCanvas/canvas/mouse/gl/quad/res/startRun)。 */
 
 /** 标题画面 (GAME_FLOW §1.2): 主菜单 — TS-001~009 打磨版 (2026-08-12) */
 function drawTitle() {
@@ -1860,17 +1653,19 @@ function drawTitle() {
 
   // 标题页设置面板 (C8: 与暂停共用 drawSettingsPanel, 含滑条/键位自定义)
   if (state.settingsOpen) {
-    drawSettingsPanel();
+    drawSettingsPanel(state, hudCtx, hudCanvas);
   }
-  uiCursor(menuRects);
+  uiCursor(canvas, mouse, menuRects);
 }
 
 /** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
 function drawNewgame() {
   const rects: Array<[number, number, number, number]> = [];
   const ngCtx: NewgameCtx = {
-    state, hudCtx, hudCanvas, mouse, drawUiPortrait,
-    isNgNaming, getNgLaunchT, loadLastNg, uiCursor,
+    state, hudCtx, hudCanvas, mouse,
+    drawUiPortrait: (classId, x, y, w, h) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h); },
+    isNgNaming, getNgLaunchT, loadLastNg: () => loadLastNg(),
+    uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
   };
   drawNewgameScreen(ngCtx, rects);
 }
@@ -1954,7 +1749,7 @@ function drawCharacters() {
       hudCtx.font = '12px monospace';
       hudCtx.fillText(`${c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}${isCur ? ' · 当前' : ''}`, cx2 + 110, cy0 + 68);
     });
-    uiCursor(recent3.map((_, i) => [cx - 320 + i * 240, cy0, 220, 86] as [number, number, number, number]));
+    uiCursor(canvas, mouse, recent3.map((_, i) => [cx - 320 + i * 240, cy0, 220, 86] as [number, number, number, number]));
   }
 
   // 列表
@@ -2129,341 +1924,22 @@ function drawFrame() {
   return;
 }
 
-/** 抽出单帧绘制逻辑 (含 pause 遮罩) */
+/** 抽出单帧绘制逻辑 (含 pause 遮罩)
+ *  P1 重构: 530 行帧绘制按图层拆到 presentation/worldDraw/*, 这里只剩 7 行调用
+ *  层序 (从下到上): 地板/墙/装饰 → 门/毒池 → instanced 粒子 → 怪物 → VFX → 装备 → 玩家 → HUD */
 function drawFrameToScreen() {
 
   // 设置 reticle 位置给 drawHud 用
   setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
 
-    // V1 地板瓦片: HD 32px 格平铺 (旧桥接: tint/混铺已随 HD 落地移除)
-  const FLOOR_TILE = 32;
-  const t0x = Math.max(0, Math.floor(state.camera.x / FLOOR_TILE));
-  const t0y = Math.max(0, Math.floor(state.camera.y / FLOOR_TILE));
-  const t1x = Math.min(Math.floor(WORLD_W / FLOOR_TILE), Math.ceil((state.camera.x + state.viewport.w) / FLOOR_TILE));
-  const t1y = Math.min(Math.floor(WORLD_H / FLOOR_TILE), Math.ceil((state.camera.y + state.viewport.h) / FLOOR_TILE));
-  const floorBase = `floor_${state.theme}`;
-  // M3 元素地图: 本局元素色相旋转整图 (地板/墙/装饰)
-  const runHue = state.run.element ? ELEMENT_DEFS[state.run.element].hue : 0;
-  for (let ty = t0y; ty < t1y; ty++) {
-    for (let tx = t0x; tx < t1x; tx++) {
-      // 位置哈希 → 10% 微暗增深度 (HD 纹理自带细节, 不需混铺)
-      const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
-      const r = (h % 1000) / 1000;
-      const opt: { color?: [number, number, number]; hue?: number } = r > 0.9 ? { color: [0.9, 0.9, 0.96], hue: runHue } : { hue: runHue };
-      drawSprite(gl, quad, res, { x: tx * FLOOR_TILE - state.camera.x, y: ty * FLOOR_TILE - state.camera.y }, { w: FLOOR_TILE, h: FLOOR_TILE }, 'world', floorBase, opt);
-    }
-  }
-
-  // V1 墙: HD 主题墙 128px 1:1 (旧桥接: void tint / wall_alt 混搭已随 HD 落地移除)
-  const wallName = `wall_${state.theme}`;
-  for (const w of state.world.walls) {
-    const sp = worldToScreen(state, w.pos);
-    if (sp.x + w.size.w < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + w.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, w.size, 'world', wallName, runHue ? { hue: runHue } : undefined);
-  }
-
-  // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞), 墙与地板之间
-  for (const d of state.world.decor) {
-    const sp = worldToScreen(state, d.pos);
-    if (sp.x + 64 < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + 64 < 0 || sp.y > state.viewport.h) continue;
-    const dopt: { color?: [number, number, number]; hue?: number } = d.tint ? { color: d.tint, hue: runHue } : { hue: runHue };
-    drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, dopt);
-  }
-
-  // A-W1 门结算: Boss 死亡位传送门 (脉冲光环, 玩家在交互范围内高亮)
-  if (state.run.portal && !state.run.portal.used) {
-    const pp = state.run.portal;
-    const sp = worldToScreen(state, { x: pp.x, y: pp.y });
-    if (sp.x > -80 && sp.x < state.viewport.w + 80 && sp.y > -80 && sp.y < state.viewport.h + 80) {
-      const pulse = 0.5 + Math.sin(performance.now() / 250) * 0.15;
-      const near = nearPortal(state);
-      const ringCol: [number, number, number] = near ? [1, 0.75, 0.4] : [0.5, 0.9, 1];
-      // 门体: 紫色旋涡
-      drawSprite(gl, quad, res, { x: sp.x - 30, y: sp.y - 30 }, { w: 60, h: 60 }, 'particles', 'spark_03', { color: [0.75, 0.4, 1], blend: 'add' });
-      // 交互光环
-      drawSprite(gl, quad, res, { x: sp.x - 42 * pulse, y: sp.y - 42 * pulse }, { w: 84 * pulse, h: 84 * pulse }, 'ui', 'slide_horizontal_color', { color: ringCol });
-      drawSprite(gl, quad, res, { x: sp.x - 3, y: sp.y - 46 }, { w: 6, h: 6 }, 'ui', 'slide_horizontal_color', { color: [1, 1, 1] });
-      // (提示文案由 HUD 层的 portal 横幅承担, 此处纯视觉)
-    }
-  }
-
-  // A-W3 毒池 (death_trigger): 半透明毒圈, 站内 DOT
-  const pools = (state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> })._pools;
-  if (pools) {
-    for (const pk of pools) {
-      const sp = worldToScreen(state, { x: pk.x, y: pk.y });
-      if (sp.x > -pk.r && sp.x < state.viewport.w + pk.r && sp.y > -pk.r && sp.y < state.viewport.h + pk.r) {
-        // 毒池脉冲 (UX_REVIEW P2): 呼吸缩放
-        const pPulse = 0.85 + 0.15 * Math.sin((performance.now() / 1000) * 4 + pk.x);
-        const pr = pk.r * pPulse;
-        drawSprite(gl, quad, res, { x: sp.x + (pk.r - pr) / 2, y: sp.y + (pk.r - pr) / 2 }, { w: pr, h: pr }, 'particles', 'spark_03', { color: [0.2, 0.9, 0.3], blend: 'add' });
-      }
-    }
-  }
-
-  // B-V3: 环境/挥砍/弹幕/死亡粒子 → instanced batch (同 atlas 单 draw call)
-  const instUv = (spriteName: string): [number, number, number, number] | null => {
-    const bundle = res.atlases.get('particles');
-    if (!bundle) return null;
-    const sprite = bundle.sprites.get(spriteName);
-    return sprite ? spriteUv(sprite, bundle.atlas.width, bundle.atlas.height) : null;
-  };
-  const addInst = (uv: [number, number, number, number] | null, sp: { x: number; y: number }, w: number, h: number, rot = 0): void => {
-    if (!uv) return;
-    particleBatch.add(sp.x, sp.y, w, h, uv, rot);
-  };
-  // 同 atlas 一次绑定纹理 + 程序; 颜色按组 flush
-  gl.useProgram(particleBatch.program);
-  gl.activeTexture(gl.TEXTURE0);
-  const pbundle = res.atlases.get('particles');
-  if (pbundle) gl.bindTexture(gl.TEXTURE_2D, pbundle.texture);
-  // Review 修复: 显式 additive (粒子发光语义), 并同步 draw.ts 的 lastBlend 缓存
-  setBlendTracked(gl, 'add');
-  const flushGroup = (color: [number, number, number]) => {
-    if (particleBatch.pending() > 0) {
-      particleBatch.setColor(color[0], color[1], color[2]);
-      particleBatch.flush({ w: state.viewport.w, h: state.viewport.h });
-    }
-  };
-  const envUv = instUv('spark_03');
-  const envColor = THEME_ENV_COLOR[state.theme];
-  for (const p of state.envFx) {
-    const sp = worldToScreen(state, p);
-    addInst(envUv, sp, 6, 6);
-  }
-  flushGroup(envColor);
-
-  // 近战挥击 (slash particle, 在玩家前)
-  const slashUv = instUv('slash_01');
-  for (const s of getSwings(state)) {
-    const sp = worldToScreen(state, s.pos);
-    if (sp.x + s.size.w < 0 || sp.x > state.viewport.w) continue;
-    addInst(slashUv, sp, s.size.w, s.size.h);
-  }
-  flushGroup([1, 1, 1]);
-
-  // 玩家火球 / 敌弹 / 死亡粒子: 颜色各异, 逐组 flush
-  const magicUv = instUv('magic_01');
-  for (const f of state.fireballs) {
-    const sp = worldToScreen(state, f.pos);
-    const rc = f.rune && f.rune !== 'none' ? RUNE_DEFS[f.rune].color : hexToRgb01(DAMAGE_TYPE_COLORS[f.dmgType]);
-    addInst(magicUv, sp, f.size.w, f.size.h);
-    flushGroup(rc);
-  }
-  const projUv = instUv('magic_05');
-  const projCol: [number, number, number] = [1, 0.3, 0.3];
-  for (const p of getEnemyProj(state)) {
-    const sp = worldToScreen(state, p.pos);
-    if (sp.x + p.size.w < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + p.size.h < 0 || sp.y > state.viewport.h) continue;
-    addInst(projUv, sp, p.size.w, p.size.h);
-  }
-  flushGroup(projCol);
-
-  // 死亡粒子 (在世界图层之后, 怪物之前)
-  const dUv = instUv('slash_02');
-  for (const fx of getDeathFx(state)) {
-    const sp = worldToScreen(state, fx.pos);
-    if (sp.x + fx.size.w < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + fx.size.h < 0 || sp.y > state.viewport.h) continue;
-    const lifeFrac = Math.max(0, fx.life / fx.maxLife);
-    const sz = fx.size.w * (0.4 + 0.6 * lifeFrac);
-    addInst(dUv, { x: sp.x, y: sp.y }, sz, sz, fx.rot);
-  }
-  flushGroup([0.9, 0.9, 0.95]);
-  // 恢复标准混合 (后续怪物/UI 绘制), 同步 draw.ts 缓存
-  setBlendTracked(gl, 'alpha');
-
-  // 怪物 (受击时变红闪烁, 复用 color tint)
-  for (const m of state.monsters) {
-    const sp = worldToScreen(state, m.pos);
-    if (sp.x + m.size.w < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + m.size.h < 0 || sp.y > state.viewport.h) continue;
-    const def = MONSTER_DEFS[m.type];
-    // HD 主题专属图: <type>_<theme>_<frame> (同名怪按主题分流, 不再互相覆盖)
-    const color: [number, number, number] | undefined =
-      m.elite ? [1, 0.85, 0.25]
-      : m.hitFlash > 0 ? [1, 0.3, 0.3]
-      : m.enhanced ? [1, 0.65, 0.3]
-      : undefined; // 主题专属图自带配色, 不再套 def.tint 二次染色
-    // V1 动画: 2 帧 + 正弦挤压 (移动时 4 步行走感, 静止时轻微呼吸)
-    const moving = Math.hypot(m.vel.x, m.vel.y) > 1;
-    const bob = Math.sin(m.walkT * (Math.PI * 2) / 0.6) * (moving ? 1 : 0.25);
-    // V1 攻击前摇: 远程怪开火尾窗 / Boss 二阶段技能尾窗 → 放大 + 亮色 + 蓄力条 (可读性=反制)
-    const dist = Math.hypot(state.player.pos.x - m.pos.x, state.player.pos.y - m.pos.y);
-    const rangedWind = !!def.rangedCooldown && m.attackCd > 0 && m.attackCd <= 0.35 && dist <= def.aggroRange;
-    const bossWind = !!def.boss && m.phase === 2 && m.aiCd > 0 && m.aiCd <= 0.6;
-    const charging = rangedWind || bossWind;
-    const bobW = m.size.w * (1 + bob * 0.06);
-    const bobH = m.size.h * (1 - bob * 0.08);
-    const sz = charging ? { w: bobW * 1.15, h: bobH * 1.15 } : { w: bobW, h: bobH };
-    const drawColor: [number, number, number] | undefined = charging ? [1.5, 1.25, 1.0] : color;
-    const runTheme = state.run?.theme ?? state.theme;
-    const want = `${m.type}_${runTheme}_${m.walkFrame}`;
-    // 缺帧回退 (旧 2 帧画: 2/3 → 0/1), 新 4 帧画到即用
-    const frameSprite = resolveSprite(res, 'monsters', want)
-      ? want
-      : resolveSprite(res, 'monsters', `${m.type}_${runTheme}_${m.walkFrame % 2}`)
-        ? `${m.type}_${runTheme}_${m.walkFrame % 2}`
-        : `${def.sprite}_${m.walkFrame % 2}`;
-    drawSprite(gl, quad, res, sp, sz, 'monsters', frameSprite, { color: drawColor, hue: m.hue ?? 0 });
-    // 领主标记 (M3): HP 条上方紫色横条
-    if (m.lord) {
-      drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 9 }, { w: m.size.w, h: 2 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1] });
-    }
-    // 光环标记 (A-W1): 增强怪头顶光环色点 (先杀光环来源 = 反制点)
-    if (m.aura) {
-      const auraColor = AURA_DEFS[m.aura].color;
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - 4, y: sp.y - 13 }, { w: 8, h: 8 }, 'ui', 'slide_horizontal_color', { color: auraColor });
-    }
-    // A-W4 双元素标记: 副元素色点 (主元素已由 hue 染色整图, 副元素在头顶右偏)
-    if (m.subElement) {
-      const subColor = ELEMENT_DEFS[m.subElement].color;
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 + 5, y: sp.y - 13 }, { w: 7, h: 7 }, 'ui', 'slide_horizontal_color', { color: subColor });
-    }
-    // 机制标记 (A-W3 包2): 精英/领主头像下色条 (盾=青 爆炸=橙 荆棘=绿 诅咒=紫 死亡=红)
-    if (m.mech) {
-      const mechBar: Record<string, [number, number, number]> = {
-        shield: [0.4, 0.9, 1],
-        explode: [1, 0.6, 0.2],
-        thorns: [0.5, 1, 0.5],
-        curse: [0.8, 0.5, 1],
-        death_trigger: [1, 0.4, 0.4],
-      };
-      const mc = mechBar[m.mech];
-      drawSprite(gl, quad, res, { x: sp.x, y: sp.y + m.size.h - 2 }, { w: m.size.w, h: 3 }, 'ui', 'slide_horizontal_color', { color: mc });
-    }
-    // 护盾弧 (A-W3 shield): 开盾期间青色光环 (可读性=反制: 开盾别打/破盾集火)
-    if (m.mech === 'shield' && m.shieldT > 0) {
-      const shPulse = 0.85 + 0.15 * Math.sin((performance.now() / 1000) * 10 + m.pos.x);
-      const shR = Math.max(m.size.w, m.size.h) * (0.75 + 0.1 * shPulse);
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - shR, y: sp.y + m.size.h / 2 - shR }, { w: shR * 2, h: shR * 2 }, 'particles', 'circle_01', { color: [0.4, 0.9, 1], blend: 'add' });
-    }
-    // 燃烧 DOT 火焰附着 (UX_REVIEW P2): 着火怪冒火 (火焰微抖动)
-    if (m.burnT > 0) {
-      const ft = performance.now() / 1000;
-      const f1 = Math.sin(ft * 14 + m.pos.x) * 4;
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - 7 + f1, y: sp.y + m.size.h / 2 - 10 }, { w: 14, h: 14 }, 'particles', 'flame_01', { color: [1, 0.55, 0.2], blend: 'add' });
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 + 3 - f1, y: sp.y + m.size.h / 2 - 5 }, { w: 10, h: 10 }, 'particles', 'flame_02', { color: [1, 0.7, 0.3], blend: 'add' });
-    }
-    // 荆棘环绕 (UX_REVIEW P2): 绿刺环 (反伤怪标记)
-    if (m.mech === 'thorns') {
-      const thR = Math.max(m.size.w, m.size.h) * 0.72;
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w / 2 - thR, y: sp.y + m.size.h / 2 - thR }, { w: thR * 2, h: thR * 2 }, 'particles', 'circle_02', { color: [0.5, 1, 0.5], blend: 'add' });
-    }
-
-    // A-W3 扑击预警圈 (leap): 蓄力 0.4s 落点圈可见 → 翻滚躲避
-    if (m.moveAI === 'leap' && m.leapT > 0) {
-      const warn = m.leapT / LEAP_WINDUP;
-      drawSprite(gl, quad, res, { x: sp.x - 8, y: sp.y + m.size.h - 6 }, { w: m.size.w + 16, h: 4 }, 'ui', 'slide_horizontal_color', { color: [1, 0.4, 0.2] });
-      void warn;
-    }
-    // A-W3 遁地土痕 (burrow): 地下移动的可见痕迹 → 预判落点
-    if (m.moveAI === 'burrow' && m.burrowT > 0) {
-      drawSprite(gl, quad, res, { x: sp.x, y: sp.y }, { w: m.size.w, h: m.size.h }, 'ui', 'slide_horizontal_color', { color: [0.75, 0.65, 0.4] });
-    }
-
-    // A-W3 激光预警条 (laser): 蓄力 0.8s 方向线可见 → 站开躲避
-    if (m.laserT > 0) {
-      const lx = state.player.pos.x - m.pos.x;
-      const ly = state.player.pos.y - m.pos.y;
-      const len = Math.hypot(lx, ly) || 1;
-      const nx = lx / len, ny = ly / len;
-      const x0 = sp.x + m.size.w / 2;
-      const y0 = sp.y + m.size.h / 2;
-      const x1 = x0 + nx * 300;
-      const y1 = y0 + ny * 300;
-      // 用细长条近似激光方向 (分段画)
-      for (let seg = 0; seg < 10; seg++) {
-        const t0 = seg / 10, t1 = (seg + 1) / 10;
-        const sx = x0 + (x1 - x0) * t0 - 2;
-        const sy = y0 + (y1 - y0) * t0;
-        drawSprite(gl, quad, res, { x: sx, y: sy }, { w: 4, h: 30 }, 'ui', 'slide_horizontal_color', { color: [1, 0.3, 0.3] });
-        void t1;
-      }
-    }
-
-    // 蓄力条 (V1): 前摇进度, 满条 = 即将出手
-    if (charging) {
-      const windFrac = rangedWind ? m.attackCd / 0.35 : m.aiCd / 0.6;
-      drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 8 }, { w: m.size.w * windFrac, h: 3 }, 'ui', 'slide_horizontal_color');
-      drawSprite(gl, quad, res, { x: sp.x + m.size.w * windFrac, y: sp.y - 8 }, { w: m.size.w * (1 - windFrac), h: 3 }, 'ui', 'slide_horizontal_grey');
-    }
-    // HP 条
-    const frac = Math.max(0, m.hp) / def.hp;
-    const barW = m.size.w;
-    const barH = 3;
-    drawSprite(gl, quad, res, { x: sp.x, y: sp.y - 5 }, { w: barW * frac, h: barH }, 'ui', 'slide_horizontal_color');
-    drawSprite(gl, quad, res, { x: sp.x + barW * frac, y: sp.y - 5 }, { w: barW * (1 - frac), h: barH }, 'ui', 'slide_horizontal_grey');
-  }
-
-  // === VFX (UX_REVIEW §8.3): 扩散环/爆裂/闪电链/辉光 (additive, tint×fade 淡出) ===
-  const vfxs = getVfx(state);
-  for (const v of vfxs) {
-    const f = Math.min(1, v.t / v.dur);
-    const fade = 1 - f;
-    const col: [number, number, number] = [v.color[0] * fade, v.color[1] * fade, v.color[2] * fade];
-    const sp = worldToScreen(state, { x: v.x, y: v.y });
-    if (v.kind === 'ring') {
-      const r = v.r0 + (v.r1 - v.r0) * (1 - (1 - f) * (1 - f));
-      drawSprite(gl, quad, res, { x: sp.x - r, y: sp.y - r }, { w: r * 2, h: r * 2 }, 'particles', v.sprite, { color: col, blend: 'add', rot: v.rot0 + (v.rot1 - v.rot0) * f });
-    } else if (v.kind === 'glow') {
-      const r = v.r0 + (v.r1 - v.r0) * f;
-      drawSprite(gl, quad, res, { x: sp.x - r, y: sp.y - r }, { w: r * 2, h: r * 2 }, 'particles', v.sprite, { color: col, blend: 'add' });
-    } else if (v.kind === 'burst') {
-      for (const d of v.dirs ?? []) {
-        const px = sp.x + d.x * v.t;
-        const py = sp.y + d.y * v.t;
-        const s = (v.size ?? 7) * (1 - f * 0.7);
-        drawSprite(gl, quad, res, { x: px - s / 2, y: py - s / 2 }, { w: s, h: s }, 'particles', v.sprite, { color: col, blend: 'add' });
-      }
-    } else if (v.kind === 'bolt') {
-      const p0 = worldToScreen(state, { x: v.x, y: v.y });
-      const p1 = worldToScreen(state, { x: v.tx ?? v.x, y: v.ty ?? v.y });
-      const len = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-      if (len < 2) continue;
-      const ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
-      const mx = (p0.x + p1.x) / 2;
-      const my = (p0.y + p1.y) / 2;
-      drawSprite(gl, quad, res, { x: mx - len / 2, y: my - (v.thickness ?? 5) / 2 }, { w: len, h: v.thickness ?? 5 }, 'particles', 'light_01', { color: col, blend: 'add', rot: ang });
-    }
-  }
-
-  // 装备 (Loot) - 4 阶稀有度上色, 玩家走过即拾
-  for (const eq of getLoot(state)) {
-    const sp = worldToScreen(state, eq.pos);
-    if (sp.x + eq.size.w < 0 || sp.x > state.viewport.w) continue;
-    if (sp.y + eq.size.h < 0 || sp.y > state.viewport.h) continue;
-    drawSprite(gl, quad, res, sp, eq.size, 'particles', 'spark_03', { color: RARITY_COLORS[eq.rarity], blend: 'add' });
-  }
-  const picked = pickupLoot(state);
-  for (const eq of picked) {
-    const affix = eq.affixes.map(describeAffix).join(' ');
-    inf('loot', `picked ${eq.rarity} ${eq.name} (${affix})`);
-    const col = RARITY_COLORS[eq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
-    pushToast(state, `${eq.name}${affix ? ' — ' + affix : ''}`, `#${col}`);
-    playSfxClient('pickup');  // OPT-025
-  }
-
-  const sprite = pickPlayerSprite(state, mouse.state().pos.x);
-  const bob = Math.sin(state.player.idleT * Math.PI * 1.2) * 1;
-  const playerScreen = worldToScreen(state, state.player.pos);
-  drawSprite(
-    gl, quad, res,
-    { x: playerScreen.x, y: playerScreen.y + bob },
-    state.player.size,
-    'characters', sprite.name,
-    { flip: { x: sprite.flipX ? -1 : 1, y: 1 }, rot: sprite.rot },
-  );
-
-  // 诅咒减速标记 (UX_REVIEW P2): 玩家紫雾环绕 (curseT > 0)
-  if ((state.player.curseT ?? 0) > 0) {
-    const ct = performance.now() / 1000;
-    const cR = 30 + Math.sin(ct * 6) * 4;
-    drawSprite(gl, quad, res, { x: playerScreen.x + state.player.size.w / 2 - cR, y: playerScreen.y + state.player.size.h / 2 - cR }, { w: cR * 2, h: cR * 2 }, 'particles', 'circle_02', { color: [0.75, 0.45, 1], blend: 'add' });
-  }
+  const ctx: DrawCtx = { state, gl, quad, res, particleBatch };
+  drawFloor(ctx);
+  drawPortalAndPools(ctx);
+  drawParticles(ctx);
+  drawMonsters(ctx);
+  drawVfx(ctx);
+  drawLoot(ctx);
+  drawPlayer(ctx, mouse.state().pos.x);
 
   drawHud(gl, quad, state);
   drawHudOverlay(hudCtx, state);
@@ -2486,7 +1962,7 @@ function drawFrameToScreen() {
       hudCtx.fillText('Ctrl+1..6 分配技能点 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
     } else {
       // 设置面板 (C8: 与标题共用 drawSettingsPanel, 含滑条/键位自定义)
-      drawSettingsPanel();
+      drawSettingsPanel(state, hudCtx, hudCanvas);
     }
     hudCtx.textAlign = 'left';
   }
@@ -2898,10 +2374,14 @@ function handleHudClick(state: GameState, key: string, aimDir: { x: number; y: n
 function handleUiClick(state: GameState, mx: number, my: number): boolean {
   const uiCtx = buildUiCtx(state, mx, my, {
     confirmCloseSave, confirmCloseCancel, continueLastSave,
-    enterTargetCharacter, titleAct, handleSettingsClick, handleTownPanelKey,
-    startFromNewgame, startCreateNewgame, enterTown, startRun,
+    enterTargetCharacter, titleAct,
+    handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
+    handleTownPanelKey,
+    startFromNewgame: () => startFromNewgame(state),
+    startCreateNewgame: () => startCreateNewgame(state),
+    enterTown, startRun,
     hardcoreWipe, revivePlayer, leaveThroughPortal, setScreen, resumeScreen,
-    deathGoldPenalty, loadLastNg,
+    deathGoldPenalty, loadLastNg: () => loadLastNg(),
   });
   return handleUiClickDispatch(uiCtx);
 }
