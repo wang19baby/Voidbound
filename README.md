@@ -2,9 +2,9 @@
 
 > 一款 2D 俯视肉鸽 ARPG，灵感来自《暗黑破坏神 2 重制版》，融合肉鸽随机机制。
 
-> **当前版本：v1.1 文档草案** —— 详见 [`docs/CHANGELOG-v1.1.md`](docs/CHANGELOG-v1.1.md)。3 项架构决策已敲定，20 项默认提案待 review。
+> **当前版本：v0.1.0 (2026-08-13)** —— 架构重构周完成,详见 [`CHANGELOG.md`](CHANGELOG.md) 与 [`docs/architecture.md`](docs/architecture.md)。
 
-> **⚠ 当前为战斗原型（2026-08-10）**：已实现——1 职业 / 17 怪（染色变体）/ 4 主题 / 单层地牢（清图→Boss→通关）/ 4 槽穿戴 / 符文三选一 / 5 档难度 / 存档 v4。**规划中未实现**：6 职业、30+ 独立模型、3 城镇、WFC 地图、账号级多角色 UI。
+> **⚠ 当前为战斗原型（2026-08-13）**：已实现——1 职业 / 17 怪（染色变体）/ 4 主题 / 单层地牢（清图→Boss→通关）/ 4 槽穿戴 / 符文三选一 / 5 档难度 / 存档 v4。**规划中未实现**：6 职业、30+ 独立模型、3 城镇、WFC 地图、账号级多角色 UI。
 
 ---
 
@@ -60,6 +60,7 @@ Voidbound/
 │   ├── REQUIREMENTS.md      # 需求规格
 │   ├── DESIGN.md            # 完整设计文档
 │   ├── ROADMAP.md           # 实施路线
+│   ├── architecture.md      # v0.1.0 架构文档
 │   └── CONTENT.md           # 内容规格与提示词
 ├── design/                   # 设计草图 / 美术参考
 ├── src-tauri/                # Rust 端（待初始化）
@@ -75,16 +76,44 @@ Voidbound/
 │   │   └── save/
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── src/                      # Web 端（待初始化）
+├── src/                      # Web 端
 │   ├── index.html
 │   ├── main.ts
-│   ├── render/              # WebGL / 粒子 / 着色器
-│   └── game/                # 输入 / 游戏循环 / UI
+│   ├── core/                # 基础设施 (eventBus, pool)
+│   ├── application/         # 跨域服务
+│   ├── game/                # 领域核心
+│   │   ├── character/    # DDD 玩家聚合
+│   │   ├── inventory/    # DDD 装备聚合
+│   │   ├── fx/           # VFX + facade
+│   │   └── system/       # GameSystem 注册表
+│   ├── presentation/        # 渲染层
+│   ├── render/              # WebGL/HUD
+│   │   └── hud/          # HUD 子模块 + overlay
+│   ├── app/                 # 应用层 (lifecycle/audio/save/screenMachine)
+│   ├── screens/             # 屏幕渲染
+│   └── ui/                  # UI primitives
 ├── assets/                   # 像素图集、shader
 ├── .github/
 ├── .gitignore
 └── README.md
 ```
+
+---
+
+## 架构 (v0.1.0)
+
+详见 [docs/architecture.md](docs/architecture.md)。
+
+简要:
+- main.ts 1955 行 (启动装配 + 主循环)
+- core/ 基础设施 + application/ 跨域服务
+- game/ DDD 聚合 (character/inventory) + 子模块 (fx/monsters/combat/system)
+- presentation/ 渲染层 + render/ WebGL/HUD (hud/overlay)
+- app/ 应用层 + screens/ 屏幕
+- 事件总线 (13 事件) + System 注册表 (4 内置) + FX facade
+
+测试: `npm test` (25 个套件 ALL PASS)
+构建: `npm run build` (esbuild ~400.7kb)
 
 ---
 
