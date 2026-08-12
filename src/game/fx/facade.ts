@@ -11,9 +11,9 @@
 // - 0 行为变更 (本次仅聚合, 不修改参数)
 
 import type { GameState } from '../state';
-import { spawnBurst, spawnRing, spawnPlayerHitFx } from '../vfx';
-import { spawnDamageNum } from '../damageNum';
-import { spawnDeathFx } from '../deathFx';
+import { spawnBurst, spawnRing, spawnPlayerHitFx } from './vfx';
+import { spawnDamageNum } from './damageNum';
+import { spawnDeathFx } from './deathFx';
 
 /** 伤害颜色策略: 按伤害类型返回 CSS 颜色 (与原 ai.ts 一致) */
 function dmgColor(dmgType: string): string {

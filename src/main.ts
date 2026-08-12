@@ -10,18 +10,18 @@ import { buildRenderResources } from './render/resources';
 import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
-import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
+import { updateCamera, pickPlayerSprite, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
 import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, drawIcon, setMouseReticle, hudDungeonHit, setHudHover } from './render/hud';
 import { makeCooldown } from './game/cooldown';
-import { tryCastSlot, updateSwings, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, SKILL_SPECS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
+import { tryCastSlot, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, SKILL_SPECS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { ELEMENT_DEFS, EXTRACT_ELEMENT_ORDER, randomSubElement } from './game/element';
 import { rollBossSkill3 } from './game/mech';
-import { spawnMonster, spawnRunPool, updateMonsters, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, updateEnemyProj, getEnemyProj, AURA_DEFS } from './game/monster';
+import { spawnMonster, spawnRunPool, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, AURA_DEFS } from './game/monster';
 import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, SET_BONUSES, type EquipType, type Equipment, type MaterialId } from './game/equipment';
@@ -30,7 +30,6 @@ import { RUNE_FORGE_COST } from './game/equipment';
 import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
 import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, cycleDifficulty, cycleDifficultyGated, type Difficulty } from './game/difficulty';
-import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
 import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
 import { rrect, hexToRgb01 } from './ui/primitives';
 import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
@@ -60,8 +59,8 @@ import { version as GAME_VERSION } from '../package.json';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
 import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint, type PassiveId } from './game/passive';
 import { getSkillCooldowns } from './game/cooldown';
-import { updateDeathFx, getDeathFx, spawnDeathFx } from './game/deathFx';
-import { getVfx, updateVfx } from './game/vfx';
+import { registerAllBuiltinSystems } from './game/system/builtins';
+import { updateAll } from './game/system/registry';
 import { inf, wrn, dbg, err, setLogLevel, type LogLevel } from './util/log';
 
 const VW = 1280;
@@ -582,6 +581,9 @@ inf('loop', 'main loop start');
 import { installCombatFxService } from './application/combatFxService';
 installCombatFxService();
 
+// T3d: 注册内置游戏系统 (攻击/怪物/环境/FX), 替代原 loopImpl 内散点 update* 调用
+const unregisterBuiltinSystems = registerAllBuiltinSystems();
+
 let last = performance.now();
 let frameCount = 0;
 let lastFpsT = performance.now();
@@ -801,16 +803,9 @@ function loopImpl(now: number) {
   updateCamera(state);
   state.world.walls = getActiveWalls(state, 2);
   state.world.decor = getActiveDecor(state, 2); // V1 画质: 装饰随相机刷新
-  updateFireballs(state, dt);
-  updateSwings(state, dt);
-  updateMonsters(state, dt);
-  updateEnemyProj(state, dt);
-  updateDeathFx(state, dt);
-  updateVfx(state, dt);
-  updateDamageNums(state, dt);
+  // T3d: 替代原散点 update* 调用 (注册到 game/system/builtins)
+  updateAll(state, dt);
   updateToasts(state, dt);
-  spawnEnvFx(state, dt);
-  updateEnvFx(state, dt);
   // CD 递减 (药水/翻滚)
   if (state.player.potionCd > 0) state.player.potionCd -= dt;
   if (state.player.dodgeT > 0) state.player.dodgeT -= dt;
@@ -2186,37 +2181,7 @@ function fadeBgm(name: string, vol: number): void {
 }
 
 
-/** 主题环境粒子色 (OPT-027) */
-const THEME_ENV_COLOR: Record<Theme, [number, number, number]> = {
-  forest: [0.55, 1, 0.4], desert: [1, 0.85, 0.4], ruin: [0.55, 0.85, 1], void: [0.7, 0.4, 1],
-};
-
-/** 环境粒子生成 (OPT-027): 视口内随机飘落, 上限 40 */
-function spawnEnvFx(state: GameState, dt: number): void {
-  if (state.envFx.length >= 40) return;
-  if (Math.random() > 0.35 * dt * 60) return;
-  const cx = state.camera.x + state.viewport.w / 2;
-  const cy = state.camera.y + state.viewport.h / 2;
-  state.envFx.push({
-    x: cx + (Math.random() - 0.5) * state.viewport.w,
-    y: cy + (Math.random() - 0.5) * state.viewport.h,
-    vx: (Math.random() - 0.5) * 12,
-    vy: -8 - Math.random() * 16,
-    t: 0,
-    life: 3 + Math.random() * 2,
-  });
-}
-
-function updateEnvFx(state: GameState, dt: number): void {
-  const nxt = [];
-  for (const p of state.envFx) {
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.t += dt;
-    if (p.t < p.life) nxt.push(p);
-  }
-  state.envFx = nxt;
-}
+/** 主题环境粒子色 (OPT-027) — 已搬到 game/fx/envFx.ts (T3a), 由 envFxSystem 调度 */
 
 // 已搬到 app/actions/* + app/save.ts (US-027-b):
 // - notifyCastFail, handleHudClick → app/actions/{hud,player}.ts

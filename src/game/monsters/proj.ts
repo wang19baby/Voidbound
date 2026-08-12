@@ -3,13 +3,16 @@
 // 本次拆分: EnemyProjectile + spawnEnemyProjectile + getEnemyProj + updateEnemyProj
 // 零循环依赖: 只依赖 types (Monster), world (aabbOverlap), vfx (spawnImpact / spawnPlayerHitFx),
 //   difficulty (DIFFICULTY_MODS), defs (levelMonsterScale + 倍率)
+//
+// B.1.5: 池化 _enemyProj
 
 import type { GameState } from '../state';
 import type { Monster } from './types';
 import { levelMonsterScale, ELITE_DMG_MULT, LORD_DMG_MULT, ENHANCED_DMG_MULT } from './defs';
 import { DIFFICULTY_MODS } from '../difficulty';
 import { aabbOverlap } from '../world';
-import { spawnImpact, spawnPlayerHitFx } from '../vfx';
+import { spawnImpact, spawnPlayerHitFx } from '../fx/vfx';
+import { Pool } from '../../core/pool';
 
 /** 怪物远程投射物 (类似玩家火球) */
 export interface EnemyProjectile {
@@ -22,59 +25,102 @@ export interface EnemyProjectile {
 }
 
 let nextProjId = 1;
+const enemyProjPool = new Pool<EnemyProjectile>({
+  factory: () => ({
+    pos: { x: 0, y: 0 },
+    vel: { x: 0, y: 0 },
+    size: { w: 0, h: 0 },
+    dmg: 0,
+    life: 0,
+    fromId: 0,
+  }),
+  reset: (p) => {
+    p.pos.x = 0; p.pos.y = 0;
+    p.vel.x = 0; p.vel.y = 0;
+    p.size.w = 0; p.size.h = 0;
+    p.dmg = 0; p.life = 0; p.fromId = 0;
+  },
+  initial: 32,
+});
+
 export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle = 0): void {
-  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
-  ext._enemyProj = ext._enemyProj ?? [];
   const dx = state.player.pos.x - m.pos.x;
   const dy = state.player.pos.y - m.pos.y;
   const len = Math.hypot(dx, dy) || 1;
   // 基础方向 + 偏角 (二阶段双发错开)
   const base = Math.atan2(dy, dx) + angle;
   const speed = 180;
-  ext._enemyProj.push({
-    pos: { x: m.pos.x + m.size.w / 2 - 6, y: m.pos.y + m.size.h / 2 - 6 },
-    vel: { x: Math.cos(base) * speed, y: Math.sin(base) * speed },
-    size: { w: 12, h: 12 },
-    dmg: Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1)),
-    life: 2.0,
-    fromId: m.id,
-  });
+  const p = enemyProjPool.acquire();
+  p.pos.x = m.pos.x + m.size.w / 2 - 6;
+  p.pos.y = m.pos.y + m.size.h / 2 - 6;
+  p.vel.x = Math.cos(base) * speed;
+  p.vel.y = Math.sin(base) * speed;
+  p.size.w = 12;
+  p.size.h = 12;
+  p.dmg = Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1));
+  p.life = 2.0;
+  p.fromId = m.id;
+  state._enemyProj.push(p);
   nextProjId++;
 }
 
 export function getEnemyProj(state: GameState): readonly EnemyProjectile[] {
-  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
-  return ext._enemyProj ?? [];
+  return state._enemyProj;
 }
 
 export function updateEnemyProj(state: GameState, dt: number): void {
-  const ext = state as GameState & { _enemyProj?: EnemyProjectile[] };
-  if (!ext._enemyProj) return;
-  ext._enemyProj = ext._enemyProj.filter(p => {
+  // 两遍循环: 第一遍标记过期/命中, 第二遍批量 splice + release
+  const toRelease: EnemyProjectile[] = [];
+  const impactPos: Array<{ x: number; y: number; color: [number, number, number] }> = [];
+  for (const p of state._enemyProj) {
     p.pos.x += p.vel.x * dt;
     p.pos.y += p.vel.y * dt;
     p.life -= dt;
-    if (p.life <= 0) return false;
-    // 撞墙 → 火花消失 (地图审查 P1: 与玩家火球同规则, 墙 = 掩体)
-    for (const w of state.world.walls) {
-      if (aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
-        spawnImpact(state, p.pos.x + p.size.w / 2, p.pos.y + p.size.h / 2, [1, 0.35, 0.35]);
-        return false;
+    let release = false;
+    let impactColor: [number, number, number] | null = null;
+    if (p.life <= 0) release = true;
+    else {
+      // 撞墙 → 火花消失 (地图审查 P1: 与玩家火球同规则, 墙 = 掩体)
+      let hitWall = false;
+      for (const w of state.world.walls) {
+        if (aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
+          hitWall = true;
+          impactColor = [1, 0.35, 0.35];
+          break;
+        }
       }
-    }
-    // 撞玩家 → 扣血 + 消失 (翻滚无敌免疫)
-    if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0 &&
+      if (hitWall) { release = true; }
+      else if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0 &&
         aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h,
                     state.player.pos.x, state.player.pos.y,
                     state.player.size.w, state.player.size.h)) {
-      state.player.hp -= p.dmg;
-      state.lastKiller = '弹幕';  // 死亡结算显示
-      state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 3);  // OPT-026
-      spawnPlayerHitFx(state);
-      return false;
+        // 撞玩家 → 扣血 + 消失
+        state.player.hp -= p.dmg;
+        state.lastKiller = '弹幕';  // 死亡结算显示
+        state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 3);  // OPT-026
+        spawnPlayerHitFx(state);
+        release = true;
+      } else if (p.pos.x < 0 || p.pos.x > state.world.w || p.pos.y < 0 || p.pos.y > state.world.h) {
+        release = true;  // 出界
+      }
     }
-    // 出界
-    if (p.pos.x < 0 || p.pos.x > state.world.w || p.pos.y < 0 || p.pos.y > state.world.h) return false;
-    return true;
-  });
+    if (release) {
+      toRelease.push(p);
+      if (impactColor) impactPos.push({ x: p.pos.x + p.size.w / 2, y: p.pos.y + p.size.h / 2, color: impactColor });
+    }
+  }
+  // 第二遍: 批量释放 (含撞墙粒子)
+  for (const pos of impactPos) {
+    spawnImpact(state, pos.x, pos.y, pos.color);
+  }
+  for (const p of toRelease) {
+    const idx = state._enemyProj.indexOf(p);
+    if (idx >= 0) state._enemyProj.splice(idx, 1);
+    enemyProjPool.release(p);
+  }
+}
+
+/** 测试用: 重置池 */
+export function _resetEnemyProjPool(): void {
+  enemyProjPool.clear();
 }

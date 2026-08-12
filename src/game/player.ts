@@ -8,7 +8,7 @@ import { pushToast } from './toast';
 import { playSfxClient } from '../ipc/sfx';
 import { classAttrWeight } from './class';
 import { CURSE_SLOW_MULT } from './mech';
-import { spawnGlow, spawnBurst } from './vfx';
+import { spawnGlow, spawnBurst } from './fx/vfx';
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;

@@ -12,9 +12,9 @@ import type { Equipment, EquipType } from './equipment';
 import { CLASS_SPRITES, type ClassId } from './class';
 import type { ElementId } from './element';
 import type { MapMode } from './mapmode';
-import { spawnBurst, type Vfx } from './vfx';
-import type { DamageNum } from './damageNum';
-import type { DeathFx } from './deathFx';
+import { spawnBurst, type Vfx } from './fx/vfx';
+import type { DamageNum } from './fx/damageNum';
+import type { DeathFx } from './fx/deathFx';
 import type { Toast } from './toast';
 import type { EnemyProjectile } from './monsters/proj';
 

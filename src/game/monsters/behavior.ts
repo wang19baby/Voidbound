@@ -10,12 +10,13 @@ import { calcDamage, DAMAGE_TYPE_COLORS, CRIT_COLOR, type DamageType } from '../
 import { DIFFICULTY_MODS } from '../difficulty';
 import { aabbOverlap } from '../world';
 import { skillDamageScale } from '../skill';
-import { spawnImpact, spawnPlayerHitFx, ELEMENT_FX } from '../vfx';
-import { spawnDamageNum } from '../damageNum';
+import { spawnImpact, spawnPlayerHitFx, ELEMENT_FX } from '../fx/vfx';
+import { spawnDamageNum } from '../fx/damageNum';
 import { playSfxClient } from '../../ipc/sfx';
 import { dbg } from '../../util/log';
 import { slideAxis, killMonster } from './ai';
 import { SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, THORNS_REFLECT, THORNS_FLAT } from '../mech';
+import { releaseFireball } from '../state';
 
 /** 对怪物结算一次 D-04 伤害; 支持击退 (F-CBT-005, US-016) */
 export function damageMonster(
@@ -78,10 +79,11 @@ export function resolveFireballHits(state: GameState): number {
     if (m.hp <= 0) return false;
     for (const f of fireballs) {
       if (aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
-        // 移除火球 (穿透/嗜血符文不消耗)
+        // 移除火球 (穿透/嗜血符文不消耗; B.1.7: 释放回池)
         if (f.rune !== 'pierce') {
           const idx = fireballs.indexOf(f);
           if (idx >= 0) fireballs.splice(idx, 1);
+          releaseFireball(f);
         }
         const r = damageMonster(state, m, { base: f.dmg, type: f.dmgType, knockback: 60 });
         // VFX (UX_REVIEW P1): 元素色命中爆点
@@ -120,9 +122,8 @@ export function resolveFireballHits(state: GameState): number {
 
 /** 检查所有挥击与怪物的碰撞 (近战 = 50 物理) */
 export function resolveMeleeHits(state: GameState): number {
-  // melees 存 state._swings
-  const ext = state as GameState & { _swing?: import('../skill').MeleeSwing[] };
-  const swings = ext._swing ?? [];
+  // melees 存 state._swing (A.1 收口, 类型安全)
+  const swings = state._swing;
   let kills = 0;
   state.monsters = state.monsters.filter(m => {
     if (m.hp <= 0) return false;

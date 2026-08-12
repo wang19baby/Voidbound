@@ -16,6 +16,7 @@
 export type { MonsterType, MonsterDef } from './monsters/types';
 export type { AuraType } from './monsters/defs';
 export type { CampType } from './monsters/spawn';
+export type { PoisonPool } from './monsters/ai';
 
 // === 数据表 + 常量 ===
 export {

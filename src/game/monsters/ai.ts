@@ -19,9 +19,9 @@ import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, 
 import { DIFFICULTY_MODS } from '../difficulty';
 import { AURA_TYPES, THEME_MONSTER_POOL } from './defs';
 import { aabbOverlap } from '../world';
-import { spawnRing, spawnBurst, spawnPlayerHitFx } from '../vfx';
-import { spawnDamageNum } from '../damageNum';
-import { spawnDeathFx } from '../deathFx';
+import { spawnRing, spawnBurst, spawnPlayerHitFx } from '../fx/vfx';
+import { spawnDamageNum } from '../fx/damageNum';
+import { spawnDeathFx } from '../fx/deathFx';
 import { playSfxClient } from '../../ipc/sfx';
 import { inf, dbg } from '../../util/log';
 import { advanceCombo, comboScoreMult } from '../skill';
@@ -29,8 +29,18 @@ import { dropLoot, dropBossReward, dropEliteLoot, addMaterial, materialDrop, THE
 import { gainExp } from '../player';
 import { spawnEnemyProjectile } from './proj';
 import { DAMAGE_TYPE_COLORS as SUB_COLOR_LOOKUP } from '../combat';
+import { bus } from '../../core/eventBus';
 
 let nextMonsterId = 1;
+
+/** A-W3 死亡触发毒池: monster 死亡时可能留下持续 DOT 区域 */
+export interface PoisonPool {
+  x: number;
+  y: number;
+  r: number;
+  dps: number;
+  t: number;
+}
 
 /** 在玩家周围 (安全距离外) 随机 spawn 一只怪物; 避开墙
  *  at: 营地生成锚点 (该点附近 80px 聚簇); 缺省 = 玩家周围 600-1200px
@@ -612,13 +622,11 @@ export function killMonster(state: GameState, m: Monster): void {
       spawnBurst(state, cx, cy, 8, [0.8, 0.8, 0.4], 'spark_03', 160, 6, 0.4);
       inf('combat', `${def.type} 死亡触发: 分裂 ×${DEATH_SPLIT_COUNT}`);
     } else {
-      const pool = {
+      const pool: PoisonPool = {
         x: cx - DEATH_POOL_RADIUS / 2, y: cy - DEATH_POOL_RADIUS / 2,
         r: DEATH_POOL_RADIUS, dps: DEATH_POOL_DPS, t: DEATH_POOL_T,
       };
-      const ext = state as GameState & { _pools?: Array<{ x: number; y: number; r: number; dps: number; t: number }> };
-      ext._pools = ext._pools ?? [];
-      ext._pools.push(pool);
+      state._pools.push(pool);
       inf('combat', `${def.type} 死亡触发: 毒池`);
     }
   }
@@ -636,5 +644,8 @@ export function killMonster(state: GameState, m: Monster): void {
     inf('combat', `${def.type} 分裂 ×2`);
   }
   spawnDamageNum(state, cx, m.pos.y, 'KILL!', '#ffaa00');
+  // A.3: 击杀事件总线 — 跨域副作用(渲染/音频/日志)走订阅者; 数据副作用保留本域
+  // killedBy 来源追踪留给未来 US-039 (damageMonster 反向调用); 当前 unknown
+  bus.emit('monster.killed', { monster: m, killedBy: 'unknown', x: cx, y: cy });
   inf('combat', `${m.type} killed (+${Math.round(def.score * comboScoreMult(combo))}${combo > 1 ? ` combo x${combo}` : ''})`);
 }

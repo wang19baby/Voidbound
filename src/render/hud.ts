@@ -12,7 +12,7 @@ import { drawSprite } from './draw';
 import type { RenderResources } from './resources';
 import { getLogs, formatLine } from '../util/log';
 import { RUNE_DEFS, RUNE_FAMILIES, slotFamily } from '../game/rune';
-import { getDamageNums } from '../game/damageNum';
+import { getDamageNums } from '../game/fx/damageNum';
 import { getToasts } from '../game/toast';
 import { getOwned, getLoot, EQUIP_SLOTS, EQUIP_NAMES, itemPowerDelta, BACKPACK_CAP, RARITY_COLORS, describeAffix } from '../game/equipment';
 import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS, slotDisplay, type SkillId, type SkillSlot } from '../game/skill';

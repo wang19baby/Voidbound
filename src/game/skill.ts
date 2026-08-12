@@ -9,7 +9,7 @@ import { RUNE_DEFS, RUNE_FAMILIES, slotFamily, type RuneId } from './rune';
 import { spawnFireball } from './state';
 import { aabbOverlap } from './world';
 import { damageMonster, FIREBALL_DAMAGE, MELEE_DAMAGE, ULTIMATE_DAMAGE } from './monster';
-import { aoeVisual, ELEMENT_FX, spawnRing, spawnBurst, spawnBolt, spawnGlow } from './vfx';
+import { aoeVisual, ELEMENT_FX, spawnRing, spawnBurst, spawnBolt, spawnGlow } from './fx/vfx';
 import type { DamageType } from './combat';
 import { bus } from '../core/eventBus';
 

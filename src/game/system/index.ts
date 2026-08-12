@@ -2,4 +2,4 @@
 
 export type { GameSystem } from './types';
 export { registerSystem, updateAll, renderAll, resetAll, systemCount } from './registry';
-export { fxSystem, attackSystem, monsterSystem, builtins, registerAllBuiltinSystems } from './builtins';
+export { fxSystem, attackSystem, monsterSystem, envFxSystem, builtins, registerAllBuiltinSystems } from './builtins';

@@ -1,6 +1,4 @@
-// app/envFx.ts — 主题氛围粒子 (T1b, 2026-08-12)
-//
-// 从 main.ts 拆出: 原 line 2388-2418 (THEME_ENV_COLOR / spawnEnvFx / updateEnvFx)
+// game/fx/envFx.ts — 主题氛围粒子 (T3a, 从 app/envFx.ts 搬入)
 //
 // 设计:
 // - 模块级 THEME_ENV_COLOR 表 (按主题定调色)
@@ -8,13 +6,12 @@
 // - updateEnvFx: 推进位置 + 寿命; 过期即清
 // - envFx 数据存在 state.envFx (GameState 内嵌数组, 现有结构)
 //
-// 迁移注意:
-// - T3a 会把本文件搬到 game/fx/envFx.ts (与 vfx.ts / damageNum.ts 同列)
-// - 当前阶段: 留在 app/ 目录, 保持 main.ts 直接 import 路径
+// 由 envFxSystem (game/system/builtins.ts) 在主循环 update 内调用,
+// 替代原 main.ts 内散点调用. 函数体内容原样从 app/envFx.ts 搬移, 未修改.
 
-import type { GameState, Theme } from '../game/state';
+import type { GameState, Theme } from '../state';
 
-/** 主题环境色 (T3a 候选, 当前留 app/) */
+/** 主题环境色 */
 export const THEME_ENV_COLOR: Record<Theme, [number, number, number]> = {
   forest: [0.45, 0.85, 0.5],
   desert: [1.0, 0.85, 0.4],
