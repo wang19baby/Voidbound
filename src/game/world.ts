@@ -36,7 +36,7 @@ function mulberry32(seed: number): () => number {
 // === A-W2 三模式出生点 + 密度梯度 (设计文档 §2) ===
 import type { MapMode } from './mapmode';
 
-/** 地图1 普通: 出生在左, 主轴左→右, Boss 在右端 */
+/** 地图1 普通: 出生在左, 主轴左→右推进 (Boss 清场后在玩家附近降临, 见 spawnRunPool) */
 export const LINEAR_SPAWN = { x: 320, y: WORLD_H / 2 };
 /** 地图2 高级: 随机角落入口, 中央 Boss */
 export const GAUNTLET_SPAWN = { x: 320, y: 320 };
@@ -87,15 +87,10 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
   for (let r = 0; r < CHUNK_BLOCKS; r++) {
     const row: boolean[] = [];
     for (let c = 0; c < CHUNK_BLOCKS; c++) {
-      // 边界 + 走廊 强制空
+      // 边界 + 十字走廊 强制空 (row 3,4 / col 3,4 全空, 含中央 2x2 交汇 → 跨 chunk 连通)
       const isBorder = r === 0 || r === CHUNK_BLOCKS - 1 || c === 0 || c === CHUNK_BLOCKS - 1;
-      const isCorridor = (r === 3 || r === 4) && (c >= 3 && c <= 4);
-      // 走廊延伸: row 3,4 与 col 3,4 在 chunk 内做十字走廊, 边界全空保证跨 chunk 通行
       const isAxisCorridor = (r === 3 || r === 4) || (c === 3 || c === 4);
-      if (isBorder || isCorridor) {
-        row.push(false);
-      } else if (isAxisCorridor) {
-        // 十字走廊外延 (边界外不延伸) → 这里因为 isBorder 已 false, 轴向走廊自然延伸
+      if (isBorder || isAxisCorridor) {
         row.push(false);
       } else {
         // 内部 4x4 + 边角 12 块, 按模式密度 (A-W2: 线性18% / 高级22% / 挑战16%)
@@ -236,7 +231,7 @@ export interface Decor {
   tint?: [number, number, number];
 }
 
-/** 主题 → 装饰配置 (复用 world 图集: grass / wall_alt) */
+/** 主题 → 装饰配置 (world 图集 decor_* HD; 旧 grass/wall_alt 已移除) */
 export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: [number, number, number] }> = {
   forest: { sprite: 'decor_forest', count: 6 }, // HD 草丛
   desert: { sprite: 'decor_desert', count: 6 }, // HD 石块
@@ -255,16 +250,19 @@ export function generateChunkDecor(cx: number, cy: number, theme: Theme, density
   const out: Decor[] = [];
   const ox = cx * CHUNK_SIZE;
   const oy = cy * CHUNK_SIZE;
-  const size = 32;
+  // 装饰显示尺寸 (Review: 与 main.ts 渲染 64px 对齐, 原 32px 检查导致探进墙块 16px)
+  const size = 64;
   let guard = 0;
   while (out.length < cfg.count && guard++ < 64) {
-    const x = ox + 16 + rand() * (CHUNK_SIZE - 32);
-    const y = oy + 16 + rand() * (CHUNK_SIZE - 32);
+    const x = ox + size / 2 + rand() * (CHUNK_SIZE - size);
+    const y = oy + size / 2 + rand() * (CHUNK_SIZE - size);
     let blocked = false;
     for (const w of walls) {
       if (aabbOverlap(x, y, size, size, w.pos.x, w.pos.y, w.size.w, w.size.h)) { blocked = true; break; }
     }
     if (blocked) continue;
+    // 装饰间不重叠 (防堆叠穿帮)
+    if (out.some(d => aabbOverlap(x, y, size, size, d.pos.x, d.pos.y, size, size))) continue;
     out.push({ pos: { x, y }, sprite: cfg.sprite, tint: cfg.tint });
   }
   return out;

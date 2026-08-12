@@ -9,9 +9,10 @@ import type { RuneId } from './rune';
 import type { SkillSlot } from './skill';
 import type { Difficulty } from './difficulty';
 import type { Equipment, EquipType } from './equipment';
-import type { ClassId } from './class';
+import { CLASS_SPRITES, type ClassId } from './class';
 import type { ElementId } from './element';
 import type { MapMode } from './mapmode';
+import { spawnBurst, type Vfx } from './vfx';
 
 export interface Camera {
   x: number;
@@ -224,6 +225,8 @@ export interface GameState {
   fireballs: Fireball[];
   fireballSize: number;
   monsters: Monster[];
+  /** 技能/机制视觉特效 (UX_REVIEW §8.3): 扩散环/爆裂/闪电/辉光 */
+  vfx: Vfx[];
   score: number;
   /** 屏幕状态机 (OPT-010) */
   screen: Screen;
@@ -274,6 +277,16 @@ export interface GameState {
   pendingDifficulty: Difficulty | null;
   /** 材料 (M5 W4 C-401): 独立计数不占背包 (J3=a); 第二货币 */
   materials: Partial<Record<import('./equipment').MaterialId, number>>;
+  /** 城镇鼠标走向目标 (v3): 点击 NPC 自动走向, 到达后自动交互 (null=无) */
+  townWalk: { kind: import('./town').NpcKind; x: number; y: number } | null;
+  /** C (P2-8): 已探索 64px 块 "cx,cy" (会话内) */
+  explored: Set<string>;
+  /** C (死亡撤销): 死亡后 N 秒内可免费撤销, 0=已过期 */
+  deathUndo: number;
+  /** C (P1-4): 收集总览覆盖层 (characters 屏) */
+  collectOpen: boolean;
+  /** C (P3-10): 键位编辑捕获目标 (设置面板点条目后按新键) */
+  keybindEdit: string | null;
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
@@ -292,8 +305,11 @@ export function resetPlayer(state: GameState): void {
 import type { Wall as WallLike } from './world';
 
 export function updateCamera(state: GameState): void {
-  state.camera.x = state.player.pos.x - state.viewport.w / 2;
-  state.camera.y = state.player.pos.y - state.viewport.h / 2;
+  const vw = state.viewport.w;
+  const vh = state.viewport.h;
+  // 钳制到世界边界: 不 clamp 会在出生点(左缘 320)露出无贴图黑带 (camera.x = 288-640 = -352)
+  state.camera.x = Math.max(0, Math.min(WORLD_W - vw, state.player.pos.x - vw / 2));
+  state.camera.y = Math.max(0, Math.min(WORLD_H - vh, state.player.pos.y - vh / 2));
 }
 
 export function worldToScreen(state: GameState, worldPos: { x: number; y: number }): { x: number; y: number } {
@@ -338,7 +354,12 @@ export function updateFireballs(state: GameState, dt: number): void {
         }
       }
     }
-    if (blocked) { wallHits++; continue; }
+    if (blocked) {
+      wallHits++;
+      // VFX (UX_REVIEW P1): 撞墙火花
+      spawnBurst(state, f.pos.x + f.size.w / 2, f.pos.y + f.size.h / 2, 4, [0.9, 0.9, 1], 'spark_03', 70, 5, 0.3);
+      continue;
+    }
     next.push(f);
   }
   if (wallHits > 0) {
@@ -390,8 +411,8 @@ export interface PlayerSprite {
 export function pickPlayerSprite(state: GameState, mouseScreenX: number): PlayerSprite {
   const vpCx = state.viewport.w / 2;
   const dx = mouseScreenX - vpCx;
-  // 职业 → 站立 sprite (HD 美术接入; 图集含全部 6 职业 _stand)
-  const name = `${state.player.classId ?? 'sorceress'}_stand`;
+  // 职业 → 站立 sprite (mage 图集名 sorceress, 由 CLASS_SPRITES 统一映射; 缺省 barbarian 防 throw)
+  const name = CLASS_SPRITES[state.player.classId as ClassId] ?? CLASS_SPRITES.barbarian;
   // 鼠标明显在右边 → R, 明显在左边 → L, 中心 ±8px → 用键盘
   if (dx > 8) return { name, flipX: false, rot: 0 };
   if (dx < -8) return { name, flipX: true, rot: 0 };

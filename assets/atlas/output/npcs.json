@@ -1,0 +1,90 @@
+{
+  "atlas": "npcs",
+  "size": {
+    "width": 546,
+    "height": 68
+  },
+  "sprite_count": 8,
+  "sprites": [
+    {
+      "name": "forge_stand",
+      "file": "forge_stand.png",
+      "x": 2,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "merchant_stand",
+      "file": "merchant_stand.png",
+      "x": 70,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "mystery_stand",
+      "file": "mystery_stand.png",
+      "x": 138,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "portal_array",
+      "file": "portal_array.png",
+      "x": 206,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "smith_stand",
+      "file": "smith_stand.png",
+      "x": 274,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "teleporter_stand",
+      "file": "teleporter_stand.png",
+      "x": 342,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "trainer_stand",
+      "file": "trainer_stand.png",
+      "x": 410,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "warehouse_stand",
+      "file": "warehouse_stand.png",
+      "x": 478,
+      "y": 2,
+      "frame_width": 64,
+      "frame_height": 64,
+      "frames": 1,
+      "is_animated": false
+    }
+  ]
+}

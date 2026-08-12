@@ -201,6 +201,31 @@ check('Boss 带 skill3', bossM.skill3 !== undefined);
 check('Boss 带原 bossSkill', MONSTER_DEFS.pumpking.bossSkill === 'summon');
 check('小怪不带 skill3', spawnMonster(makeStubState() as never, 'slime', undefined, {}).skill3 === undefined);
 
+// === 地图审查 P1: 敌弹撞墙 (墙 = 掩体) ===
+import { updateEnemyProj, getEnemyProj, type EnemyProjectile } from '../src/game/monster';
+function projState() {
+  const s = makeStubState();
+  return {
+    ...s,
+    player: { ...s.player, size: { w: 32, h: 32 }, dodgeT: 0, reviveInvuln: 0 },
+    world: {
+      w: s.world.w, h: s.world.h,
+      walls: [{ pos: { x: 500, y: 0 }, size: { w: 128, h: 128 } }],
+    },
+    cameraShake: 0,
+    lastKiller: null,
+    _enemyProj: [] as EnemyProjectile[],
+  } as never;
+}
+const sA = projState();
+(sA as { _enemyProj: EnemyProjectile[] })._enemyProj.push({ pos: { x: 430, y: 64 }, vel: { x: 200, y: 0 }, size: { w: 12, h: 12 }, dmg: 5, life: 2, fromId: 1 });
+updateEnemyProj(sA, 0.5); // 移动 100px → x=530 ∈ 墙 [500,628] → 销毁 + 火花
+check('敌弹撞墙消失', getEnemyProj(sA).length === 0);
+const sB = projState();
+(sB as { _enemyProj: EnemyProjectile[] })._enemyProj.push({ pos: { x: 300, y: 64 }, vel: { x: 100, y: 0 }, size: { w: 12, h: 12 }, dmg: 5, life: 2, fromId: 1 });
+updateEnemyProj(sB, 0.5); // x=350, 墙外 → 存活
+check('无阻挡弹幕存活', getEnemyProj(sB).length === 1);
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);

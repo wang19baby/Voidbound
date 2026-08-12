@@ -13,6 +13,8 @@ export interface TownNpc {
   name: string;
   pos: { x: number; y: number };
   hint: string;
+  /** npcs 图集 sprite 名 (美术: 7 角色 + portal_array 传送阵); difficulty 祭坛为结构物设为空 */
+  sprite: string;
 }
 
 /** 城镇 id (C-301): 3 镇 */
@@ -35,36 +37,36 @@ export const TOWN_DEFS: Record<TownId, TownDef> = {
     id: 'greenwing', name: '鲁特·格莱宁', requires: [],
     color: '0.10, 0.11, 0.16',
     npcs: [
-      { kind: 'merchant',   name: '商人',       pos: { x: 240, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
-      { kind: 'smith',      name: '重铸师',     pos: { x: 480, y: 400 }, hint: '100金 重铸词条' },
-      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 720, y: 400 }, hint: '存取装备 (账号共享)' },
-      { kind: 'difficulty', name: '挑战祭坛',   pos: { x: 960, y: 400 }, hint: '调整难度' },
-      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+      { kind: 'merchant',   name: '商人',       pos: { x: 240, y: 400 }, hint: '买装备 / 卖装备 / 药水', sprite: 'merchant_stand' },
+      { kind: 'smith',      name: '重铸师',     pos: { x: 480, y: 400 }, hint: '100金 重铸词条', sprite: 'smith_stand' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 720, y: 400 }, hint: '存取装备 (账号共享)', sprite: 'warehouse_stand' },
+      { kind: 'difficulty', name: '挑战祭坛',   pos: { x: 960, y: 400 }, hint: '调整难度', sprite: '' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发', sprite: 'portal_array' },
     ],
   },
   harbor: {
     id: 'harbor', name: '卡斯特蓝港', requires: ['forest'],
     color: '0.08, 0.16, 0.24',
     npcs: [
-      { kind: 'merchant',   name: '商人',       pos: { x: 200, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
-      { kind: 'mystery',    name: '神秘商人',   pos: { x: 440, y: 400 }, hint: '传奇装备 (500-2000金)' },
-      { kind: 'smith',      name: '装备重铸师', pos: { x: 680, y: 400 }, hint: '100金 重铸词条' },
-      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 920, y: 400 }, hint: '存取装备 (账号共享)' },
-      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 400 }, hint: '前往其他城镇' },
-      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+      { kind: 'merchant',   name: '商人',       pos: { x: 200, y: 400 }, hint: '买装备 / 卖装备 / 药水', sprite: 'merchant_stand' },
+      { kind: 'mystery',    name: '神秘商人',   pos: { x: 440, y: 400 }, hint: '传奇装备 (500-2000金)', sprite: 'mystery_stand' },
+      { kind: 'smith',      name: '装备重铸师', pos: { x: 680, y: 400 }, hint: '100金 重铸词条', sprite: 'smith_stand' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 920, y: 400 }, hint: '存取装备 (账号共享)', sprite: 'warehouse_stand' },
+      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 400 }, hint: '前往其他城镇', sprite: 'teleporter_stand' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发', sprite: 'portal_array' },
     ],
   },
   sanctum: {
     id: 'sanctum', name: '圣所·阿卡拉', requires: ['desert', 'ruin'],
     color: '0.16, 0.13, 0.08',
     npcs: [
-      { kind: 'merchant',   name: '商人',       pos: { x: 160, y: 400 }, hint: '买装备 / 卖装备 / 药水' },
-      { kind: 'forge',      name: '符文锻造师', pos: { x: 400, y: 400 }, hint: '5奥术核心+1虚空碎片 重铸符文' },
-      { kind: 'trainer',    name: '训练师',     pos: { x: 640, y: 400 }, hint: '技能树开发中' },
-      { kind: 'smith',      name: '重铸师',     pos: { x: 880, y: 400 }, hint: '100金/灵铁 重铸词条' },
-      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 1120, y: 400 }, hint: '存取装备 (账号共享)' },
-      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 220 }, hint: '前往其他城镇' },
-      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发' },
+      { kind: 'merchant',   name: '商人',       pos: { x: 160, y: 400 }, hint: '买装备 / 卖装备 / 药水', sprite: 'merchant_stand' },
+      { kind: 'forge',      name: '符文锻造师', pos: { x: 400, y: 400 }, hint: '5奥术核心+1虚空碎片 重铸符文', sprite: 'forge_stand' },
+      { kind: 'trainer',    name: '训练师',     pos: { x: 640, y: 400 }, hint: '技能树开发中', sprite: 'trainer_stand' },
+      { kind: 'smith',      name: '重铸师',     pos: { x: 880, y: 400 }, hint: '100金/灵铁 重铸词条', sprite: 'smith_stand' },
+      { kind: 'warehouse',  name: '仓库管理员', pos: { x: 1120, y: 400 }, hint: '存取装备 (账号共享)', sprite: 'warehouse_stand' },
+      { kind: 'teleport',   name: '传送师',     pos: { x: 1140, y: 220 }, hint: '前往其他城镇', sprite: 'teleporter_stand' },
+      { kind: 'exit',       name: '地下城入口', pos: { x: 600, y: 200 }, hint: '出发', sprite: 'portal_array' },
     ],
   },
 };

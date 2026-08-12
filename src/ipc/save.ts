@@ -72,6 +72,8 @@ export interface SaveData {
   passives: Array<[string, number]>;
   /** 布局模式 (v10, A-W2): linear/gauntlet/extract */
   mode: string;
+  /** 上次场景 (v11): dungeon/town — 读档按此分派 */
+  scene: string;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

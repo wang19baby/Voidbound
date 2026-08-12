@@ -1,5 +1,5 @@
 // 角色存档: bincode 序列化到 saves/char_0.bin (US-003 + OPT-014/015/003/029 + M5 + A-W1)
-// 格式: 首字节 = SAVE_FORMAT_VERSION (10), 其后 bincode(SaveData)
+// 格式: 首字节 = SAVE_FORMAT_VERSION (11), 其后 bincode(SaveData)
 // v10 [A-W1]: + mode (布局模式 linear/gauntlet/extract, 迁移默认 linear)
 // v9 [M5 非目标收尾]: + passives (被动技能树等级: id, level)
 // v8 [M5 W4 C-401]: + materials (材料计数: iron_shard/arcane_core/void_fragment)
@@ -15,7 +15,7 @@ use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_FORMAT_VERSION: u8 = 10;
+pub const SAVE_FORMAT_VERSION: u8 = 11;
 
 /// 当前角色 ID (OPT-029: 多角色 UI 前固定单角色)
 const CURRENT_CHAR: &str = "char_0";
@@ -192,6 +192,68 @@ pub struct SaveData {
     pub passives: Vec<(String, u32)>,
     // v10 (A-W1): 布局模式 linear/gauntlet/extract (迁移默认 linear)
     pub mode: String,
+    // v11 (界面优化): 上次场景 dungeon/town (读档分派, 迁移默认 dungeon)
+    pub scene: String,
+}
+
+/// v10 兼容结构 (无 scene 字段)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+struct SaveDataV10 {
+    pub player_x: f32,
+    pub player_y: f32,
+    pub player_hp: f32,
+    pub player_mp: f32,
+    pub facing_x: f32,
+    pub facing_y: f32,
+    pub score: u32,
+    pub world_w: f32,
+    pub world_h: f32,
+    pub level: u32,
+    pub owned: Vec<OwnedItem>,
+    pub gold: u32,
+    pub runes: Vec<RuneSlot>,
+    pub theme: String,
+    pub difficulty: String,
+    pub equipped: Vec<EquippedItem>,
+    pub skill_levels: Vec<SkillLevel>,
+    pub skill_points: u32,
+    pub exp: u32,
+    pub class: String,
+    pub town: String,
+    pub materials: Vec<(String, u32)>,
+    pub passives: Vec<(String, u32)>,
+    pub mode: String,
+}
+
+/// v10 → v11: 补 scene 默认 dungeon (旧行为: 读档一律进地下城)
+fn migrate_v10(v10: SaveDataV10) -> SaveData {
+    SaveData {
+        player_x: v10.player_x,
+        player_y: v10.player_y,
+        player_hp: v10.player_hp,
+        player_mp: v10.player_mp,
+        facing_x: v10.facing_x,
+        facing_y: v10.facing_y,
+        score: v10.score,
+        world_w: v10.world_w,
+        world_h: v10.world_h,
+        level: v10.level,
+        owned: v10.owned,
+        gold: v10.gold,
+        runes: v10.runes,
+        theme: v10.theme,
+        difficulty: v10.difficulty,
+        equipped: v10.equipped,
+        skill_levels: v10.skill_levels,
+        skill_points: v10.skill_points,
+        exp: v10.exp,
+        class: v10.class,
+        town: v10.town,
+        materials: v10.materials,
+        passives: v10.passives,
+        mode: v10.mode,
+        scene: "dungeon".into(),
+    }
 }
 
 /// v9 兼容结构 (无 mode 字段)
@@ -397,6 +459,7 @@ fn migrate_v1(v1: SaveDataV1) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -426,6 +489,7 @@ fn migrate_v2(v2: SaveDataV2) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -455,6 +519,7 @@ fn migrate_v3(v3: SaveDataV3) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -487,6 +552,7 @@ fn migrate_v5(v5: SaveDataV5) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -516,6 +582,7 @@ fn migrate_v4(v4: SaveDataV4) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -546,6 +613,7 @@ fn migrate_v6(v6: SaveDataV6) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -576,6 +644,7 @@ fn migrate_v7(v7: SaveDataV7) -> SaveData {
         materials: Vec::new(),
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -606,6 +675,7 @@ fn migrate_v8(v8: SaveDataV8) -> SaveData {
         materials: v8.materials,
         passives: Vec::new(),
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -636,6 +706,7 @@ fn migrate_v9(v9: SaveDataV9) -> SaveData {
         materials: v9.materials,
         passives: v9.passives,
         mode: "linear".into(),
+        scene: "dungeon".into(),
     }
 }
 
@@ -804,9 +875,13 @@ fn decode_save(bytes: &[u8]) -> Result<(SaveData, Option<crate::account::Account
     match bytes[0] {
         SAVE_FORMAT_VERSION => {
             let data: SaveData = bincode::deserialize(&bytes[1..])
-                .map_err(|e| format!("v10 deserialize failed: {e}"))?;
+                .map_err(|e| format!("v11 deserialize failed: {e}"))?;
             Ok((data, None))
         }
+        10 => match bincode::deserialize::<SaveDataV10>(&bytes[1..]) {
+            Ok(v10) => Ok((migrate_v10(v10), None)),
+            Err(e) => Err(format!("v10 deserialize failed: {e}")),
+        },
         9 => match bincode::deserialize::<SaveDataV9>(&bytes[1..]) {
             Ok(v9) => Ok((migrate_v9(v9), None)),
             Err(e) => Err(format!("v9 deserialize failed: {e}")),
@@ -908,6 +983,7 @@ mod tests {
             materials: vec![("iron_shard".into(), 3), ("arcane_core".into(), 1)],
             passives: vec![("critRate".into(), 4), ("speed".into(), 2)],
             mode: "linear".into(),
+            scene: "dungeon".into(),
         }
     }
 
@@ -943,7 +1019,7 @@ mod tests {
         let data = sample_v5();
         let mut bytes = vec![SAVE_FORMAT_VERSION];
         bytes.extend(bincode::serialize(&data).expect("serialize"));
-        assert_eq!(bytes[0], 10, "版本头必须为 10");
+        assert_eq!(bytes[0], SAVE_FORMAT_VERSION, "版本头必须为 11");
         let back: SaveData = bincode::deserialize(&bytes[1..]).expect("deserialize");
         assert_eq!(data, back);
         assert_eq!(back.skill_levels[0].level, 12);

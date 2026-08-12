@@ -8,6 +8,7 @@ import { pushToast } from './toast';
 import { playSfxClient } from '../ipc/sfx';
 import { classAttrWeight } from './class';
 import { CURSE_SLOW_MULT } from './mech';
+import { spawnGlow, spawnBurst } from './vfx';
 
 export const MAX_HP = 100;
 export const MAX_MP = 100;
@@ -54,6 +55,12 @@ export function usePotion(state: GameState, stat: 'hp' | 'mp'): boolean {
   p.potions[stat]--;
   if (stat === 'hp') p.hp = Math.min(MAX_HP, p.hp + POTION_HP_HEAL);
   else p.mp = Math.min(MAX_MP, p.mp + POTION_MP_HEAL);
+  // VFX (UX_REVIEW P3): 喝药闪光 (红/蓝按药水)
+  const px = p.pos.x + (p.size?.w ?? 0) / 2;
+  const py = p.pos.y + (p.size?.h ?? 0) / 2;
+  const col: [number, number, number] = stat === 'hp' ? [1, 0.4, 0.35] : [0.4, 0.6, 1];
+  spawnGlow(state, px, py, col, 0.6, 44);
+  spawnBurst(state, px, py, 5, col, 'spark_03', 60, 6, 0.6);
   return true;
 }
 
@@ -65,6 +72,8 @@ export function startDodge(state: GameState): boolean {
   p.dodgeT = DODGE_DURATION;
   // A-W3 诅咒: 翻滚清除 (反制点 = 用无敌帧解 debuff)
   p.curseT = 0;
+  // VFX (UX_REVIEW P3): 翻滚起跳尘雾
+  spawnBurst(state, p.pos.x + (p.size?.w ?? 0) / 2, p.pos.y + (p.size?.h ?? 0) / 2, 6, [0.85, 0.9, 1], 'spark_03', 80, 5, 0.3);
   return true;
 }
 

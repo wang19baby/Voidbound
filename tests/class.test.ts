@@ -1,7 +1,7 @@
 // 职业系统单测 (M5 C-102/104/105): 职业表完整性 + bindSkill 保留等级
 // 运行: npm test
 
-import { CLASS_DEFS, CLASS_IDS, classById, classAttrWeight, bindClass } from '../src/game/class';
+import { CLASS_DEFS, CLASS_IDS, CLASS_SPRITES, classById, classAttrWeight, bindClass } from '../src/game/class';
 import { SKILL_SPECS, bindSkill, skillLevel, SKILL_SLOTS, getSkill, slotDisplay } from '../src/game/skill';
 import type { GameState } from '../src/game/state';
 
@@ -30,6 +30,12 @@ check('6 职业槽位配置互不相同', new Set(CLASS_IDS.map(id => JSON.strin
 eq('classById 命中', classById('mage').name, '法师');
 eq('野蛮人属性权重 1.0', classAttrWeight('barbarian'), 1.0);
 eq('法师属性权重 0.8', classAttrWeight('mage'), 0.8);
+
+// === 立绘精灵映射 (图集 mage 用 sorceress 美术) ===
+check('6 职业均有立绘映射', CLASS_IDS.every(id => typeof CLASS_SPRITES[id] === 'string' && CLASS_SPRITES[id].endsWith('_stand')));
+eq('法师立绘 = sorceress_stand', CLASS_SPRITES.mage, 'sorceress_stand');
+eq('野蛮人立绘 = barbarian_stand', CLASS_SPRITES.barbarian, 'barbarian_stand');
+check('立绘映射互不相同', new Set(CLASS_IDS.map(id => CLASS_SPRITES[id])).size === 6);
 
 // === bindSkill 保留等级/符文 ===
 {

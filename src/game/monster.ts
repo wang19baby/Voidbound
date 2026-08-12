@@ -2,7 +2,7 @@
 // 数据驱动: monster_defs 表, spawn 时按 type 选择
 
 import type { GameState, Theme } from './state';
-import { aabbOverlap } from './world';
+import { aabbOverlap, getActiveWalls } from './world';
 import { inf, dbg } from '../util/log';
 import { spawnDeathFx } from './deathFx';
 import { playSfxClient } from '../ipc/sfx';
@@ -15,6 +15,7 @@ import { DIFFICULTY_MODS } from './difficulty';
 import { ELEMENT_DEFS, randomElement, type ElementId } from './element';
 import { rollMech, rollBossSkill3, MECH_TYPES, SHIELD_UP_T, SHIELD_DOWN_T, SHIELD_DAMAGE_REDUCE, SHIELD_BREAK_VULN, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, THORNS_REFLECT, THORNS_FLAT, CURSE_SLOW_MULT, CURSE_DURATION, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_DPS, DEATH_POOL_RADIUS, DEATH_POOL_T, BOSS_SKILLS3, SPIRAL_BULLETS, SPIRAL_TURNS, SPIRAL_CD, LASER_WINDUP, LASER_CD, LASER_DMG_MULT, LASER_WIDTH, NOVA_BULLETS, NOVA_CD, SUMMON_ELITES_CD, SUMMON_ELITES_COUNT, ENRAGE_HP, ENRAGE_SPEED_MULT, type MechType, type BossSkill3 } from './mech';
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT, type MoveAI } from './moveai';
+import { spawnRing, spawnBurst, spawnImpact, spawnPlayerHitFx, ELEMENT_FX } from './vfx';
 
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
@@ -153,6 +154,8 @@ export const AURA_RADIUS = 140;
  *  A-W1 营地三型: 玩家周围生成 4 个营地 (光环/精英抱团/双核随机), 每营地聚簇 */
 export function spawnRunPool(state: GameState): void {
   state.monsters.length = 0;
+  // Review (地图审查 P2): 营地/补散怪出生避墙需要当前局墙 — resetWorldForMode 刚清缓存, 先按出生点生成
+  state.world.walls = getActiveWalls(state, 2);
   const pool = THEME_MONSTER_POOL[state.theme];
   const pick = () => pool[Math.floor(Math.random() * pool.length)];
 
@@ -394,6 +397,10 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       bossLike: false,
       fleeT: 0,
     };
+    // VFX (UX_REVIEW P4): 精英/领主/Boss 出生阵
+    if (def.boss || isLord || elite) {
+      spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 60, 0.6, 'circle_02', [0.6, 0.35, 1]);
+    }
     return m;
   }
   // 兜底: 中心北 800
@@ -507,6 +514,8 @@ export function updateMonsters(state: GameState, dt: number): void {
     const dx = p.x - m.pos.x;
     const dy = p.y - m.pos.y;
     const dist = Math.hypot(dx, dy);
+    // Hoisted: fleeActive 需在远程攻击检查 (dist < aggroRange 分支) 之前可用; 原声明在后 → TDZ 崩溃
+    const fleeActive = m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD && (m.fleeT ?? 0) <= 2.5;
 
     // A-W1 光环: 每 0.5s 回复 (光环覆盖内回血)
     if (m.hp > 0 && auraActive(state, m, 'regen')) {
@@ -550,6 +559,8 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.hitFlash = 0.4;
       state.cameraShake = Math.min(18, (state.cameraShake ?? 0) + 14);  // OPT-026 二阶段大震
       spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'PHASE 2!', '#ff9530');
+      spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 110, 0.55, 'circle_03', [1, 0.6, 0.2]);
+      spawnBurst(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 14, [1, 0.6, 0.2], 'spark_03', 220, 8, 0.6);
       inf('combat', `${m.type} enters PHASE 2 (狂暴)`);
     }
 
@@ -590,6 +601,7 @@ export function updateMonsters(state: GameState, dt: number): void {
             state.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${bdmg}`, '#c9aaff');
             state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+            spawnPlayerHitFx(state);
           }
           m.aiCd = BURROW_CD;
           spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 8, '钻地', '#9cf');
@@ -614,6 +626,7 @@ export function updateMonsters(state: GameState, dt: number): void {
           state.lastKiller = m.type;
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff9600');
           state.cameraShake = Math.min(14, (state.cameraShake ?? 0) + 8);
+          spawnPlayerHitFx(state);
         }
         m.aiCd = LEAP_CD;
       } else if (m.aiCd <= 0 && dist > def.attackRange * 1.2 && dist < LEAP_RANGE) {
@@ -637,9 +650,12 @@ export function updateMonsters(state: GameState, dt: number): void {
         state.lastKiller = m.type;
         spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${dmg}`, '#ff7043');
         state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 8);
+        spawnPlayerHitFx(state);
       }
       spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '💥', '#ff9600');
       playSfxClient('hit');
+      spawnBurst(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 10, [1, 0.6, 0.2], 'spark_03', 200, 8, 0.5);
+      spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 70, 0.4, 'circle_01', [1, 0.6, 0.2], 20);
       // 自爆 = 自身死亡: 走统一死亡结算 (alive--/掉落/经验), 防跑局软锁
       m.hp = 0;
       killMonster(state, m);
@@ -673,11 +689,13 @@ export function updateMonsters(state: GameState, dt: number): void {
             minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
             minion.spawned = true;  // Review: 召唤体不递减 alive
             state.monsters.push(minion);  // Review 修复: 之前漏 push → 召唤 no-op
+            spawnRing(state, minion.pos.x + minion.size.w / 2, minion.pos.y + minion.size.h / 2, 44, 0.5, 'circle_02', [0.6, 0.35, 1]);
             m.aiSpawned = (m.aiSpawned ?? 0) + 1;
             m.aiCd = 4.0;
             return true;
           } else if (def.bossSkill === 'ring') {
             for (let k = 0; k < 10; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 10);
+            spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 80, 0.5, 'circle_02', [1, 0.55, 0.3]);
             m.aiCd = 6.0;
             return true;
           }
@@ -694,6 +712,7 @@ export function updateMonsters(state: GameState, dt: number): void {
                   spawnEnemyProjectile(state, m, Math.round(def.contactDmg * 0.6), base + (k * Math.PI * 2) / SPIRAL_BULLETS);
                 }
               }
+              spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 90, 0.5, 'circle_02', [0.7, 0.45, 1]);
               m.aiCd = SPIRAL_CD;
               break;
             }
@@ -708,6 +727,8 @@ export function updateMonsters(state: GameState, dt: number): void {
               for (let k = 0; k < NOVA_BULLETS; k++) {
                 spawnEnemyProjectile(state, m, Math.round(def.contactDmg * 0.7), (k * Math.PI * 2) / NOVA_BULLETS);
               }
+              spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 130, 0.55, 'circle_01', [0.85, 0.4, 1]);
+              spawnBurst(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 12, [0.85, 0.4, 1], 'spark_03', 180, 7, 0.5);
               m.aiCd = NOVA_CD;
               break;
             }
@@ -719,6 +740,7 @@ export function updateMonsters(state: GameState, dt: number): void {
                 e.pos = { x: m.pos.x + (Math.random() * 120 - 60), y: m.pos.y + (Math.random() * 120 - 60) };
                 e.spawned = true;  // Review: 召唤体不递减 alive
                 state.monsters.push(e);
+                spawnRing(state, e.pos.x + e.size.w / 2, e.pos.y + e.size.h / 2, 40, 0.5, 'circle_02', [0.6, 0.35, 1]);
               }
               m.aiCd = SUMMON_ELITES_CD;
               break;
@@ -728,6 +750,8 @@ export function updateMonsters(state: GameState, dt: number): void {
               m.enrageT = 6;
               m.aiCd = 12;
               spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'ENRAGE!', '#ff4530');
+              spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 90, 0.5, 'circle_01', [1, 0.3, 0.25]);
+              spawnBurst(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 12, [1, 0.3, 0.25], 'spark_03', 200, 8, 0.6);
               break;
             }
           }
@@ -753,6 +777,7 @@ export function updateMonsters(state: GameState, dt: number): void {
             state.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff7043');
             state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+            spawnPlayerHitFx(state);
           }
           spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 10, 'LASER!', '#ff7043');
         }
@@ -765,8 +790,7 @@ export function updateMonsters(state: GameState, dt: number): void {
     const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
     const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste * (m.enrageT > 0 ? ENRAGE_SPEED_MULT : 1);
     // A-W3 移动 AI 接管移动: flee (残血逃窜) / burrow (遁地中) / leap (蓄力扑击) 时跳过普通追击
-    // flee 2.5s 超时后恢复攻击 (防永久卡图); fleeT 归零由非逃窜帧重置
-    const fleeActive = m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD && (m.fleeT ?? 0) <= 2.5;
+    // flee 2.5s 超时后恢复攻击 (防永久卡图); fleeT 归零由非逃窜帧重置; fleeActive 已在循环头声明
     const moveAIActive =
       fleeActive ||
       (m.moveAI === 'burrow' && m.burrowT > 0) ||
@@ -788,6 +812,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.attackCd = 1.0 * frenzyMult;
         state.lastKiller = m.type;  // 死亡结算显示
         state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 5);  // OPT-026
+        spawnPlayerHitFx(state);
         // A-W3 诅咒: 命中玩家 → 减速 40% + 禁翻滚 1s (药水/翻滚清除)
         if (m.mech === 'curse') {
           state.player.curseT = Math.max(state.player.curseT ?? 0, CURSE_DURATION);
@@ -805,6 +830,7 @@ export function updateMonsters(state: GameState, dt: number): void {
           state.lastKiller = m.type;
           const subColor = DAMAGE_TYPE_COLORS[subDef.dmgType];
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 22, `-${subDmg}`, subColor);
+          spawnPlayerHitFx(state);
           dbg('monster', `${m.type} sub(${subDef.name}) hit player for ${subDmg}`);
         }
         dbg('monster', `${m.type} hit player for ${Math.round(dmg)} (hp=${state.player.hp.toFixed(0)})`);
@@ -844,6 +870,15 @@ export function killMonster(state: GameState, m: Monster): void {
   state.score += Math.round(def.score * comboScoreMult(combo));
   // 金币 (US-021, D-06): base = score*0.5 × 难度掉落倍率
   state.player.gold = (state.player.gold ?? 0) + Math.max(1, Math.round(def.score * 0.5 * DIFFICULTY_MODS[state.difficulty].dropMult));
+  // VFX (UX_REVIEW P3): 掉金爆点 + 连击反馈 (10 连击起里程碑环, 3 连击起小火花)
+  spawnBurst(state, cx, cy, 6, [1, 0.85, 0.3], 'spark_03', 120, 5, 0.4);
+  const pcx = state.player.pos.x + state.player.size.w / 2;
+  const pcy = state.player.pos.y + state.player.size.h / 2;
+  if (combo >= 10 && combo % 5 === 0) {
+    spawnRing(state, pcx, pcy, 70, 0.4, 'circle_02', [1, 0.85, 0.3]);
+  } else if (combo >= 3) {
+    spawnBurst(state, pcx, pcy, 3, [1, 0.85, 0.3], 'spark_03', 60, 4, 0.3);
+  }
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
   state.killsTotal = (state.killsTotal ?? 0) + 1;
   state.run.kills = (state.run.kills ?? 0) + 1;
@@ -883,8 +918,11 @@ export function killMonster(state: GameState, m: Monster): void {
         state.player.hp -= boom;
         state.lastKiller = m.type;
         spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${boom}`, '#ff7043');
+        spawnPlayerHitFx(state);
       }
       spawnDamageNum(state, cx, m.pos.y - 10, '💥', '#ff9600');
+      spawnRing(state, cx, cy, DEATH_EXPLODE_RADIUS, 0.45, 'circle_01', [1, 0.6, 0.2]);
+      spawnBurst(state, cx, cy, 10, [1, 0.6, 0.2], 'spark_03', 240, 8, 0.5);
     } else if (roll < 0.73) {
       // 分裂: 2 只 25% 血小怪 (防递归)
       for (let i = 0; i < DEATH_SPLIT_COUNT; i++) {
@@ -897,6 +935,7 @@ export function killMonster(state: GameState, m: Monster): void {
         c.pos = { x: cx + (i === 0 ? -28 : 28), y: cy };
         state.monsters.push(c);
       }
+      spawnBurst(state, cx, cy, 8, [0.8, 0.8, 0.4], 'spark_03', 160, 6, 0.4);
       inf('combat', `${def.type} 死亡触发: 分裂 ×${DEATH_SPLIT_COUNT}`);
     } else {
       // 毒池: 3s 站内每秒伤害 (走位反制)
@@ -995,6 +1034,10 @@ export function resolveFireballHits(state: GameState): number {
           if (idx >= 0) fireballs.splice(idx, 1);
         }
         const r = damageMonster(state, m, { base: f.dmg, type: f.dmgType, knockback: 60 });
+        // VFX (UX_REVIEW P1): 元素色命中爆点
+        if (r.damage > 0) {
+          spawnImpact(state, f.pos.x + f.size.w / 2, f.pos.y + f.size.h / 2, ELEMENT_FX[f.dmgType] ?? [1, 1, 1]);
+        }
         // 燃烧/中毒 DOT (US-016/M5): 火 3s×3dps, 毒同机制
         if (r.damage > 0 && (f.dmgType === 'fire' || f.dmgType === 'poison')) { m.burnT = 3; m.burnDps = 3; }
         // 嗜血: 命中回 5 HP
@@ -1047,6 +1090,7 @@ export function resolveMeleeHits(state: GameState): number {
             state.player.hp -= reflect;
             state.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${reflect}`, '#9f9');
+            spawnPlayerHitFx(state);
             state.cameraShake = Math.min(8, (state.cameraShake ?? 0) + 4);
           }
         }
@@ -1106,6 +1150,13 @@ export function updateEnemyProj(state: GameState, dt: number): void {
     p.pos.y += p.vel.y * dt;
     p.life -= dt;
     if (p.life <= 0) return false;
+    // 撞墙 → 火花消失 (地图审查 P1: 与玩家火球同规则, 墙 = 掩体)
+    for (const w of state.world.walls) {
+      if (aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
+        spawnImpact(state, p.pos.x + p.size.w / 2, p.pos.y + p.size.h / 2, [1, 0.35, 0.35]);
+        return false;
+      }
+    }
     // 撞玩家 → 扣血 + 消失 (翻滚无敌免疫)
     if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0 &&
         aabbOverlap(p.pos.x, p.pos.y, p.size.w, p.size.h,
@@ -1114,6 +1165,7 @@ export function updateEnemyProj(state: GameState, dt: number): void {
       state.player.hp -= p.dmg;
       state.lastKiller = '弹幕';  // 死亡结算显示
       state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 3);  // OPT-026
+      spawnPlayerHitFx(state);
       return false;
     }
     // 出界

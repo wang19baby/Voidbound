@@ -54,6 +54,16 @@ export const CLASS_DEFS: Record<ClassId, ClassDef> = {
 
 export const CLASS_IDS: readonly ClassId[] = ['barbarian', 'paladin', 'mage', 'necromancer', 'ranger', 'assassin'];
 
+/** 职业 → 立绘 sprite (图集 skills 缺失 mage_stand, 法师用 sorceress 美术) */
+export const CLASS_SPRITES: Record<ClassId, string> = {
+  barbarian: 'barbarian_stand',
+  paladin: 'paladin_stand',
+  mage: 'sorceress_stand',
+  necromancer: 'necromancer_stand',
+  ranger: 'ranger_stand',
+  assassin: 'assassin_stand',
+};
+
 export function classById(id: ClassId): ClassDef {
   return CLASS_DEFS[id];
 }

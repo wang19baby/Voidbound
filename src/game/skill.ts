@@ -9,6 +9,7 @@ import { RUNE_DEFS, RUNE_FAMILIES, slotFamily, type RuneId } from './rune';
 import { spawnFireball } from './state';
 import { aabbOverlap } from './world';
 import { damageMonster, FIREBALL_DAMAGE, MELEE_DAMAGE, ULTIMATE_DAMAGE } from './monster';
+import { aoeVisual, ELEMENT_FX, spawnRing, spawnBurst, spawnBolt, spawnGlow } from './vfx';
 import type { DamageType } from './combat';
 
 export type SkillSlot = 'LMB' | 'RMB' | 'Q' | 'W' | 'E' | 'R';
@@ -137,6 +138,8 @@ export function rejectRune(state: GameState): void {
 function castProjectile(state: GameState, dir: { x: number; y: number }, slot: SkillSlot, type: DamageType, base: number, spread = 0): void {
   const rune = registry[slot].rune;
   const dmg = Math.round(base * skillDamageScale(skillLevel(slot)));
+  // VFX (UX_REVIEW P3): 出手 muzzle 爆点
+  spawnBurst(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y + state.player.size.h / 2, 4, ELEMENT_FX[type] ?? [1, 1, 1], 'spark_03', 90, 5, 0.25);
   if (rune === 'split') {
     spawnFireball(state, dir, -0.15, rune, dmg, type);
     spawnFireball(state, dir, 0, rune, dmg, type);
@@ -197,6 +200,10 @@ function castAoe(state: GameState, _dir: { x: number; y: number }, slot: SkillSl
     }
   }
   state.monsters = state.monsters.filter(m => m.hp > 0);
+  // VFX (UX_REVIEW §8.3): 扩散环 + 粒子爆裂 (物理=旋风灰蓝 / 冰=霜环)
+  const vis = aoeVisual(type);
+  spawnRing(state, px, py, radius, 0.45, vis.sprite, vis.color);
+  spawnBurst(state, px, py, 10, vis.color);
 }
 
 /** 连锁闪电: 最近怪 → 链 2 跳 (130px, ×0.7/×0.5) */
@@ -221,13 +228,21 @@ function castChain(state: GameState, _dir: { x: number; y: number }, slot: Skill
   if (!first) return;
   let prev = first;
   const mults = [1, 0.7, 0.5];
+  const pts: Array<{ x: number; y: number }> = [{ x: px, y: py }];
   for (let hop = 0; hop < 3; hop++) {
     const tgt = hop === 0 ? first : pick(prev, prev.pos.x + prev.size.w / 2, prev.pos.y + prev.size.h / 2, 130);
     if (!tgt) break;
     damageMonster(state, tgt, { base: Math.round(base * mults[hop]), type: 'lightning', knockback: 10 });
+    pts.push({ x: tgt.pos.x + tgt.size.w / 2, y: tgt.pos.y + tgt.size.h / 2 });
     prev = tgt;
   }
   state.monsters = state.monsters.filter(m => m.hp > 0);
+  // VFX (UX_REVIEW §8.3): 每段闪电连线 + 命中点火花
+  const lc = ELEMENT_FX.lightning;
+  for (let i = 1; i < pts.length; i++) {
+    spawnBolt(state, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y, lc);
+    spawnBurst(state, pts[i].x, pts[i].y, 4, lc, 'spark_03', 90, 5, 0.3);
+  }
 }
 
 export const SKILL_SPECS: Record<SkillId, SkillSpec> = {
@@ -242,7 +257,14 @@ export const SKILL_SPECS: Record<SkillId, SkillSpec> = {
   shadow_bolt:{ name: '暗影箭', cooldown: 0.6, mpCost: 8, cast: (s, d, slot) => castProjectile(s, d, slot, 'shadow', 35) },
   holy_bolt:  { name: '圣光弹', cooldown: 0.6, mpCost: 8, cast: (s, d, slot) => castProjectile(s, d, slot, 'holy', 30) },
   poison_dart:{ name: '毒镖', cooldown: 0.7, mpCost: 6, cast: (s, d, slot) => castProjectile(s, d, slot, 'poison', 20) },
-  heal:       { name: '回血', cooldown: 5.0, mpCost: 25, cast: (s) => { s.player.hp = Math.min(100, s.player.hp + 40); } },
+  heal:       { name: '回血', cooldown: 5.0, mpCost: 25, cast: (s) => {
+    s.player.hp = Math.min(100, s.player.hp + 40);
+    // VFX (UX_REVIEW §8.3): 治愈光辉 + 上升粒子
+    const hx = s.player.pos.x + s.player.size.w / 2;
+    const hy = s.player.pos.y + s.player.size.h / 2;
+    spawnGlow(s, hx, hy, [0.45, 1, 0.6]);
+    spawnBurst(s, hx, hy, 6, [0.45, 1, 0.6], 'spark_03', 55, 6, 0.8);
+  } },
   ultimate:   { name: '终极', cooldown: 8.0, mpCost: 50, cast: (s, _d, slot) => {
     const focus = skillRune(slot) === 'focus' ? 1.5 : 1;
     const base = Math.round(ULTIMATE_DAMAGE * skillDamageScale(skillLevel(slot)) * focus);
@@ -256,6 +278,9 @@ export const SKILL_SPECS: Record<SkillId, SkillSpec> = {
       }
     }
     s.monsters = s.monsters.filter(m => m.hp > 0);
+    // VFX (UX_REVIEW §8.3): 爆炸波 + 星屑
+    spawnRing(s, px, py, 200, 0.6, 'circle_03', [0.7, 0.42, 1]);
+    spawnBurst(s, px, py, 16, [0.7, 0.42, 1], 'star_03', 240, 9, 0.7);
   } },
 };
 

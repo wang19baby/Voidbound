@@ -2,9 +2,9 @@
   "atlas": "icons",
   "size": {
     "width": 418,
-    "height": 730
+    "height": 834
   },
-  "sprite_count": 105,
+  "sprite_count": 123,
   "sprites": [
     {
       "name": "arrowDown",
@@ -587,9 +587,39 @@
       "is_animated": false
     },
     {
+      "name": "mat_arcane_core",
+      "file": "mat_arcane_core.png",
+      "x": 3134,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "mat_iron_shard",
+      "file": "mat_iron_shard.png",
+      "x": 3186,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "mat_void_fragment",
+      "file": "mat_void_fragment.png",
+      "x": 3238,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "medal1",
       "file": "medal1.png",
-      "x": 3134,
+      "x": 3290,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -599,7 +629,7 @@
     {
       "name": "medal2",
       "file": "medal2.png",
-      "x": 3188,
+      "x": 3344,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -609,7 +639,7 @@
     {
       "name": "menuGrid",
       "file": "menuGrid.png",
-      "x": 3242,
+      "x": 3398,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -619,7 +649,7 @@
     {
       "name": "menuList",
       "file": "menuList.png",
-      "x": 3296,
+      "x": 3452,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -629,7 +659,7 @@
     {
       "name": "minus",
       "file": "minus.png",
-      "x": 3350,
+      "x": 3506,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -639,7 +669,7 @@
     {
       "name": "mouse",
       "file": "mouse.png",
-      "x": 3404,
+      "x": 3560,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -649,7 +679,7 @@
     {
       "name": "multiplayer",
       "file": "multiplayer.png",
-      "x": 3458,
+      "x": 3614,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -659,7 +689,7 @@
     {
       "name": "musicOff",
       "file": "musicOff.png",
-      "x": 3512,
+      "x": 3668,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -669,7 +699,7 @@
     {
       "name": "musicOn",
       "file": "musicOn.png",
-      "x": 3566,
+      "x": 3722,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -679,7 +709,7 @@
     {
       "name": "next",
       "file": "next.png",
-      "x": 3620,
+      "x": 3776,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -689,7 +719,7 @@
     {
       "name": "open",
       "file": "open.png",
-      "x": 3674,
+      "x": 3830,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -699,7 +729,7 @@
     {
       "name": "pause",
       "file": "pause.png",
-      "x": 3728,
+      "x": 3884,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -709,7 +739,7 @@
     {
       "name": "phone",
       "file": "phone.png",
-      "x": 3782,
+      "x": 3938,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -719,7 +749,7 @@
     {
       "name": "plus",
       "file": "plus.png",
-      "x": 3836,
+      "x": 3992,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -727,9 +757,29 @@
       "is_animated": false
     },
     {
+      "name": "potion_hp",
+      "file": "potion_hp.png",
+      "x": 4046,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "potion_mp",
+      "file": "potion_mp.png",
+      "x": 4098,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "power",
       "file": "power.png",
-      "x": 3890,
+      "x": 4150,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -739,7 +789,7 @@
     {
       "name": "previous",
       "file": "previous.png",
-      "x": 3944,
+      "x": 4204,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -749,7 +799,7 @@
     {
       "name": "question",
       "file": "question.png",
-      "x": 3998,
+      "x": 4258,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -759,7 +809,7 @@
     {
       "name": "return",
       "file": "return.png",
-      "x": 4052,
+      "x": 4312,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -769,7 +819,7 @@
     {
       "name": "rewind",
       "file": "rewind.png",
-      "x": 4106,
+      "x": 4366,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -779,7 +829,7 @@
     {
       "name": "save",
       "file": "save.png",
-      "x": 4160,
+      "x": 4420,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -789,7 +839,7 @@
     {
       "name": "scrollHorizontal",
       "file": "scrollHorizontal.png",
-      "x": 4214,
+      "x": 4474,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -799,7 +849,7 @@
     {
       "name": "scrollVertical",
       "file": "scrollVertical.png",
-      "x": 4268,
+      "x": 4528,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -809,7 +859,7 @@
     {
       "name": "share1",
       "file": "share1.png",
-      "x": 4322,
+      "x": 4582,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -819,7 +869,7 @@
     {
       "name": "share2",
       "file": "share2.png",
-      "x": 4376,
+      "x": 4636,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -829,7 +879,7 @@
     {
       "name": "signal1",
       "file": "signal1.png",
-      "x": 4430,
+      "x": 4690,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -839,7 +889,7 @@
     {
       "name": "signal2",
       "file": "signal2.png",
-      "x": 4484,
+      "x": 4744,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -849,7 +899,7 @@
     {
       "name": "signal3",
       "file": "signal3.png",
-      "x": 4538,
+      "x": 4798,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -859,7 +909,7 @@
     {
       "name": "singleplayer",
       "file": "singleplayer.png",
-      "x": 4592,
+      "x": 4852,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -867,9 +917,139 @@
       "is_animated": false
     },
     {
+      "name": "skill_bash",
+      "file": "skill_bash.png",
+      "x": 4906,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_chain_lightning",
+      "file": "skill_chain_lightning.png",
+      "x": 4958,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_fireball",
+      "file": "skill_fireball.png",
+      "x": 5010,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_frost_nova",
+      "file": "skill_frost_nova.png",
+      "x": 5062,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_heal",
+      "file": "skill_heal.png",
+      "x": 5114,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_holy_bolt",
+      "file": "skill_holy_bolt.png",
+      "x": 5166,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_melee",
+      "file": "skill_melee.png",
+      "x": 5218,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_multi_fireball",
+      "file": "skill_multi_fireball.png",
+      "x": 5270,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_poison_dart",
+      "file": "skill_poison_dart.png",
+      "x": 5322,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_shadow_bolt",
+      "file": "skill_shadow_bolt.png",
+      "x": 5374,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_thrust",
+      "file": "skill_thrust.png",
+      "x": 5426,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_ultimate",
+      "file": "skill_ultimate.png",
+      "x": 5478,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
+      "name": "skill_whirlwind",
+      "file": "skill_whirlwind.png",
+      "x": 5530,
+      "y": 2,
+      "frame_width": 48,
+      "frame_height": 48,
+      "frames": 1,
+      "is_animated": false
+    },
+    {
       "name": "smaller",
       "file": "smaller.png",
-      "x": 4646,
+      "x": 5582,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -879,7 +1059,7 @@
     {
       "name": "star",
       "file": "star.png",
-      "x": 4700,
+      "x": 5636,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -889,7 +1069,7 @@
     {
       "name": "stop",
       "file": "stop.png",
-      "x": 4754,
+      "x": 5690,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -899,7 +1079,7 @@
     {
       "name": "tablet",
       "file": "tablet.png",
-      "x": 4808,
+      "x": 5744,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -909,7 +1089,7 @@
     {
       "name": "target",
       "file": "target.png",
-      "x": 4862,
+      "x": 5798,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -919,7 +1099,7 @@
     {
       "name": "trashcan",
       "file": "trashcan.png",
-      "x": 4916,
+      "x": 5852,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -929,7 +1109,7 @@
     {
       "name": "trashcanOpen",
       "file": "trashcanOpen.png",
-      "x": 4970,
+      "x": 5906,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -939,7 +1119,7 @@
     {
       "name": "trophy",
       "file": "trophy.png",
-      "x": 5024,
+      "x": 5960,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -949,7 +1129,7 @@
     {
       "name": "unlocked",
       "file": "unlocked.png",
-      "x": 5078,
+      "x": 6014,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -959,7 +1139,7 @@
     {
       "name": "up",
       "file": "up.png",
-      "x": 5132,
+      "x": 6068,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -969,7 +1149,7 @@
     {
       "name": "upLeft",
       "file": "upLeft.png",
-      "x": 5186,
+      "x": 6122,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -979,7 +1159,7 @@
     {
       "name": "upRight",
       "file": "upRight.png",
-      "x": 5240,
+      "x": 6176,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -989,7 +1169,7 @@
     {
       "name": "video",
       "file": "video.png",
-      "x": 5294,
+      "x": 6230,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -999,7 +1179,7 @@
     {
       "name": "warning",
       "file": "warning.png",
-      "x": 5348,
+      "x": 6284,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -1009,7 +1189,7 @@
     {
       "name": "wrench",
       "file": "wrench.png",
-      "x": 5402,
+      "x": 6338,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -1019,7 +1199,7 @@
     {
       "name": "zoom",
       "file": "zoom.png",
-      "x": 5456,
+      "x": 6392,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -1029,7 +1209,7 @@
     {
       "name": "zoomDefault",
       "file": "zoomDefault.png",
-      "x": 5510,
+      "x": 6446,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -1039,7 +1219,7 @@
     {
       "name": "zoomIn",
       "file": "zoomIn.png",
-      "x": 5564,
+      "x": 6500,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,
@@ -1049,7 +1229,7 @@
     {
       "name": "zoomOut",
       "file": "zoomOut.png",
-      "x": 5618,
+      "x": 6554,
       "y": 2,
       "frame_width": 50,
       "frame_height": 50,

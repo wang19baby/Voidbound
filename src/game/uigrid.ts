@@ -74,6 +74,10 @@ export const EQ_LAYOUT = {
   btnY: 620,
   btnEquip: { x: 300, y: 620, w: 110, h: 32 },
   btnUnequip: { x: 430, y: 620, w: 110, h: 32 },
+  // 右上关闭 + 网格右侧翻页 (鼠标路径)
+  btnClose: { x: 20, y: 20, w: 96, h: 34 },
+  btnPrev: { x: 520, y: 84, w: 96, h: 28 },
+  btnNext: { x: 520, y: 118, w: 96, h: 28 },
   // tooltip 区
   tipY: 660,
 };

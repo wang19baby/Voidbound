@@ -9,18 +9,20 @@
 import type { GameState } from '../game/state';
 import { MAX_HP, MAX_MP } from '../game/player';
 import { drawSprite } from './draw';
+import type { RenderResources } from './resources';
 import { getLogs, formatLine } from '../util/log';
-import { RUNE_DEFS } from '../game/rune';
+import { RUNE_DEFS, RUNE_FAMILIES, slotFamily } from '../game/rune';
 import { getDamageNums } from '../game/damageNum';
 import { getToasts } from '../game/toast';
 import { getOwned, getLoot, EQUIP_SLOTS, EQUIP_NAMES, itemPowerDelta, BACKPACK_CAP, RARITY_COLORS, describeAffix } from '../game/equipment';
-import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS, slotDisplay } from '../game/skill';
+import { getSkillCooldowns, skillLevel, skillRune, getSkill, SKILL_SLOTS, slotDisplay, type SkillId, type SkillSlot } from '../game/skill';
+import { loadKeybinds, keyLabel } from '../game/keybind';
 import { expNext } from '../game/player';
 import { itemPower } from '../game/equipment';
 import { DAMAGE_TYPES } from '../game/combat';
 import { DIFFICULTY_MODS } from '../game/difficulty';
 import { MONSTER_DEFS } from '../game/monster';
-import { worldToScreen } from '../game/state';
+import { worldToScreen, WORLD_W, WORLD_H } from '../game/state';
 import { pageCount, pageOf, cellIndex, cellRects, slotRects, inRect, EQ_LAYOUT } from '../game/uigrid';
 
 // 鼠标 reticle 全局位置 (由 main loop 每帧设置)
@@ -36,8 +38,60 @@ const SLOT_GAP = 10;
 /** 技能槽行 Y (左下) */
 function slotY(vh: number): number { return vh - 120; }
 const SKILL_KEYS = ['Q', 'F', 'E', 'R'] as const;
-const SKILL_ICONS = ['buttonA', 'buttonB', 'buttonX', 'buttonY'] as const;
+/** 展示键 → 内部槽位 (F=W); 修 W 槽 Lv/符文/cd 查不到的历史 bug */
+const KEY_TO_SLOT: Record<string, SkillSlot> = { Q: 'Q', F: 'W', E: 'E', R: 'R' };
+/** 技能 id → icons 图集图标 (review §8.1: 替代手柄键帽 buttonA/B/X/Y) */
+const SKILL_ICON_BY_ID: Record<SkillId, string> = {
+  melee: 'skill_melee', thrust: 'skill_thrust', bash: 'skill_bash', whirlwind: 'skill_whirlwind',
+  fireball: 'skill_fireball', multi_fireball: 'skill_multi_fireball', frost_nova: 'skill_frost_nova',
+  chain_lightning: 'skill_chain_lightning', shadow_bolt: 'skill_shadow_bolt', holy_bolt: 'skill_holy_bolt',
+  poison_dart: 'skill_poison_dart', heal: 'skill_heal', ultimate: 'skill_ultimate',
+};
 const LOG_LINES = 6;
+
+// === 战斗 HUD 可点击按钮布局 (hud 绘制与 main 命中共用) ===
+export interface HudBtn { key: string; x: number; y: number; w: number; h: number; }
+
+export function hudDungeonButtons(vw: number, vh: number): HudBtn[] {
+  const sy = slotY(vh);
+  const btns: HudBtn[] = [];
+  for (let i = 0; i < SKILL_KEYS.length; i++) {
+    btns.push({ key: `skill${i}`, x: HUD_PAD + i * (SLOT_SIZE + SLOT_GAP) - 2, y: sy - 2, w: SLOT_SIZE + 4, h: SLOT_SIZE + 4 });
+  }
+  const py = sy - 46;
+  const ph = 30;
+  btns.push({ key: 'potionHp', x: HUD_PAD, y: py, w: 104, h: ph });
+  btns.push({ key: 'potionMp', x: HUD_PAD + 108, y: py, w: 104, h: ph });
+  btns.push({ key: 'dodge', x: HUD_PAD + 216, y: py, w: 132, h: ph });
+  return btns;
+}
+
+/** 命中测试 (main.ts 每帧调用: LMB 点击分发 + hover 状态) */
+export function hudDungeonHit(mx: number, my: number, vw: number, vh: number): string | null {
+  for (const b of hudDungeonButtons(vw, vh)) {
+    if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) return b.key;
+  }
+  return null;
+}
+
+/** 当前悬停按钮 (main 每帧设置, overlay 绘制高亮) */
+let hudHoverKey: string | null = null;
+export function setHudHover(key: string | null): void { hudHoverKey = key; }
+
+/** Canvas2D overlay 上画 icons 图集图标 (城镇面板底色不透明, GL 图标会被盖住 → 用 ImageBitmap) */
+export function drawIcon(ctx: CanvasRenderingContext2D, res: RenderResources, name: string, dx: number, dy: number, size: number): void {
+  if (!res.iconBitmap) return;
+  const spr = res.atlases.get('icons')?.sprites.get(name);
+  if (!spr) return;
+  ctx.drawImage(res.iconBitmap, spr.x, spr.y, spr.frame_width, spr.frame_height, dx, dy, size, size);
+}
+
+/** 秒 → mm:ss (HUD 计时器) */
+function formatHudTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 export function drawHud(
   gl: WebGL2RenderingContext,
@@ -56,10 +110,12 @@ export function drawHud(
   const SLOT_FLASH_IDX: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
-    drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'icons', SKILL_ICONS[i]);
+    const slot = KEY_TO_SLOT[SKILL_KEYS[i]];
+    const sk = getSkill(slot);
+    drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'icons', SKILL_ICON_BY_ID[sk.id] ?? 'buttonA');
     // cd 遮罩 (cd > 0 时半透灰)
     const cds = getSkillCooldowns(nowSec);
-    if ((cds[SKILL_KEYS[i]] ?? 0) > 0) {
+    if ((cds[slot] ?? 0) > 0) {
       drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'ui', 'slide_horizontal_grey');
     }
     // 施法失败红闪 (OPT-007)
@@ -116,23 +172,41 @@ export function drawHudOverlay(
   ctx2d.fillText(`击杀 ${state.killsTotal ?? 0}`, rx, HUD_PAD + 40);
   ctx2d.fillStyle = '#9cc';
   ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, rx, HUD_PAD + 58);
-  // 跑局进度 (OPT-012): 剩余小怪数
+  // 跑局进度 (OPT-012): 剩余小怪数 + C1 速通计时器 (P1-5)
   if (state.screen === 'dungeon') {
     ctx2d.fillStyle = '#aaf';
-    ctx2d.fillText(`剩余 ${state.run.alive} 怪`, rx, HUD_PAD + 76);
+    ctx2d.fillText(`剩余 ${state.run.alive} 怪 · ${formatHudTime(state.run.timeSec)}`, rx, HUD_PAD + 76);
   }
   // 小地图 (OPT-024): 战斗场景右上, 现有 walls/monsters 降采样
   if (state.screen === 'dungeon') {
     const mw = 140;
     const mh = Math.round((mw * state.world.h) / state.world.w);
     const mx = rx - mw;
-    const my = HUD_PAD + 100;
+    const my = HUD_PAD + 116;
     ctx2d.fillStyle = 'rgba(8, 8, 16, 0.6)';
     ctx2d.fillRect(mx, my, mw, mh);
     const sx = mw / state.world.w;
     const sy = mh / state.world.h;
-    ctx2d.fillStyle = '#5a5a6a';
+    // C (P2-8): 已探索 64px 块浅底 (未探索保持深底), 只画相机视野内块
+    const BX = 64;
+    const camBx0 = Math.max(0, Math.floor(state.camera.x / BX));
+    const camBy0 = Math.max(0, Math.floor(state.camera.y / BX));
+    const camBx1 = Math.min(Math.floor(WORLD_W / BX) - 1, Math.floor((state.camera.x + vw) / BX));
+    const camBy1 = Math.min(Math.floor(WORLD_H / BX) - 1, Math.floor((state.camera.y + vh) / BX));
+    const cellPx = mw / vw * BX;
+    const cellPy = mh / vh * BX;
+    for (let by = camBy0; by <= camBy1; by++) {
+      for (let bx = camBx0; bx <= camBx1; bx++) {
+        if (state.explored.has(`${bx},${by}`)) {
+          ctx2d.fillStyle = 'rgba(180,200,255,0.14)';
+          ctx2d.fillRect(mx + (bx * BX - state.camera.x) * (mw / vw), my + (by * BX - state.camera.y) * (mh / vh), cellPx + 0.5, cellPy + 0.5);
+        }
+      }
+    }
     for (const w of state.world.walls) {
+      const bl = Math.floor(w.pos.x / BX) + ',' + Math.floor(w.pos.y / BX);
+      if (!state.explored.has(bl)) continue;  // 未探索区不泄露墙布局
+      ctx2d.fillStyle = '#5a5a6a';
       ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
     }
     for (const m of state.monsters) {
@@ -141,6 +215,11 @@ export function drawHudOverlay(
     }
     ctx2d.fillStyle = '#fff';
     ctx2d.fillRect(mx + state.player.pos.x * sx - 2, my + state.player.pos.y * sy - 2, 5, 5);
+    // C (P2-8): 探索度 (小地图下方)
+    const explFrac = Math.min(1, state.explored.size / ((WORLD_W / BX) * (WORLD_H / BX)));
+    ctx2d.fillStyle = '#8f8';
+    ctx2d.font = '11px monospace';
+    ctx2d.fillText(`探索 ${Math.round(explFrac * 100)}%`, rx, my + mh + 4);
   }
   // 低血量红晕 (OPT-026): HP < 25% 时边缘渐红
   if (state.screen === 'dungeon' && state.player.hp / MAX_HP < 0.25) {
@@ -188,28 +267,91 @@ export function drawHudOverlay(
 
   // === 左下: 技能簇 ===
   const sy = slotY(vh);
+  const kb = loadKeybinds();
   ctx2d.font = 'bold 11px monospace';
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const key = SKILL_KEYS[i];
+    const slot = KEY_TO_SLOT[key];
     const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
+    if (hudHoverKey === `skill${i}`) {
+      ctx2d.strokeStyle = '#ffd64a';
+      ctx2d.lineWidth = 2;
+      ctx2d.strokeRect(x - 2, sy - 2, SLOT_SIZE + 4, SLOT_SIZE + 4);
+    }
     ctx2d.fillStyle = '#fff';
-    ctx2d.fillText(key, x + SLOT_SIZE / 2, sy - 16);
+    ctx2d.fillText(keyLabel(kb.skills[slot]), x + SLOT_SIZE / 2, sy - 16);  // 显示键跟随键位自定义
     ctx2d.fillStyle = '#aaa';
     ctx2d.font = '10px monospace';
-    ctx2d.fillText(`Lv${skillLevel(key)}`, x + 2, sy + SLOT_SIZE + 2);
-    const r = skillRune(key);
+    ctx2d.fillText(`Lv${skillLevel(slot)}`, x + 2, sy + SLOT_SIZE + 2);
+    const r = skillRune(slot);
     if (r !== null && r !== 'none') {
       const col = RUNE_DEFS[r].color;
       ctx2d.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
       ctx2d.fillText(RUNE_DEFS[r].name, x + 2, sy + SLOT_SIZE + 14);
     }
   }
-  ctx2d.font = '12px monospace';
+  // C (P2-9): 技能槽 hover → 符文变异预览 (Lv10 三选一可选池)
+  const hoverIdx = SKILL_KEYS.findIndex((_, i) => hudHoverKey === `skill${i}`);
+  if (hoverIdx >= 0) {
+    const hSlot = KEY_TO_SLOT[SKILL_KEYS[hoverIdx]];
+    const fam = slotFamily(hSlot);
+    const pool = RUNE_FAMILIES[fam];
+    const lines = [`Lv10 变异可选 (${hSlot} 槽)`, ...pool.map(r => `${RUNE_DEFS[r].name}: ${RUNE_DEFS[r].desc}`)];
+    const th = lines.length * 15 + 10;
+    const tx = HUD_PAD + hoverIdx * (SLOT_SIZE + SLOT_GAP);
+    const ty = sy - 18 - th;
+    ctx2d.fillStyle = 'rgba(8,8,16,0.93)';
+    ctx2d.fillRect(tx, ty, 400, th);
+    ctx2d.strokeStyle = '#c9aaff';
+    ctx2d.lineWidth = 1;
+    ctx2d.strokeRect(tx, ty, 400, th);
+    ctx2d.textAlign = 'left';
+    ctx2d.textBaseline = 'top';
+    lines.forEach((ln, i) => {
+      if (i === 0) {
+        ctx2d.fillStyle = '#c9aaff';
+        ctx2d.font = 'bold 12px monospace';
+      } else {
+        ctx2d.fillStyle = '#ccc';
+        ctx2d.font = '11px monospace';
+      }
+      ctx2d.fillText(ln, tx + 8, ty + 6 + i * 15);
+    });
+    ctx2d.textAlign = 'left';
+    ctx2d.textBaseline = 'top';
+  }
+  // 药水/翻滚按钮 (鼠标可点, 与键盘 1/2/Space 同行为; hover 高亮)
+  const btn = (b: HudBtn, label: string, col: string) => {
+    ctx2d.fillStyle = hudHoverKey === b.key ? 'rgba(255,255,255,0.14)' : 'rgba(10,10,18,0.78)';
+    ctx2d.fillRect(b.x, b.y, b.w, b.h);
+    // 药水图标 (review §8.1: 替代纯文字; overlay 绘制避免被按钮底盖住)
+    const icon = b.key === 'potionHp' ? 'potion_hp' : b.key === 'potionMp' ? 'potion_mp' : null;
+    let textShift = 0;
+    if (icon) {
+      drawIcon(ctx2d, state.resources, icon, b.x + 4, b.y + 3, 24);
+      textShift = 10;
+    }
+    ctx2d.strokeStyle = hudHoverKey === b.key ? col : '#445';
+    ctx2d.lineWidth = hudHoverKey === b.key ? 2 : 1;
+    ctx2d.strokeRect(b.x, b.y, b.w, b.h);
+    ctx2d.fillStyle = col;
+    ctx2d.font = 'bold 12px monospace';
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(label, b.x + b.w / 2 + textShift, b.y + b.h / 2);
+    ctx2d.textAlign = 'left';
+    ctx2d.textBaseline = 'top';
+  };
+  const hudBtns = hudDungeonButtons(vw, vh);
+  const hpN = state.player.potions?.hp ?? 0;
+  const mpN = state.player.potions?.mp ?? 0;
+  btn(hudBtns[4], `HP 药水 ×${hpN}`, hpN > 0 ? '#f88' : '#766');
+  btn(hudBtns[5], `MP 药水 ×${mpN}`, mpN > 0 ? '#88f' : '#766');
+  const dodgeCd = state.player.dodgeCd;
+  btn(hudBtns[6], `翻滚${dodgeCd > 0 ? ` ${dodgeCd.toFixed(1)}s` : ' ✓'}`, dodgeCd > 0 ? '#887' : '#8f8');
   ctx2d.fillStyle = '#ffd';
-  ctx2d.fillText(
-    `药水 1:×${state.player.potions?.hp ?? 0}  2:×${state.player.potions?.mp ?? 0}   翻滚${state.player.dodgeCd > 0 ? ` ${state.player.dodgeCd.toFixed(1)}s` : ' ✓'}   技能点 ${state.player.skillPoints ?? 0}`,
-    HUD_PAD, sy - 34,
-  );
+  ctx2d.font = '12px monospace';
+  ctx2d.fillText(`技能点 ${state.player.skillPoints ?? 0}`, HUD_PAD + 356, sy - 46 + 9);
 
   // 技能 cd 倒计时 (槽内)
   const nowSec = performance.now() / 1000;
@@ -219,7 +361,7 @@ export function drawHudOverlay(
   ctx2d.textBaseline = 'middle';
   const cds = getSkillCooldowns(nowSec);
   for (let i = 0; i < SKILL_KEYS.length; i++) {
-    const cdLeft = cds[SKILL_KEYS[i]] ?? 0;
+    const cdLeft = cds[KEY_TO_SLOT[SKILL_KEYS[i]]] ?? 0;  // 槽名查询 (F 显示键 → W 槽)
     if (cdLeft > 0.05) {
       ctx2d.fillText(cdLeft.toFixed(1), HUD_PAD + i * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2, sy + SLOT_SIZE / 2);
     }
@@ -403,6 +545,9 @@ export function drawHudOverlay(
     const btns: Array<{ r: { x: number; y: number; w: number; h: number }; label: string; color: string }> = [
       { r: EQ_LAYOUT.btnEquip, label: '[A] 装备', color: '#2a6a3a' },
       { r: EQ_LAYOUT.btnUnequip, label: '[U] 卸下', color: '#7a2a2a' },
+      { r: EQ_LAYOUT.btnPrev, label: '← 上一页', color: '#2a3a5a' },
+      { r: EQ_LAYOUT.btnNext, label: '下一页 →', color: '#2a3a5a' },
+      { r: EQ_LAYOUT.btnClose, label: '[Esc] 关闭', color: '#5a2a2a' },
     ];
     for (const b of btns) {
       const hv2 = inRect(mouseX, mouseY, b.r.x, b.r.y, b.r.w, b.r.h);

@@ -30,6 +30,60 @@ ATLAS_IN = BASE.parent / "atlas" / "input"   # assets/atlas/input
 SIZE = 64  # 默认输出贴图尺寸 (px); 可 --size 覆盖 (小怪/瓦片按显示尺寸烘焙)
 
 
+def chroma_key_pink(img: Image.Image) -> Image.Image:
+    """粉红底容错抠图 (模型给脏品红如 (185,42,134) 时用, b 通道不足 150 严格品红不认):
+    紫红系判定 r > 150 且 r >= b 且 b > 90; g 越低越纯 → 全透明, 120~150 半透明过渡"""
+    img = img.convert("RGB")
+    px = img.load()
+    out = Image.new("RGBA", img.size)
+    opx = out.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            if r > 150 and b > 90 and r >= b:
+                if g < 120:
+                    a = 0
+                elif g < 150:
+                    a = int(255 * (g - 120) / 30)
+                else:
+                    a = 255
+            else:
+                a = 255
+            opx[x, y] = (r, g, b, a)
+    return out
+
+
+def first_sprite(rgba: Image.Image) -> Image.Image:
+    """取第一个内容块 (透明列分隔); 无分隔或仅一个块时整图直用 (防宽画布误切)"""
+    w, h = rgba.size
+    alpha = rgba.getchannel("A")
+    col = [sum(1 for y in range(h) if alpha.getpixel((x, y)) > 8) for x in range(w)]
+    sep: list[tuple[int, int]] = []
+    x = 0
+    while x < w:
+        if col[x] == 0:
+            x0 = x
+            while x < w and col[x] == 0:
+                x += 1
+            if x - x0 >= 4:
+                sep.append((x0, x))
+        else:
+            x += 1
+    if sep:
+        bounds: list[tuple[int, int]] = []
+        prev = 0
+        for s0, s1 in sep:
+            if s0 - prev >= 16:
+                bounds.append((prev, s0))
+            prev = s1
+        if w - prev >= 16:
+            bounds.append((prev, w))
+        if len(bounds) >= 2:
+            return rgba.crop((bounds[0][0], 0, bounds[0][1], h))
+    return rgba
+
+
 def bbox_crop(img: Image.Image, size: int = SIZE) -> Image.Image:
     """按 alpha 非零区域裁剪, 扩展为正方形 (居中), 缩放到 size (降采样用 BOX 保质量)"""
     bbox = img.getchannel("A").getbbox()
@@ -42,12 +96,11 @@ def bbox_crop(img: Image.Image, size: int = SIZE) -> Image.Image:
     left = int(cx - side / 2)
     top = int(cy - side / 2)
     canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    # 越界部分直接裁掉 (主体在画布中央)
-    ox, oy = max(0, -left), max(0, -top)
+    # 越界部分直接裁掉 (主体在画布中央); crop 窗口即画布内容, 粘贴到原点
     sx, sy = max(0, left), max(0, top)
     ex, ey = min(img.width, left + side), min(img.height, top + side)
     region = img.crop((sx, sy, ex, ey))
-    canvas.paste(region, (ox + sx - left, oy + sy - top))
+    canvas.paste(region, (sx - left, sy - top))
     if canvas.width == size:
         return canvas
     # 降采样用 BOX (像素平均), 升采样用 NEAREST (保持像素边)
@@ -195,6 +248,44 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
                 stale.unlink()
             save_frames(img, ATLAS_IN / "characters" / name, True, size, quantize_key)
             out_done.extend(str(p) for p in sorted(ATLAS_IN.glob(f"characters/{name}_*.png")))
+    elif rel_dir == "npcs":
+        # 站立单帧 → npcs/{name}.png (游戏按 kind→sprite 引用, 如 merchant_stand)
+        # sheet (一张多个人物) 默认取第一个切图; 仅一个内容块时整图直用 (防宽画布误切)
+        # 非品红底: 先试严格品红键, 几乎无透明 → 粉红容错键; 仍无 → 整图直用 (深色石板等)
+        for stale in ATLAS_IN.glob(f"npcs/{name}.png"):
+            stale.unlink()
+        rgba = chroma_key_magenta(img)
+        a_hist = rgba.getchannel("A").histogram()
+        opaque = sum(a_hist[128:])
+        if opaque / (rgba.width * rgba.height) > 0.9:
+            rgba = chroma_key_pink(img)
+        rgba = first_sprite(rgba)
+        # 弱 alpha 残渣归零 (第一格边缘半透明撑偏 bbox → 主体不居中)
+        a = rgba.getchannel("A").point(lambda v: 0 if v < 40 else v)
+        rgba.putalpha(a)
+        rgba = bbox_crop(rgba, size)
+        if quantize_key:
+            rgba = apply_quantize(rgba, quantize_key)
+        (ATLAS_IN / "npcs").mkdir(parents=True, exist_ok=True)
+        rgba.save(ATLAS_IN / "npcs" / f"{name}.png", format="PNG")
+        out_done.append(f"npcs/{name}.png")
+    elif rel_dir == "icons":
+        # UI 图标 (技能/药水/材料): 单对象, 品红键 + 第一格 + 居中; 存 icons/{name}.png
+        for stale in ATLAS_IN.glob(f"icons/{name}.png"):
+            stale.unlink()
+        rgba = chroma_key_magenta(img)
+        a_hist = rgba.getchannel("A").histogram()
+        if sum(a_hist[128:]) / (rgba.width * rgba.height) > 0.9:
+            rgba = chroma_key_pink(img)
+        rgba = first_sprite(rgba)
+        a = rgba.getchannel("A").point(lambda v: 0 if v < 40 else v)
+        rgba.putalpha(a)
+        rgba = bbox_crop(rgba, size)
+        if quantize_key:
+            rgba = apply_quantize(rgba, quantize_key)
+        (ATLAS_IN / "icons").mkdir(parents=True, exist_ok=True)
+        rgba.save(ATLAS_IN / "icons" / f"{name}.png", format="PNG")
+        out_done.append(f"icons/{name}.png")
     return out_done
 
 
@@ -269,7 +360,7 @@ def check(path: Path, rel_dir: str) -> list[str]:
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Voidbound 美术导入")
-    parser.add_argument("group", nargs="?", choices=["characters", "monsters", "world", "all"])
+    parser.add_argument("group", nargs="?", choices=["characters", "monsters", "world", "npcs", "icons", "all"])
     parser.add_argument("--all", action="store_true", help="处理全部 (等价于省略参数)")
     parser.add_argument("--size", type=int, default=SIZE, help=f"输出贴图尺寸, 默认 {SIZE} (小怪/瓦片按显示尺寸烘焙, 如 --size 32)")
     parser.add_argument("--dry-run", action="store_true")
@@ -293,7 +384,7 @@ def main():
         print(f"检查完成: {bad} 个问题" if bad else "检查完成: 全部通过")
         sys.exit(1 if bad else 0)
 
-    groups = ["characters", "monsters", "world"] if (args.all or args.group in (None, "all")) else [args.group]
+    groups = ["characters", "monsters", "world", "npcs", "icons"] if (args.all or args.group in (None, "all")) else [args.group]
     if not IMPORT.exists():
         sys.exit(f"import 目录不存在: {IMPORT} (请按 PROMPTS_USER.md 放置 PNG)")
 
