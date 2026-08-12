@@ -33,7 +33,7 @@ import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, cycleDifficulty, cycle
 import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
 import { rrect, hexToRgb01 } from './ui/primitives';
 import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
-import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor } from './screens/title';
+import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor, drawTitleScreen, type TitleCtx } from './screens/title';
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
 import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
@@ -275,6 +275,15 @@ const state = {
   materials: emptyMaterials(),
   // v3 鼠标化: 城镇 NPC 走向目标
   townWalk: null as { kind: NpcKind; x: number; y: number } | null,
+};
+
+// US-024-c: drawTitle 已搬到 screens/title.ts, 启动时装配一次 TitleCtx, 主循环每帧复用
+const titleCtx: TitleCtx = {
+  state, hudCtx, hudCanvas, canvas, gl, quad, res, mouse,
+  drawUiPortrait: (classId, x, y, w, h) => drawUiPortrait(gl, quad, res, classId, x, y, w, h),
+  syncTitleFocus: (hasSave) => syncTitleFocus(hasSave),
+  getTitleFocus: () => getTitleFocus(),
+  uiCursor: (c, m, rects) => uiCursor(c, m, rects),
 };
 
 // 初始化跑局状态 (OPT-012): 怪物在进入地牢时由 startRun/ensureDungeonRun 生成
@@ -626,7 +635,7 @@ function loop(now: number) {
         }).catch(() => { /* 列表刷新失败忽略: 沿用旧列表 */ });
       }
       handleScreenClick();
-      drawTitle();
+      drawTitleScreen(titleCtx);
     } else if (state.screen === 'newgame') {
       // 出发过场倒计时: 期间冻结选择交互, 结束后开跑
       if (getNgLaunchT() > 0) {
@@ -1449,228 +1458,11 @@ function formatTime(sec: number): string {
 }
 
 // ===== 标题屏打磨 (TS-001~009, 2026-08-12) =====
-
-/** TS-008: 存档格式标签 (与 src-tauri/src/save.rs SAVE_FORMAT_VERSION=11 同步维护) */
-const SAVE_FMT_LABEL = 'v11';
-
-/** US-024-b/025-b: startNewgameFromTitle/openCharactersList/settingsKeyRects/handleSettingsClick/
- *  drawSettingsPanel/drawUiPortrait/uiCursor/keyHintMain/keyHintSkills 移到 screens/title.ts;
- *  saveLastNg/loadLastNg/startFromNewgame/doLaunchRun/createCharacterNow/startCreateNewgame/
- *  NG_LAST_KEY/ATTR_NAMES/THEME_NAMES 移到 screens/newgame.ts。
- *  0 行为变更: 函数体原样搬移, 闭包依赖显式参数化 (state/hudCanvas/canvas/mouse/gl/quad/res/startRun)。 */
-
-/** 标题画面 (GAME_FLOW §1.2): 主菜单 — TS-001~009 打磨版 (2026-08-12) */
-function drawTitle() {
-  const w = hudCanvas.width, h = hudCanvas.height;
-  const mx = mouse.state().pos.x;
-  const my = mouse.state().pos.y;
-  const lmb = mouse.state().buttons.LMB;
-  const kb = loadKeybinds();
-  const menuRects: Array<[number, number, number, number]> = [];
-  const hasSave = state.charList.length > 0;
-  syncTitleFocus(hasSave);
-  // 最近存档排序: 按 last_played 降序取前 5 (0/缺失排最后)
-  const recentCards = hasSave
-    ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
-    : [];
-  // 立绘职业: 当前角色优先, 无存档用默认 (TS-001)
-  const curChar = hasSave ? (state.charList.find(c => c.id === state.currentChar) ?? state.charList[0]) : null;
-  const portraitClass: ClassId = (curChar?.class as ClassId) ?? (state.player.classId as ClassId) ?? 'barbarian';
-  // 主菜单布局 (与 handleUiClick 同几何): 有存档 → 金色大按钮 + [2][3][R]; 无存档 → [1][2][R]
-  const menuY0 = h / 2 - 30;
-  const menuItems: Array<{ y: number; label: string; key: string; icon: 'sword' | 'gear' | 'portrait'; sub: string }> = hasSave
-    ? [
-        { y: menuY0 + 40, label: '新游戏', key: '2', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
-        { y: menuY0 + 80, label: '设置', key: '3', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
-        { y: menuY0 + 120, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
-      ]
-    : [
-        { y: menuY0, label: '新游戏', key: '1', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
-        { y: menuY0 + 40, label: '设置', key: '2', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
-        { y: menuY0 + 80, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
-      ];
-  const itemW = 320, itemH = 38;
-
-  // ---- GL 层 (TS-001 立绘 + 脚下光环; TS-004 菜单 GL 图标): 先清空, 2D 层对应区域挖孔 ----
-  const px = 24, py = h - 206, pw = 180, ph = 180;  // 左下角 (右下被最近存档卡片占用)
-  const iconSprites: Array<{ x: number; y: number; atlas: string; name: string }> = [];
-  for (const it of menuItems) {
-    if (it.icon === 'sword') iconSprites.push({ x: w / 2 - itemW / 2 + 14, y: it.y - itemH / 2 + 9, atlas: 'icons', name: 'skill_melee' });
-    else if (it.icon === 'portrait') iconSprites.push({ x: w / 2 - itemW / 2 + 14, y: it.y - itemH / 2 + 9, atlas: 'characters', name: CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian });
-  }
-  gl.clearColor(0.043, 0.043, 0.071, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  // 脚下光环 (城镇 NPC 同类画法: ui/slide_horizontal_color additive)
-  drawSprite(gl, quad, res, { x: px + 24, y: py + ph - 24 }, { w: 132, h: 22 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1], blend: 'add' });
-  drawSprite(gl, quad, res, { x: px, y: py }, { w: pw, h: ph }, 'characters', CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian, {});
-  for (const ip of iconSprites) {
-    drawSprite(gl, quad, res, { x: ip.x, y: ip.y }, { w: 20, h: 20 }, ip.atlas, ip.name, {});
-  }
-
-  // ---- 2D 层 ----
-  drawTitleBackground(hudCtx, hudCanvas);  // TS-002: 基色 + 径向渐变 + 微尘 (委托 screens/title.ts)
-  // 挖孔露出 GL: 立绘+光环 / 菜单 GL 图标
-  hudCtx.clearRect(px - 8, py - 8, pw + 16, ph + 36);
-  for (const ip of iconSprites) hudCtx.clearRect(ip.x - 2, ip.y - 2, 24, 24);
-
-  // TS-005: 标题外发光 + 副标字距 + 玩家向文案
-  drawTitleWordmark(hudCtx, hudCanvas);
-
-  // 右侧最近存档卡片区 — TS-003: 加场景图标 (当前角色用内存 scene, 其余用存档摘要)
-  const cardX = w - 460, cardW = 360, cardY0 = 330, cardH = 42, cardGap = 6;
-  recentCards.forEach((c, i) => {
-    const cy = cardY0 + i * (cardH + cardGap);
-    const hit = inRect(mx, my, cardX, cy, cardW, cardH);
-    const down = hit && lmb;
-    hudCtx.fillStyle = down ? 'rgba(102,204,255,0.30)' : hit ? 'rgba(102,204,255,0.13)' : '#14141f';
-    hudCtx.fillRect(cardX, cy, cardW, cardH);
-    hudCtx.strokeStyle = hit ? '#66ccff' : '#2a2a3a';
-    hudCtx.lineWidth = hit ? 2 : 1;
-    hudCtx.strokeRect(cardX, cy, cardW, cardH);
-    const rep = CLASS_DEFS[(c.class as ClassId) ?? 'barbarian'];
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'middle';
-    drawSceneIcon(hudCtx, cardX + 22, cy + 14, c.id === state.currentChar ? state.mode : (c.scene ?? 'dungeon'));
-    hudCtx.fillStyle = rep?.color ?? '#eee';
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(`${rep?.name ?? c.class} ${c.id}`, cardX + 38, cy + 14);
-    hudCtx.fillStyle = hit ? '#fff' : '#caa';
-    hudCtx.font = '13px monospace';
-    hudCtx.textAlign = 'right';
-    hudCtx.fillText(`Lv${c.level} · ${THEME_NAMES[c.theme] ?? c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}`, cardX + cardW - 14, cy + 14);
-    menuRects.push([cardX, cy, cardW, cardH]);
-  });
-  // 金色大按钮"继续游戏" — TS-003: + 相对时间 / 场景图标 / 跑局进度条 (剩余怪)
-  if (hasSave) {
-    const recent = recentCards[0];
-    const contW = 480, contH = 46;
-    const contX = w / 2 - contW / 2, contY = menuY0 - contH / 2;
-    const hit = inRect(mx, my, contX, contY, contW, contH);
-    const down = hit && lmb;
-    const focused = getTitleFocus() === 0;
-    const active = hit || focused;
-    hudCtx.fillStyle = down ? 'rgba(255,214,74,0.35)' : active ? 'rgba(255,214,74,0.16)' : 'rgba(40,34,10,0.55)';
-    hudCtx.fillRect(contX, contY, contW, contH);
-    hudCtx.strokeStyle = down ? '#fff' : '#ffd64a';
-    hudCtx.lineWidth = down ? 3 : active ? 2 : 1;
-    hudCtx.strokeRect(contX, contY, contW, contH);
-    if (focused) {
-      hudCtx.strokeStyle = '#ffd64a';
-      hudCtx.lineWidth = 2;
-      hudCtx.strokeRect(contX - 3, contY - 3, contW + 6, contH + 6);
-    }
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = hit ? '#fff' : '#ffd64a';
-    hudCtx.font = 'bold 20px monospace';
-    hudCtx.fillText('[1] ▶ 继续游戏', w / 2, contY + contH / 2 - 9);
-    if (recent) {
-      // 行 1 右: 上次游玩距今
-      hudCtx.fillStyle = '#bba';
-      hudCtx.font = '12px monospace';
-      hudCtx.textAlign = 'right';
-      hudCtx.fillText(relTime(recent.last_played), contX + contW - 14, contY + contH / 2 - 9);
-      // 行 2: 场景图标 + 摘要
-      const rep = CLASS_DEFS[(recent.class as ClassId) ?? 'barbarian'];
-      drawSceneIcon(hudCtx, contX + 16, contY + contH / 2 + 13, recent.id === state.currentChar ? state.mode : (recent.scene ?? 'dungeon'));
-      hudCtx.fillStyle = '#caa';
-      hudCtx.font = '13px monospace';
-      hudCtx.textAlign = 'center';
-      hudCtx.fillText(`${rep?.name ?? recent.class} ${recent.id} · Lv${recent.level} · ${THEME_NAMES[recent.theme] ?? recent.theme} · ${DIFFICULTY_MODS[recent.difficulty]?.name ?? recent.difficulty}`, w / 2 + 10, contY + contH / 2 + 13);
-      // 跑局进度条 (仅当前角色 + 地牢 + 有跑局数据)
-      if (recent.id === state.currentChar && state.mode === 'dungeon' && state.run.total > 0) {
-        const alive = state.run.alive, total = state.run.total;
-        const frac = state.run.bossAlive ? 1 : Math.min(1, Math.max(0, 1 - alive / total));
-        const bx = contX + contW - 104, bw = 64, by = contY + contH / 2 + 9, bh = 5;
-        hudCtx.fillStyle = '#333';
-        hudCtx.fillRect(bx, by, bw, bh);
-        if (frac > 0) {
-          hudCtx.fillStyle = state.run.bossAlive ? '#ffd64a' : '#c9aaff';
-          hudCtx.fillRect(bx, by, Math.max(2, bw * frac), bh);
-        }
-        hudCtx.strokeStyle = '#8a8a96';
-        hudCtx.lineWidth = 1;
-        hudCtx.strokeRect(bx, by, bw, bh);
-        hudCtx.fillStyle = hit ? '#eed' : '#997';
-        hudCtx.font = '9px monospace';
-        hudCtx.textAlign = 'right';
-        hudCtx.fillText(state.run.bossAlive ? 'Boss' : `${alive}/${total}`, contX + contW - 34, by + bh / 2 + 3);
-      }
-    }
-    menuRects.push([contX, contY, contW, contH]);
-  }
-  // 菜单项 (TS-004: 图标/键帽/副标题; TS-007: 金边外扩 + 文字右移 + 焦点环)
-  menuItems.forEach((it, i) => {
-    const focusIdx = hasSave ? i + 1 : i;
-    const ry = it.y - itemH / 2;
-    const rx = w / 2 - itemW / 2;
-    const hit = inRect(mx, my, rx, ry, itemW, itemH);
-    const down = hit && lmb;  // 按下反馈: 松开瞬间已触发动作, 视觉加深
-    const focused = getTitleFocus() === focusIdx;
-    const active = hit || focused;
-    if (active) {
-      hudCtx.fillStyle = down ? 'rgba(102,204,255,0.32)' : 'rgba(102,204,255,0.13)';
-      hudCtx.fillRect(rx, ry, itemW, itemH);
-      hudCtx.strokeStyle = '#ffd64a';
-      hudCtx.lineWidth = down ? 3 : 2;
-      hudCtx.strokeRect(rx - 2, ry - 2, itemW + 4, itemH + 4);
-    } else {
-      hudCtx.strokeStyle = 'rgba(42,42,58,0.7)';
-      hudCtx.lineWidth = 1;
-      hudCtx.strokeRect(rx, ry, itemW, itemH);
-    }
-    if (it.icon === 'gear') drawGearIcon(hudCtx, rx + 26, it.y, 8, active, down);  // 设置图标 (图集无齿轮, 程序化)
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = active ? (down ? '#fff' : '#66ccff') : '#eee';
-    hudCtx.font = 'bold 22px monospace';
-    hudCtx.fillText(it.label, w / 2 + 6 + (active ? 4 : 0), it.y);
-    drawKeycap(hudCtx, w / 2 + itemW / 2 - 46, ry + 7, it.key, active);
-    // hover/焦点副标题 (TS-004): 菜单项左侧, 右对齐
-    if (active) {
-      hudCtx.textAlign = 'right';
-      hudCtx.fillStyle = '#9cf';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText(it.sub, rx - 16, it.y);
-      hudCtx.textAlign = 'center';
-    }
-    menuRects.push([rx, ry, itemW, itemH]);
-  });
-  // hover 填充画在 GL 图标孔之上 → 菜单绘制完重新挖孔 (仅图标区, 不影响金边/文字)
-  for (const ip of iconSprites) hudCtx.clearRect(ip.x - 2, ip.y - 2, 24, 24);
-
-  // TS-006: 玩法说明带 (4 列, 键位随自定义)
-  drawInfoBand(hudCtx, hudCanvas, mouse.state().pos, kb, menuRects);
-
-  // TS-009: 设置齿轮入口 (右下角, 点击开设置面板)
-  const gearX = w - 36, gearY = h - 36;
-  const gearHit = inRect(mx, my, gearX - 14, gearY - 14, 28, 28);
-  drawGearIcon(hudCtx, gearX, gearY, 9, gearHit, gearHit && lmb);
-  menuRects.push([gearX - 14, gearY - 14, 28, 28]);
-
-  // 底部: 键位提示 / 状态消息 / 版本信息 (TS-008)
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#888';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText(keyHintMain(), w / 2, h - 46);
-  if (state.titleMsg) {
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = '16px monospace';
-    hudCtx.fillText(state.titleMsg, w / 2, h - 124);
-  }
-  hudCtx.fillStyle = '#4a4a58';
-  hudCtx.font = '11px monospace';
-  hudCtx.fillText(`v${GAME_VERSION} · 战斗原型 · 存档 ${SAVE_FMT_LABEL}`, w / 2, h - 22);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-
-  // 标题页设置面板 (C8: 与暂停共用 drawSettingsPanel, 含滑条/键位自定义)
-  if (state.settingsOpen) {
-    drawSettingsPanel(state, hudCtx, hudCanvas);
-  }
-  uiCursor(canvas, mouse, menuRects);
-}
+//
+// US-024-c: drawTitle 函数整块搬到 screens/title.ts (TitleCtx 注入模式);
+//           启动时在 main.ts 装配一次 titleCtx, 主循环每帧复用。
+//           SAVE_FMT_LABEL 与 lifecycle.ts 同源 (v11), 仅 screens/title.ts 引用, 留在那里。
+//           0 行为变更, 所有 module-level 引用 (state/canvas/gl/quad/res/mouse) → TitleCtx 字段。
 
 /** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
 function drawNewgame() {
