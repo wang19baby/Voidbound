@@ -820,6 +820,9 @@ pub struct CharacterSummary {
     /// 最近游玩时间 (unix 秒, 存档文件 mtime; 0 = 未知)
     #[serde(default)]
     pub last_played: u64,
+    /// 上次场景 (存档 v11): dungeon/town; 无档/旧档默认 dungeon (TS-003 标题卡片)
+    #[serde(default)]
+    pub scene: String,
 }
 
 /// 角色列表 (C-201): 读 account.characters + 各档摘要; 无存档的角色跳过摘要字段用默认
@@ -851,6 +854,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                         level: data.level,
                         difficulty: data.difficulty,
                         theme: data.theme,
+                        scene: data.scene,
                         id,
                         last_played,
                     },
@@ -859,6 +863,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                         level: 1,
                         difficulty: "normal".into(),
                         theme: "forest".into(),
+                        scene: "dungeon".into(),
                         id,
                         last_played,
                     },
@@ -868,6 +873,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                     level: 1,
                     difficulty: "normal".into(),
                     theme: "forest".into(),
+                    scene: "dungeon".into(),
                     id,
                     last_played,
                 },
@@ -877,6 +883,7 @@ pub fn list_characters() -> Result<Vec<CharacterSummary>, String> {
                 level: 1,
                 difficulty: "normal".into(),
                 theme: "forest".into(),
+                scene: "dungeon".into(),
                 id,
                 last_played,
             },

@@ -93,3 +93,13 @@ export function keyLabel(bind: string): string {
   if (bind === 'escape') return 'Esc';
   return bind.toUpperCase();
 }
+
+/** 标题底部键位提示 (TS-010): 纯函数, 键位自定义后即时反映; main.ts keyHintMain 委托 */
+export function keyHintMainText(kb: Keybinds): string {
+  return `WASD 移动 · 左/右键 攻击 · ${keyLabel(kb.skills.Q)}/${keyLabel(kb.skills.W)}/${keyLabel(kb.skills.E)}/${keyLabel(kb.skills.R)} 技能 · ${keyLabel(kb.dodge)} 翻滚 · ${keyLabel(kb.potionHp)}/${keyLabel(kb.potionMp)} 药水 · ${keyLabel(kb.equip)} 装备 · ${keyLabel(kb.interact)} 交互 · Esc 暂停`;
+}
+
+/** 设置面板技能名行 (TS-010): 键位动态, 与 keyHintMainText 同源 */
+export function keyHintSkillsText(kb: Keybinds): string {
+  return `${keyLabel(kb.skills.Q)} 火球 · ${keyLabel(kb.skills.W)} 连发 · ${keyLabel(kb.skills.E)} 回血 · ${keyLabel(kb.skills.R)} 大招`;
+}

@@ -98,6 +98,8 @@ export interface CharacterSummary {
   theme: Theme;
   /** 最近游玩时间 (unix 秒, 存档文件 mtime; 0 = 未知) */
   last_played: number;
+  /** 上次场景 (存档 v11): dungeon/town; 旧档/无档默认 dungeon (TS-003 标题卡片) */
+  scene: string;
 }
 
 export function saveGame(data: SaveData, charId?: string): Promise<string> {

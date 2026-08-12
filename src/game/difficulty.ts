@@ -43,7 +43,7 @@ export function cycleDifficulty(d: Difficulty): Difficulty {
  * 进度解锁 (OPT-015, C1): 难度 → 需要通关的主题门槛
  * nightmare←forest / hell←desert / inferno←ruin / hardcore←ruin(通关炼狱) + 二次确认(调用方)
  */
-const DIFFICULTY_GATES: Partial<Record<Difficulty, string>> = {
+export const DIFFICULTY_GATES: Partial<Record<Difficulty, string>> = {
   nightmare: 'forest',
   hell: 'desert',
   inferno: 'ruin',

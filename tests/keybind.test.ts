@@ -1,7 +1,7 @@
 // 键位模块单测 (P3-10): 默认布局 / 匹配 / 技能反查 / 持久化 (localStorage stub)
 // 运行: npm test
 
-import { DEFAULT_KEYBINDS, normKey, keyMatch, skillSlotByKey, keyLabel, loadKeybinds, saveKeybinds, resetKeybinds } from '../src/game/keybind';
+import { DEFAULT_KEYBINDS, normKey, keyMatch, skillSlotByKey, keyLabel, loadKeybinds, saveKeybinds, resetKeybinds, keyHintMainText, keyHintSkillsText } from '../src/game/keybind';
 
 // Node 无 localStorage: stub (loadKeybinds 内 try/catch 兜底, 此处验证读写路径)
 const store = new Map<string, string>();
@@ -70,6 +70,29 @@ eq('默认装备 tab', kb.equip, 'tab');
   const k4 = resetKeybinds();
   eq('重置后翻滚 Space', k4.dodge, DEFAULT_KEYBINDS.dodge);
   eq('重置后 Q=q', k4.skills.Q, DEFAULT_KEYBINDS.skills.Q);
+}
+
+// === 提示文本 (TS-010): keyHintMainText/keyHintSkillsText 跟随键位自定义 ===
+{
+  resetKeybinds();
+  const kb = loadKeybinds();
+  const hint = keyHintMainText(kb);
+  eq('默认提示含 Q/F/E/R', hint.split('技能')[0].includes('Q/F/E/R') ? 'yes' : 'no', 'yes');
+  check('默认提示含 Space 翻滚', hint.includes('Space'));
+  check('默认提示含 Tab 装备', hint.includes('Tab'));
+  eq('默认技能行', keyHintSkillsText(kb), 'Q 火球 · F 连发 · E 回血 · R 大招');
+  // 改键后提示即时反映
+  const k2: typeof kb = {
+    ...kb,
+    dodge: 'shift',
+    equip: 'i',
+    skills: { Q: 'x', W: 'y', E: 'z', R: 'v' },
+  };
+  const h2 = keyHintMainText(k2);
+  check('改键后技能提示 X/Y/Z/V', h2.includes('X/Y/Z/V'));
+  check('改键后 SHIFT 翻滚', h2.includes('SHIFT'));
+  check('改键后装备 I', h2.includes('I'));
+  eq('改键后技能行', keyHintSkillsText(k2), 'X 火球 · Y 连发 · Z 回血 · V 大招');
 }
 
 if (failures > 0) {
