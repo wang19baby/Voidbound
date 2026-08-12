@@ -3,16 +3,20 @@
 
 import type { RenderResources } from '../render/resources';
 import { WORLD_W, WORLD_H, type Decor, spawnPointForMode } from './world';
-import { FIREBALL_DAMAGE, type Monster } from './monster';
+import { FIREBALL_DAMAGE, type Monster, type PoisonPool } from './monster';
 import type { CombatStats, DamageType } from './combat';
 import type { RuneId } from './rune';
-import type { SkillSlot } from './skill';
+import type { SkillSlot, MeleeSwing } from './skill';
 import type { Difficulty } from './difficulty';
 import type { Equipment, EquipType } from './equipment';
 import { CLASS_SPRITES, type ClassId } from './class';
 import type { ElementId } from './element';
 import type { MapMode } from './mapmode';
 import { spawnBurst, type Vfx } from './vfx';
+import type { DamageNum } from './damageNum';
+import type { DeathFx } from './deathFx';
+import type { Toast } from './toast';
+import type { EnemyProjectile } from './monsters/proj';
 
 export interface Camera {
   x: number;
@@ -100,8 +104,11 @@ export interface ScreenMachine {
 
 /** 集中切换屏: 同步 mode; pauseFrom 只在进 pause 前由调用方设置 */
 export function setScreen(s: ScreenMachine, next: Screen): void {
+  const from = s.screen;
   s.screen = next;
   if (next === 'dungeon' || next === 'town') s.mode = next;
+  // T1a: emit 事件 (bgm/震动服务订阅; 后续 US-XX-b 接入)
+  void import('../core/eventBus').then(({ bus }) => bus.emit('screen.changed', { from, to: next }));
 }
 
 /** 暂停恢复目标 (pauseFrom='town' → town, 否则 dungeon) */
@@ -270,6 +277,22 @@ export interface GameState {
   lastKiller: string | null;
   /** 环境粒子 (OPT-027): 主题氛围微尘 */
   envFx: Array<{ x: number; y: number; vx: number; vy: number; t: number; life: number }>;
+  /** 死亡触发毒池 (A-W3 death_trigger): 站内每秒伤害 (本次 A.1 收口, 类型安全) */
+  _pools: PoisonPool[];
+  /** 伤害数字 (本次 A.1 收口, 类型安全; 之前用 _dmgNums 字段逃逸) */
+  _dmgNums: DamageNum[];
+  /** 死亡粒子 (本次 A.1 收口, 类型安全) */
+  _deathFx: DeathFx[];
+  /** 挥击 (近战命中盒): 由 skill.updateSwings 写入 (本次 A.1 收口, 类型安全) */
+  _swing: MeleeSwing[];
+  /** 地面掉落: equipment.ts (本次 A.1 收口) */
+  _loot: import('./equipment').Equipment[];
+  /** 已拾取(装备中)列表: equipment.ts (本次 A.1 收口) */
+  _owned: import('./equipment').Equipment[];
+  /** 顶部 toast 列表: toast.ts (本次 A.1 收口) */
+  _toasts: Toast[];
+  /** 怪物远程投射物: monsters/proj.ts (本次 A.1 收口) */
+  _enemyProj: EnemyProjectile[];
   /** 已通关主题 (OPT-015, C1): 解锁难度与主题 */
   cleared: string[];
   /** 硬核二段确认 (OPT-006/015) */
@@ -317,7 +340,7 @@ export function worldToScreen(state: GameState, worldPos: { x: number; y: number
 }
 
 export function updateFireballs(state: GameState, dt: number): void {
-  const next: Fireball[] = [];
+  const toRelease: Fireball[] = [];
   let wallHits = 0;
   for (const f of state.fireballs) {
     // 追踪符文: 每帧朝最近怪物转向
@@ -340,35 +363,43 @@ export function updateFireballs(state: GameState, dt: number): void {
     f.pos.x += f.vel.x * dt;
     f.pos.y += f.vel.y * dt;
     f.life -= dt;
-    if (f.life <= 0) continue;
-    if (f.pos.x < 0 || f.pos.x + f.size.w > state.world.w) continue;
-    if (f.pos.y < 0 || f.pos.y + f.size.h > state.world.h) continue;
-    // 墙碰撞 (穿透符文免疫)
-    let blocked = false;
-    if (f.rune !== 'pierce') {
-      for (const w of state.world.walls) {
-        if (f.pos.x < w.pos.x + w.size.w && f.pos.x + f.size.w > w.pos.x &&
-            f.pos.y < w.pos.y + w.size.h && f.pos.y + f.size.h > w.pos.y) {
-          blocked = true;
-          break;
+    let release = false;
+    if (f.life <= 0) release = true;
+    else if (f.pos.x < 0 || f.pos.x + f.size.w > state.world.w) release = true;
+    else if (f.pos.y < 0 || f.pos.y + f.size.h > state.world.h) release = true;
+    else {
+      // 墙碰撞 (穿透符文免疫)
+      let blocked = false;
+      if (f.rune !== 'pierce') {
+        for (const w of state.world.walls) {
+          if (f.pos.x < w.pos.x + w.size.w && f.pos.x + f.size.w > w.pos.x &&
+              f.pos.y < w.pos.y + w.size.h && f.pos.y + f.size.h > w.pos.y) {
+            blocked = true;
+            break;
+          }
         }
       }
+      if (blocked) {
+        wallHits++;
+        // VFX (UX_REVIEW P1): 撞墙火花
+        spawnBurst(state, f.pos.x + f.size.w / 2, f.pos.y + f.size.h / 2, 4, [0.9, 0.9, 1], 'spark_03', 70, 5, 0.3);
+        release = true;
+      }
     }
-    if (blocked) {
-      wallHits++;
-      // VFX (UX_REVIEW P1): 撞墙火花
-      spawnBurst(state, f.pos.x + f.size.w / 2, f.pos.y + f.size.h / 2, 4, [0.9, 0.9, 1], 'spark_03', 70, 5, 0.3);
-      continue;
-    }
-    next.push(f);
+    if (release) toRelease.push(f);
   }
   if (wallHits > 0) {
     void import('../util/log').then(({ inf }) => inf('combat', `fireball hit ${wallHits} wall(s)`));
   }
-  if (state.fireballs.length !== next.length) {
-    void import('../util/log').then(({ inf }) => inf('skill', `fireballs remaining: ${next.length}`));
+  const beforeCount = state.fireballs.length;
+  for (const f of toRelease) {
+    const idx = state.fireballs.indexOf(f);
+    if (idx >= 0) state.fireballs.splice(idx, 1);
+    fireballPool.release(f);
   }
-  state.fireballs = next;
+  if (state.fireballs.length !== beforeCount) {
+    void import('../util/log').then(({ inf }) => inf('skill', `fireballs remaining: ${state.fireballs.length}`));
+  }
 }
 
 export function spawnFireball(state: GameState, dir: { x: number; y: number }, spread = 0, rune: RuneId = 'none', dmg = FIREBALL_DAMAGE, dmgType: DamageType = 'fire'): void {
@@ -383,18 +414,19 @@ export function spawnFireball(state: GameState, dir: { x: number; y: number }, s
   const speed = 320;
   const cx = state.player.pos.x + state.player.size.w / 2;
   const cy = state.player.pos.y + state.player.size.h / 2;
-  state.fireballs.push({
-    pos: {
-      x: cx + dx * (state.player.size.w / 2) - state.fireballSize / 2,
-      y: cy + dy * (state.player.size.h / 2) - state.fireballSize / 2,
-    },
-    vel: { x: dx * speed, y: dy * speed },
-    size: { w: state.fireballSize, h: state.fireballSize },
-    life: rune === 'pierce' ? 3.0 : 1.5,
-    dmg,
-    rune,
-    dmgType,
-  });
+  // B.1.7: 池化 acquire → 复用, 避免每帧 new
+  const f = fireballPool.acquire();
+  f.pos.x = cx + dx * (state.player.size.w / 2) - state.fireballSize / 2;
+  f.pos.y = cy + dy * (state.player.size.h / 2) - state.fireballSize / 2;
+  f.vel.x = dx * speed;
+  f.vel.y = dy * speed;
+  f.size.w = state.fireballSize;
+  f.size.h = state.fireballSize;
+  f.life = rune === 'pierce' ? 3.0 : 1.5;
+  f.dmg = dmg;
+  f.rune = rune;
+  f.dmgType = dmgType;
+  state.fireballs.push(f);
   void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)}) rune=${rune} dmg=${dmg} type=${dmgType}`));
 }
 
@@ -422,3 +454,38 @@ export function pickPlayerSprite(state: GameState, mouseScreenX: number): Player
 
 // re-export
 export { WORLD_W, WORLD_H };
+
+// === B.1.7 玩家火球池 (零 GC, 满屏弹幕护栏) ===
+import { Pool } from '../core/pool';
+const fireballPool = new Pool<Fireball>({
+  factory: () => ({
+    pos: { x: 0, y: 0 },
+    vel: { x: 0, y: 0 },
+    size: { w: 0, h: 0 },
+    life: 0,
+    dmg: 0,
+    rune: 'none' as RuneId,
+    dmgType: 'fire' as DamageType,
+  }),
+  reset: (f) => {
+    f.pos.x = 0; f.pos.y = 0;
+    f.vel.x = 0; f.vel.y = 0;
+    f.size.w = 0; f.size.h = 0;
+    f.life = 0; f.dmg = 0;
+    f.rune = 'none';
+    f.dmgType = 'fire';
+  },
+  initial: 64,
+});
+
+/** 测试用: 重置玩家火球池 */
+export function _resetFireballPool(): void {
+  fireballPool.clear();
+}
+
+/** B.1.7 helper: 跨模块释放单个火球 (splice 在调用方做, 这里只回池)
+ *  - monsters/behavior.resolveFireballHits 在 splice 后调用此函数
+ *  - 幂等: 重复 release 无害 (Pool.release 内部防御) */
+export function releaseFireball(f: Fireball): void {
+  fireballPool.release(f);
+}

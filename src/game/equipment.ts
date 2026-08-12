@@ -6,6 +6,7 @@ import type { GameState, Theme } from './state';
 import { baseCombat, type CombatStats, type DamageType, DAMAGE_TYPES } from './combat';
 import { MAX_HP, MAX_MP } from './player';
 import { DIFFICULTY_MODS } from './difficulty';
+import { bus } from '../core/eventBus';
 
 // === 5 阶稀有度 (F-ITEM-002: 普通/魔法/稀有/套装/传奇) ===
 
@@ -204,12 +205,10 @@ export const LOOT_LIFETIME_SEC = 60;
 
 /** 清理过期地面掉落 (OPT-032): 主循环每帧调用; spawnT 单位为秒 */
 export function cullLoot(state: GameState, nowSec: number): void {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  if (!ext._loot) return;
-  const before = ext._loot.length;
-  ext._loot = ext._loot.filter(eq => eq.pickedUp || nowSec - (eq.spawnT ?? nowSec) < LOOT_LIFETIME_SEC);
-  if (ext._loot.length !== before) {
-    void import('../util/log').then(({ dbg }) => dbg('loot', `culled ${before - ext._loot!.length} expired`));
+  const before = state._loot.length;
+  state._loot = state._loot.filter(eq => eq.pickedUp || nowSec - (eq.spawnT ?? nowSec) < LOOT_LIFETIME_SEC);
+  if (state._loot.length !== before) {
+    void import('../util/log').then(({ dbg }) => dbg('loot', `culled ${before - state._loot.length} expired`));
   }
 }
 
@@ -348,6 +347,8 @@ export function equipItem(state: EquipState, eq: Equipment): boolean {
   }
   applyInstant(state, eq);
   recomputeCombat(state);
+  // T1a: emit 事件
+  bus.emit('item.equipped', { item: eq, slot: eq.type });
   return true;
 }
 
@@ -413,11 +414,9 @@ export function randomEquipment(chosen: Rarity, theme?: Theme, forcedSet?: SetNa
 
 /** 通关收集地上掉落 (M5 实测修复): 全部入背包, 满则留地并提示; 返回收集数 */
 export function collectAllLoot(state: GameState): Equipment[] {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  if (!ext._loot) return [];
   const picked: Equipment[] = [];
   let rejected = 0;
-  ext._loot = ext._loot.filter(eq => {
+  state._loot = state._loot.filter(eq => {
     if (eq.pickedUp) return false;
     if (getOwned(state).length >= BACKPACK_CAP) { rejected++; return true; }
     eq.pickedUp = true;
@@ -435,8 +434,7 @@ export function collectAllLoot(state: GameState): Equipment[] {
 
 /** 清空地上物品 (M5 实测修复: 回城/新局按规则清理) */
 export function clearGroundLoot(state: GameState): void {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  if (ext._loot) ext._loot.length = 0;
+  state._loot.length = 0;
 }
 
 /** Boss 专属掉落 (OPT-021): 指定套装 + 落点, 直接进 _loot */
@@ -444,14 +442,13 @@ export function dropBossReward(state: GameState, x: number, y: number, set: SetN
   const eq = randomEquipment('set', state.theme, set);
   eq.pos = { x, y };
   eq.spawnT = performance.now() / 1000;
-  const ext = state as GameState & { _loot?: Equipment[] };
-  ext._loot = ext._loot ?? [];
-  ext._loot.push(eq);
+  state._loot.push(eq);
   return eq;
 }
 
-/** 精英保底掉落 (内容扩充): rare 45% / set 40% / unique 15% + 主题倾向 */
-export function dropEliteLoot(state: { theme: Theme } & { _loot?: Equipment[] }, x: number, y: number): Equipment {
+/** 精英保底掉落 (内容扩充): rare 45% / set 40% / unique 15% + 主题倾向
+ *  测试友好: _loot 可选 (mock 简化), 内部 lazy-init; GameState 场景 _loot 必填 */
+export function dropEliteLoot(state: { theme: Theme; _loot?: Equipment[] }, x: number, y: number): Equipment {
   const r = Math.random();
   const rarity: Rarity = r < 0.15 ? 'unique' : r < 0.55 ? 'set' : 'rare';
   const eq = randomEquipment(rarity, state.theme);
@@ -508,8 +505,6 @@ export function addOwned(state: EquipState, eq: Equipment): boolean {
 
 /** 怪物死亡时按稀有度掉落率掉装备 */
 export function dropLoot(state: GameState, x: number, y: number): Equipment | null {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  ext._loot = ext._loot ?? [];
   const mods = DIFFICULTY_MODS[state.difficulty];
   const baseTotal = Object.values(RARITY_DROP_RATE).reduce((a, b) => a + b, 0);
   const total = baseTotal * mods.dropMult;
@@ -530,6 +525,8 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
   const extra = Math.min(mods.affixBonus, 6 - eq.affixes.length);
   for (let i = 0; i < extra; i++) eq.affixes.push(genAffix());
   ext._loot.push(eq);
+  // T1a: emit 事件 (FX/sfx/统计服务订阅)
+  bus.emit('item.dropped', { item: eq, rarity: eq.rarity });
   return eq;
 }
 
@@ -564,15 +561,12 @@ export function pickupLoot(state: GameState): Equipment[] {
 }
 
 export function getLoot(state: GameState): readonly Equipment[] {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  return ext._loot ?? [];
+  return state._loot;
 }
 
 /** 已拾取(装备中)的列表 */
 export function getOwned(state: GameState): Equipment[] {
-  const ext = state as GameState & { _owned?: Equipment[] };
-  ext._owned = ext._owned ?? [];
-  return ext._owned;
+  return state._owned;
 }
 
 export function describeAffix(a: Affix): string {

@@ -11,6 +11,7 @@ import { aabbOverlap } from './world';
 import { damageMonster, FIREBALL_DAMAGE, MELEE_DAMAGE, ULTIMATE_DAMAGE } from './monster';
 import { aoeVisual, ELEMENT_FX, spawnRing, spawnBurst, spawnBolt, spawnGlow } from './vfx';
 import type { DamageType } from './combat';
+import { bus } from '../core/eventBus';
 
 export type SkillSlot = 'LMB' | 'RMB' | 'Q' | 'W' | 'E' | 'R';
 export const SKILL_SLOTS: readonly SkillSlot[] = ['LMB', 'RMB', 'Q', 'W', 'E', 'R'];
@@ -120,6 +121,8 @@ export function chooseRune(state: GameState, idx: number): boolean {
   registry[ch.slot].rune = rune;
   state.runeChoice = null;
   inf('rune', `${ch.slot} 绑定符文: ${RUNE_DEFS[rune].name}`);
+  // T1a: emit 事件
+  bus.emit('rune.chosen', { rune, slot: ch.slot });
   return true;
 }
 
@@ -296,14 +299,11 @@ export interface MeleeSwing {
 }
 
 export function updateSwings(state: GameState, dt: number): void {
-  const ext = state as GameState & { _swing?: MeleeSwing[] };
-  if (!ext._swing) return;
-  ext._swing = ext._swing.filter(s => { s.life -= dt; return s.life > 0; });
+  state._swing = state._swing.filter(s => { s.life -= dt; return s.life > 0; });
 }
 
 export function getSwings(state: GameState): readonly MeleeSwing[] {
-  const ext = state as GameState & { _swing?: MeleeSwing[] };
-  return ext._swing ?? [];
+  return state._swing;
 }
 
 // === 注册表 ===
@@ -355,6 +355,8 @@ export function tryCastSlot(slot: SkillSlot, state: GameState, dir: { x: number;
   state.player.mp -= sk.mpCost;
   sk.cast(state, dir);
   lastTrigger[slot] = nowSec;
+  // T1a: emit 事件 (sfx/统计服务订阅)
+  bus.emit('skill.cast', { slot, id: sk.id, pos: { x: state.player.pos.x, y: state.player.pos.y } });
   return true;
 }
 
