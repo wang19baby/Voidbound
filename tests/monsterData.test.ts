@@ -154,6 +154,13 @@ check('forceElite 怪物带机制', lordMech.mech !== undefined);
 const plainM = spawnMonster(makeStubState() as never, 'slime', undefined, {});
 check('白怪不带机制', plainM.mech === undefined);
 
+// === Review 回归: 派生怪标记 / fleeT / bossLike 初始值 ===
+check('spawn 默认非派生', plainM.spawned === false);
+check('spawn 默认 fleeT 0', plainM.fleeT === 0);
+check('spawn 默认 bossLike false', plainM.bossLike === false);
+// 营地精英带 bossLike=false (只有 extract 外层 Boss 手动置 true)
+check('营地精英非 bossLike', spawnCamp(makeStubState() as never, { x: 10240, y: 5760, type: 'aura' }, pickForest).filter(m => m.elite)[0].bossLike === false);
+
 // === A-W3 诅咒清除: 翻滚解 debuff ===
 import { startDodge } from '../src/game/player';
 const cursedState = makeStubState() as never as { player: { curseT: number; dodgeCd: number; dodgeT: number } };

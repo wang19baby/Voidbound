@@ -141,12 +141,11 @@ function applyLandmarkCarve(isWall: boolean[][], cx: number, cy: number, mode: M
     }
     // 分支密室: 主带两侧偶发死路 pocket (1 块宽 2 块深, 藏宝)
     const pocketRng = mulberry32(cx * 99371 ^ cy * 1913 ^ 0xabcd);
-    const pocketChance = pocketRng();
-    if (pocketChance < 0.25 && cy !== midR && cy !== midR - 1) {
+    if (pocketRng() < 0.25 && cy !== midR && cy !== midR - 1) {
       const side = cy < midR - 1 ? 0 : 1;  // 主带上/下侧
-      const c0 = 1 + Math.floor(Math.random() * 5);
-      if (side === 0) { for (let c = c0; c < c0 + 2; c++) isWall[2][c] = false; isWall[3][c0 - 1] = true; }
-      else { for (let c = c0; c < c0 + 2; c++) isWall[5][c] = false; isWall[4][c0 - 1] = true; }
+      const c0 = 2 + Math.floor(pocketRng() * 4);  // Review: 种子化 + c0≥2 (不写边界/走廊列)
+      if (side === 0) { for (let c = c0; c < c0 + 2; c++) isWall[2][c] = false; }
+      else { for (let c = c0; c < c0 + 2; c++) isWall[5][c] = false; }
     }
   } else if (mode === 'gauntlet') {
     // 中央竞技场: 2x2 清空 + 环墙 (外圈是墙)

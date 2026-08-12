@@ -13,7 +13,7 @@ import { updatePlayer, castFireball, usePotion, startDodge } from './game/player
 import { updateFireballs, spawnFireball, updateCamera, pickPlayerSprite, worldToScreen, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
-import { drawSprite, setViewportUniform } from './render/draw';
+import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
 import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, setMouseReticle } from './render/hud';
 import { makeCooldown } from './game/cooldown';
@@ -700,10 +700,25 @@ window.addEventListener('keydown', (e) => {
   if (state.screen === 'portal') {
     const k = e.key.toLowerCase();
     if (k === '1') {
-      // 回城: 提前结算 (战利品已保留), 进城镇
+      // 回城: 提前结算 (战利品/经验保留) — collectAllLoot + 记录最佳 + 持久化, 进胜利结算屏
       leaveThroughPortal(state);
-      enterTown(state);
-      inf('ui', 'portal → 回城结算');
+      const collected = collectAllLoot(state);
+      state.run.collectedLoot = state.run.collectedLoot + collected.length;
+      if (collected.length > 0) pushToast(state, `掉落已入背包 ×${collected.length}`, '#ffd64a');
+      if (state.run.bossKilled) {
+        const prev = state.run.best[state.difficulty];
+        if (prev === undefined || state.run.timeSec < prev) {
+          state.run.best[state.difficulty] = state.run.timeSec;
+          pushToast(state, `新纪录! ${formatTime(state.run.timeSec)}`, '#ffd64a');
+        }
+      }
+      const cIdx = state.charList.findIndex(c => c.id === state.currentChar);
+      if (cIdx >= 0) {
+        state.charList[cIdx] = { ...state.charList[cIdx], level: state.player.level, difficulty: state.difficulty, theme: state.run.theme };
+      }
+      void persistNow();
+      setScreen(state, 'victory');
+      inf('ui', 'portal → 回城结算 (victory)');
     } else if (k === '2' || k === 'escape') {
       // 继续: 留在本局 (门仍在 Boss 死亡位)
       setScreen(state, 'dungeon');
@@ -1133,17 +1148,18 @@ function loopImpl(now: number) {
         const pool = THEME_MONSTER_POOL[state.run.theme];
         for (let i = 0; i < 4; i++) {
           const t = pool[Math.floor(Math.random() * pool.length)];
-          const ob = spawnMonster(state, t);
-          ob.elite = true;           // 外层 Boss 级: 精英倍率
+          // Review 修复: forceElite 在 spawn 时生效 (hp×2.2 + mech 挂载), 之前事后置 elite 无效
+          const ob = spawnMonster(state, t, undefined, { forceElite: true });
           const mainElem = EXTRACT_ELEMENT_ORDER[i];  // 方向位固定主元素
           const subElem = randomSubElement(mainElem);
           ob.elementId = mainElem;
           ob.subElement = subElem;
           ob.hue = ELEMENT_DEFS[mainElem].hue;
+          ob.bossLike = true;  // 外层 Boss: 享受二阶段狂暴 + skill3 技能池
           ob.size = { w: ob.size.w * 1.5, h: ob.size.h * 1.5 };
           ob.hp = Math.round(ob.hp * 3);
           ob.maxHp = ob.hp;
-          ob.skill3 = rollBossSkill3();  // A-W3 技能池
+          ob.skill3 = rollBossSkill3();  // A-W3 技能池 (bossLike 触发)
           // 分置四方向 (外→内)
           const a = (Math.PI / 2) * i;
           ob.pos = {
@@ -1187,18 +1203,14 @@ function loopImpl(now: number) {
       }
     } else if (ph === 'won' && !state.run.victoryShown) {
       state.run.victoryShown = true;
+      // A-W1 门结算: 不再自动进 victory 屏 — 玩家走到 Boss 死亡位传送门前按 V 交互结算
       state.run.timeSec = Math.max(0, (performance.now() - state.run.t0) / 1000);
-      const prev = state.run.best[state.difficulty];
-      if (prev === undefined || state.run.timeSec < prev) {
-        state.run.best[state.difficulty] = state.run.timeSec;
-        pushToast(state, `新纪录! ${formatTime(state.run.timeSec)}`, '#ffd64a');
-      }
-      // 进度解锁 (OPT-015): 首次通关记录主题
+      // 进度解锁 (OPT-015): 首次通关记录主题 (结算时持久化)
       if (!state.cleared.includes(state.run.theme)) {
         state.cleared.push(state.run.theme);
         pushToast(state, `已解锁: ${state.run.theme}`, '#9cf');
       }
-      // 传承 (D-01 补完): 本局已绑定符文存入账号层, 新局自动绑定
+      // 传承 (D-01 补完): 本局已绑定符文存入账号层, 新局自动绑定 (结算时持久化)
       for (const slot of SKILL_SLOTS) {
         const r = skillRune(slot);
         if (r && !state.legacy.some(l => l.slot === slot)) {
@@ -1206,20 +1218,8 @@ function loopImpl(now: number) {
           pushToast(state, `传承: ${slotDisplay(slot)} → ${RUNE_DEFS[r].name}`, '#c9aaff');
         }
       }
-      // M5 实测修复: Boss 掉落全部入背包 (胜利屏前收集, 不再捡不到)
-      const collected = collectAllLoot(state);
-      state.run.collectedLoot = collected.length;
-      if (collected.length > 0) {
-        pushToast(state, `Boss 掉落已入背包 ×${collected.length}`, '#ffd64a');
-      }
-      setScreen(state, 'victory');
-      // C-201: 通关后持久化 (cleared/best/last_char) + 刷新角色摘要等级
-      const cIdx = state.charList.findIndex(c => c.id === state.currentChar);
-      if (cIdx >= 0) {
-        state.charList[cIdx] = { ...state.charList[cIdx], level: state.player.level, difficulty: state.difficulty, theme: state.run.theme };
-      }
-      void persistNow();
-      inf('ui', `VICTORY: ${state.run.timeSec.toFixed(1)}s (${state.difficulty}) collected=${collected.length}`);
+      pushToast(state, 'Boss 已击败 — 传送门已开启 (V 回城结算)', '#ffd64a');
+      inf('ui', `VICTORY(待结算): ${state.run.timeSec.toFixed(1)}s (${state.difficulty}) — 等待门交互`);
     }
   }
 
@@ -2105,6 +2105,8 @@ function drawFrameToScreen() {
   gl.activeTexture(gl.TEXTURE0);
   const pbundle = res.atlases.get('particles');
   if (pbundle) gl.bindTexture(gl.TEXTURE_2D, pbundle.texture);
+  // Review 修复: 显式 additive (粒子发光语义), 并同步 draw.ts 的 lastBlend 缓存
+  setBlendTracked(gl, 'add');
   const flushGroup = (color: [number, number, number]) => {
     if (particleBatch.pending() > 0) {
       particleBatch.setColor(color[0], color[1], color[2]);
@@ -2157,6 +2159,8 @@ function drawFrameToScreen() {
     addInst(dUv, { x: sp.x, y: sp.y }, sz, sz, fx.rot);
   }
   flushGroup([0.9, 0.9, 0.95]);
+  // 恢复标准混合 (后续怪物/UI 绘制), 同步 draw.ts 缓存
+  setBlendTracked(gl, 'alpha');
 
   // 怪物 (受击时变红闪烁, 复用 color tint)
   for (const m of state.monsters) {
@@ -2419,12 +2423,21 @@ function drawFrameToScreen() {
     hudCtx.textBaseline = 'top';
   }
 
-  // dungeon HUD: 门前提示 (V 交互)
-  if (state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
+  // dungeon HUD: 门前提示 (V 交互); Boss 死后未交互 → 持续引导到门
+  if (state.screen === 'dungeon' && portalActive(state)) {
     hudCtx.textAlign = 'center';
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = 'bold 15px monospace';
-    hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
+    if (nearPortal(state)) {
+      hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
+    } else if (state.run.portal) {
+      const dx = state.run.portal.x - (state.player.pos.x + state.player.size.w / 2);
+      const dy = state.run.portal.y - (state.player.pos.y + state.player.size.h / 2);
+      const dist = Math.hypot(dx, dy);
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
+      hudCtx.fillStyle = '#ccaaff';
+      hudCtx.fillText(`传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`, hudCanvas.width / 2, hudCanvas.height - 60);
+    }
     hudCtx.textAlign = 'left';
   }
 

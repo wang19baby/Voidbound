@@ -298,6 +298,12 @@ export interface Monster {
   elementId?: ElementId;
   /** 副元素 (双元素 Boss): 攻击附加副元素伤; 主元素决定 hue */
   subElement?: ElementId;
+  /** Review 修复: 派生怪标记 (分裂/召唤体) — 死亡不递减 run.alive, 防计数腐蚀 */
+  spawned: boolean;
+  /** Review 修复: 外层元素 Boss (extract 4 只) — 享受二阶段狂暴 + skill3 技能池 */
+  bossLike: boolean;
+  /** flee 逃窜累计秒 (Review: 2.5s 超时恢复攻击, 防永久卡图) */
+  fleeT: number;
 }
 
 let nextMonsterId = 1;
@@ -384,6 +390,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       hue,
       elementId: element,
       subElement: undefined,
+      spawned: false,
+      bossLike: false,
+      fleeT: 0,
     };
     return m;
   }
@@ -423,6 +432,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     enrageT: 0,
     hue: 0,
     subElement: undefined,
+    spawned: false,
+    bossLike: false,
+    fleeT: 0,
   };
 }
 
@@ -489,6 +501,8 @@ export function updateMonsters(state: GameState, dt: number): void {
   const p = state.player.pos;
   const walls = state.world.walls;
   for (const m of state.monsters) {
+    // Review 修复: 跳过死亡尸体 (explode 自爆等已在 death 结算, 防僵尸窗口 1 帧)
+    if (m.hp <= 0) continue;
     const def = MONSTER_DEFS[m.type];
     const dx = p.x - m.pos.x;
     const dy = p.y - m.pos.y;
@@ -530,8 +544,8 @@ export function updateMonsters(state: GameState, dt: number): void {
       }
     }
 
-    // Boss 二阶段: 50% 血 → 狂暴 (提速 1.6x + 双发投射物)
-    if (def.boss && m.phase === 1 && m.hp <= m.maxHp * 0.5) {
+    // Boss 二阶段: 50% 血 → 狂暴 (提速 1.6x + 双发投射物); 外层元素 Boss (bossLike) 同规则
+    if ((def.boss || m.bossLike) && m.phase === 1 && m.hp <= m.maxHp * 0.5) {
       m.phase = 2;
       m.hitFlash = 0.4;
       state.cameraShake = Math.min(18, (state.cameraShake ?? 0) + 14);  // OPT-026 二阶段大震
@@ -547,11 +561,16 @@ export function updateMonsters(state: GameState, dt: number): void {
       }
     }
     // 移动 AI (A-W3 包1): 领主专属
-    if (m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD) {
-      // 残血逃窜: 反向移动 + 提速 (连锁仇恨: 不追击则放走, 不回血)
-      if (dist > 4) {
-        m.vel.x = (dx / dist) * -def.speed * FLEE_SPEED_MULT;
-        m.vel.y = (dy / dist) * -def.speed * FLEE_SPEED_MULT;
+    if (m.moveAI === 'flee') {
+      // 残血逃窜: 反向移动 + 提速; 2.5s 后恢复 (不永久卡图, 逃窜可被风筝消耗掉)
+      if (fleeActive) {
+        m.fleeT = (m.fleeT ?? 0) + dt;
+        if (m.fleeT <= 2.5 && dist > 4) {
+          m.vel.x = (dx / dist) * -def.speed * FLEE_SPEED_MULT;
+          m.vel.y = (dy / dist) * -def.speed * FLEE_SPEED_MULT;
+        }
+      } else {
+        m.fleeT = 0;  // 超时/血量回升 → 恢复追击
       }
     } else if (m.moveAI === 'burrow') {
       m.aiCd -= dt;
@@ -562,8 +581,7 @@ export function updateMonsters(state: GameState, dt: number): void {
           m.vel.x = (dx / (dist || 1)) * def.speed * BURROW_SPEED_MULT;
           m.vel.y = (dy / (dist || 1)) * def.speed * BURROW_SPEED_MULT;
         }
-        m.pos.x += m.vel.x * dt;
-        m.pos.y += m.vel.y * dt;
+        // (位移由通用移动段执行, 避免双重移动)
         if (m.burrowT <= 0) {
           // 出地
           if (dist < def.attackRange * 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
@@ -622,12 +640,15 @@ export function updateMonsters(state: GameState, dt: number): void {
       }
       spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '💥', '#ff9600');
       playSfxClient('hit');
-      m.hp = 0;  // 自爆 = 自身死亡 (掉落照常)
+      // 自爆 = 自身死亡: 走统一死亡结算 (alive--/掉落/经验), 防跑局软锁
+      m.hp = 0;
+      killMonster(state, m);
       inf('combat', `${m.type} 自爆`);
+      continue;
     }
 
-    // 远程攻击: 朝玩家发射投射物 (二阶段双发); 专职光环者不攻击
-    if (!m.pureSupport && def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
+    // 远程攻击: 朝玩家发射投射物 (二阶段双发); 专职光环者不攻击; 逃窜中禁用 (语义一致)
+    if (!m.pureSupport && !fleeActive && def.rangedCooldown && dist < def.aggroRange && dist > def.attackRange * 2 && m.attackCd <= 0) {
       spawnEnemyProjectile(state, m, def.contactDmg);
       if (m.phase === 2) spawnEnemyProjectile(state, m, def.contactDmg, 0.22);
       m.attackCd = m.phase === 2 ? 1.6 : def.rangedCooldown;
@@ -642,7 +663,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.aiCd = def.bossSkill === 'charge' ? 5.0 : 2.5;
       }
     }
-    if (def.boss && m.phase === 2) {
+    if ((def.boss || m.bossLike) && m.phase === 2) {
       m.aiCd -= dt;
       if (m.aiCd <= 0) {
         const didBase = (() => {
@@ -650,6 +671,8 @@ export function updateMonsters(state: GameState, dt: number): void {
             const pool = THEME_MONSTER_POOL[state.run.theme];
             const minion = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
             minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
+            minion.spawned = true;  // Review: 召唤体不递减 alive
+            state.monsters.push(minion);  // Review 修复: 之前漏 push → 召唤 no-op
             m.aiSpawned = (m.aiSpawned ?? 0) + 1;
             m.aiCd = 4.0;
             return true;
@@ -694,6 +717,7 @@ export function updateMonsters(state: GameState, dt: number): void {
                 const pool = THEME_MONSTER_POOL[state.run.theme];
                 const e = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)], undefined, { forceElite: true });
                 e.pos = { x: m.pos.x + (Math.random() * 120 - 60), y: m.pos.y + (Math.random() * 120 - 60) };
+                e.spawned = true;  // Review: 召唤体不递减 alive
                 state.monsters.push(e);
               }
               m.aiCd = SUMMON_ELITES_CD;
@@ -741,8 +765,10 @@ export function updateMonsters(state: GameState, dt: number): void {
     const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
     const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste * (m.enrageT > 0 ? ENRAGE_SPEED_MULT : 1);
     // A-W3 移动 AI 接管移动: flee (残血逃窜) / burrow (遁地中) / leap (蓄力扑击) 时跳过普通追击
+    // flee 2.5s 超时后恢复攻击 (防永久卡图); fleeT 归零由非逃窜帧重置
+    const fleeActive = m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD && (m.fleeT ?? 0) <= 2.5;
     const moveAIActive =
-      (m.moveAI === 'flee' && m.hp > 0 && m.hp <= m.maxHp * FLEE_HP_THRESHOLD) ||
+      fleeActive ||
       (m.moveAI === 'burrow' && m.burrowT > 0) ||
       (m.moveAI === 'leap' && m.leapT > 0);
     if (dist < def.aggroRange && !moveAIActive) {
@@ -783,7 +809,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         }
         dbg('monster', `${m.type} hit player for ${Math.round(dmg)} (hp=${state.player.hp.toFixed(0)})`);
       }
-    } else {
+    } else if (!moveAIActive) {
       m.wanderTimer -= dt;
       const tx = m.wanderTarget.x - m.pos.x;
       const ty = m.wanderTarget.y - m.pos.y;
@@ -796,6 +822,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         m.vel.y = (ty / tdist) * def.speed * 0.5;
       }
     }
+    // (moveAIActive 时 vel 已由 flee/leap/burrow 分支设置, 不再覆盖)
 
     // 移动 + AABB 滑移 (墙)
     m.pos.x = Math.max(0, Math.min(state.world.w - def.size.w, m.pos.x + m.vel.x * dt));
@@ -820,12 +847,12 @@ export function killMonster(state: GameState, m: Monster): void {
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
   state.killsTotal = (state.killsTotal ?? 0) + 1;
   state.run.kills = (state.run.kills ?? 0) + 1;
-  // 跑局推进 (OPT-012): Boss 被杀 → 通关条件; 小怪被杀 → alive--
+  // 跑局推进 (OPT-012): Boss 被杀 → 通关条件; 原始小怪被杀 → alive-- (派生怪不递减, 防腐蚀)
   if (def.boss) {
     state.run.bossKilled = true;
     // A-W1 门结算: Boss 死亡位置生门 (玩家可交互回城/继续)
     state.run.portal = { x: cx, y: cy, bossType: m.type, used: false };
-  } else if (state.run.alive > 0) state.run.alive--;
+  } else if (state.run.alive > 0 && !m.spawned) state.run.alive--;
   const ups = gainExp(state, Math.round(def.score * 2 * DIFFICULTY_MODS[state.difficulty].expMult));
   if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
   if (Math.random() < 0.12) {
@@ -865,6 +892,7 @@ export function killMonster(state: GameState, m: Monster): void {
         c.hp = Math.max(1, Math.round(c.maxHp * 0.25));
         c.maxHp = c.hp;
         c.aiSpawned = 1;
+        c.spawned = true;  // Review: 派生怪不递减 alive
         c.mech = undefined;  // 分裂小怪不带机制
         c.pos = { x: cx + (i === 0 ? -28 : 28), y: cy };
         state.monsters.push(c);
@@ -890,6 +918,7 @@ export function killMonster(state: GameState, m: Monster): void {
       c.hp = Math.max(1, Math.round(c.hp * 0.3));
       c.maxHp = c.hp;
       c.aiSpawned = 1;
+      c.spawned = true;  // Review: 派生怪不递减 alive
       c.pos = { x: cx + (i === 0 ? -24 : 24), y: cy };
       state.monsters.push(c);
     }

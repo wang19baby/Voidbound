@@ -22,6 +22,12 @@ export interface DrawOpts {
 /** 上次混合模式缓存: 避免同模式重复切换 blendFunc */
 let lastBlend: BlendMode = 'alpha';
 
+/** Review 修复: 外部 (instanced 渲染) 设置 blend 时同步缓存, 防 drawSprite 误跳 */
+export function setBlendTracked(gl: WebGL2RenderingContext, mode: BlendMode): void {
+  setBlend(gl, mode);
+  lastBlend = mode;
+}
+
 /** V0 画质: 设置 u_viewport (视口尺寸, 替代 shader 硬编码 1280x720) */
 export function setViewportUniform(gl: WebGL2RenderingContext, q: QuadResources, w: number, h: number): void {
   gl.useProgram(q.program);
@@ -65,17 +71,6 @@ export function drawSprite(
   gl.uniform1f(q.uRot, rot);
   gl.uniform3f(q.uColor, color[0], color[1], color[2]);
   gl.uniform1f(q.uHue, hue);
-
-  gl.useProgram(q.program);
-  gl.bindVertexArray(q.vao);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, bundle.texture);
-  gl.uniform1i(q.uTex, 0);
-  gl.uniform2f(q.uPos, pos.x, pos.y);
-  gl.uniform2f(q.uSize, size.w, size.h);
-  gl.uniform2f(q.uFlip, flip.x, flip.y);
-  gl.uniform1f(q.uRot, rot);
-  gl.uniform3f(q.uColor, color[0], color[1], color[2]);
   const [u, v, du, dv] = spriteUv(sprite, bundle.atlas.width, bundle.atlas.height);
   gl.uniform4f(q.uUv, u, v, du, dv);
   gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
