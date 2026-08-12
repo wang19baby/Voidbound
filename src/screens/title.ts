@@ -211,7 +211,7 @@ export function startNewgameFromTitle(state: GameState): void {
   setNgLaunchT(-1);
   setNgNaming(false);
   setScreen(state, 'newgame');
-  state.titleMsg = '';
+  state.ui.titleMsg = '';
   inf('ui', '新游戏 → 选择屏');
 }
 
@@ -222,9 +222,9 @@ export function openCharactersList(state: GameState): void {
     state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
     state.charConfirmDel = false;
     setScreen(state, 'characters');
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     inf('ui', `角色管理: ${list.length} 个角色`);
-  }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
+  }).catch((err: unknown) => { state.ui.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
 }
 
 /** C (P3-10): 键位条目几何 (绘制与命中共用) */
@@ -253,7 +253,7 @@ export function settingsKeyRects(hudCanvas: HTMLCanvasElement): Array<{ key: str
 export function handleSettingsClick(state: GameState, hudCanvas: HTMLCanvasElement, mx: number, my: number): boolean {
   for (const r of settingsKeyRects(hudCanvas)) {
     if (inRect(mx, my, r.x, r.y, r.w, r.h)) {
-      state.keybindEdit = r.key;
+      state.ui.keybindEdit = r.key;
       pushToast(state, `按新键绑定「${r.label}」 (Esc 取消)`, '#9cf');
       return true;
     }
@@ -294,7 +294,7 @@ export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingConte
   hudCtx.font = 'bold 15px monospace';
   hudCtx.fillText('键位 — 点击条目后按新键 · [R] 恢复默认', w / 2, y0 + 194);
   for (const r of settingsKeyRects(hudCanvas)) {
-    const edit = state.keybindEdit === r.key;
+    const edit = state.ui.keybindEdit === r.key;
     hudCtx.fillStyle = edit ? 'rgba(102,204,255,0.22)' : 'rgba(24,26,36,0.95)';
     hudCtx.fillRect(r.x, r.y, r.w, r.h);
     hudCtx.strokeStyle = edit ? '#66ccff' : '#3a3a4a';
@@ -555,10 +555,10 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   hudCtx.fillStyle = '#888';
   hudCtx.font = '14px monospace';
   hudCtx.fillText(keyHintMain(), w / 2, h - 46);
-  if (state.titleMsg) {
+  if (state.ui.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '16px monospace';
-    hudCtx.fillText(state.titleMsg, w / 2, h - 124);
+    hudCtx.fillText(state.ui.titleMsg, w / 2, h - 124);
   }
   hudCtx.fillStyle = '#4a4a58';
   hudCtx.font = '11px monospace';
@@ -567,7 +567,7 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   hudCtx.textBaseline = 'top';
 
   // 标题页设置面板 (C8: 与暂停共用 drawSettingsPanel, 含滑条/键位自定义)
-  if (state.settingsOpen) {
+  if (state.ui.settingsOpen) {
     drawSettingsPanel(state, hudCtx, hudCanvas);
   }
   ctx.uiCursor(canvas, mouse, menuRects);

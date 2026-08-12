@@ -17,7 +17,7 @@ function handlePlayerDamaged(payload: { dmg: number; src: string }, state: GameS
   if (!state) return;
   // 受击时叠加震动: 受击震动强度按 dmg 缩放, 上限 8
   const shake = Math.min(8, 1.5 + payload.dmg * 0.05);
-  state.cameraShake = Math.max(state.cameraShake ?? 0, shake);
+  state.combat.cameraShake = Math.max(state.combat.cameraShake ?? 0, shake);
   inf('screen.fx', `player damaged ${payload.dmg.toFixed(1)} from ${payload.src}, shake=${shake.toFixed(2)}`);
 }
 

@@ -281,7 +281,7 @@ export function updateMonsters(state: GameState, dt: number): void {
     if ((def.boss || m.bossLike) && m.phase === 1 && m.hp <= m.maxHp * 0.5) {
       m.phase = 2;
       m.hitFlash = 0.4;
-      state.cameraShake = Math.min(18, (state.cameraShake ?? 0) + 14);
+      state.combat.cameraShake = Math.min(18, (state.combat.cameraShake ?? 0) + 14);
       spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y, 'PHASE 2!', '#ff9530');
       spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 110, 0.55, 'circle_03', [1, 0.6, 0.2]);
       spawnBurst(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 14, [1, 0.6, 0.2], 'spark_03', 220, 8, 0.6);
@@ -316,9 +316,9 @@ export function updateMonsters(state: GameState, dt: number): void {
           if (dist < def.attackRange * 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
             const bdmg = Math.round(def.contactDmg * BURROW_EXIT_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
             state.player.hp -= bdmg;
-            state.lastKiller = m.type;
+            state.combat.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${bdmg}`, '#c9aaff');
-            state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+            state.combat.cameraShake = Math.min(12, (state.combat.cameraShake ?? 0) + 6);
             spawnPlayerHitFx(state);
           }
           m.aiCd = BURROW_CD;
@@ -340,9 +340,9 @@ export function updateMonsters(state: GameState, dt: number): void {
         if (m.leapT <= 0 && dist < def.attackRange * 1.6 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
           const ldmg = Math.round(def.contactDmg * LEAP_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
           state.player.hp -= ldmg;
-          state.lastKiller = m.type;
+          state.combat.lastKiller = m.type;
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff9600');
-          state.cameraShake = Math.min(14, (state.cameraShake ?? 0) + 8);
+          state.combat.cameraShake = Math.min(14, (state.combat.cameraShake ?? 0) + 8);
           spawnPlayerHitFx(state);
         }
         m.aiCd = LEAP_CD;
@@ -362,9 +362,9 @@ export function updateMonsters(state: GameState, dt: number): void {
       const dmg = Math.round(def.contactDmg * EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1));
       if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
         state.player.hp -= dmg;
-        state.lastKiller = m.type;
+        state.combat.lastKiller = m.type;
         spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${dmg}`, '#ff7043');
-        state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 8);
+        state.combat.cameraShake = Math.min(12, (state.combat.cameraShake ?? 0) + 8);
         spawnPlayerHitFx(state);
       }
       spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 6, '💥', '#ff9600');
@@ -477,9 +477,9 @@ export function updateMonsters(state: GameState, dt: number): void {
           if (proj > 0 && proj < 300 && perp < LASER_WIDTH / 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
             const ldmg = Math.round(def.contactDmg * LASER_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level));
             state.player.hp -= ldmg;
-            state.lastKiller = m.type;
+            state.combat.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff7043');
-            state.cameraShake = Math.min(12, (state.cameraShake ?? 0) + 6);
+            state.combat.cameraShake = Math.min(12, (state.combat.cameraShake ?? 0) + 6);
             spawnPlayerHitFx(state);
           }
           spawnDamageNum(state, m.pos.x + m.size.w / 2, m.pos.y - 10, 'LASER!', '#ff7043');
@@ -509,8 +509,8 @@ export function updateMonsters(state: GameState, dt: number): void {
         if (stoneskin) dmg *= 0.7;
         state.player.hp -= dmg;
         m.attackCd = 1.0 * frenzyMult;
-        state.lastKiller = m.type;
-        state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 5);
+        state.combat.lastKiller = m.type;
+        state.combat.cameraShake = Math.min(10, (state.combat.cameraShake ?? 0) + 5);
         spawnPlayerHitFx(state);
         if (m.mech === 'curse') {
           state.player.curseT = Math.max(state.player.curseT ?? 0, CURSE_DURATION);
@@ -523,7 +523,7 @@ export function updateMonsters(state: GameState, dt: number): void {
           const subDef = ELEMENT_DEFS[m.subElement];
           const subDmg = Math.max(1, Math.round(dmg * 0.4));
           state.player.hp -= subDmg;
-          state.lastKiller = m.type;
+          state.combat.lastKiller = m.type;
           // DAMAGE_TYPE_COLORS 由 combat 提供 (延迟到 module 加载)
           const subColor = SUB_COLOR_LOOKUP[subDef.dmgType];
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 22, `-${subDmg}`, subColor);
@@ -560,7 +560,7 @@ export function killMonster(state: GameState, m: Monster): void {
   const cx = m.pos.x + m.size.w / 2;
   const cy = m.pos.y + m.size.h / 2;
   const combo = advanceCombo(state);
-  state.score += Math.round(def.score * comboScoreMult(combo));
+  state.combat.score += Math.round(def.score * comboScoreMult(combo));
   state.player.gold = (state.player.gold ?? 0) + Math.max(1, Math.round(def.score * 0.5 * DIFFICULTY_MODS[state.difficulty].dropMult));
   spawnBurst(state, cx, cy, 6, [1, 0.85, 0.3], 'spark_03', 120, 5, 0.4);
   const pcx = state.player.pos.x + state.player.size.w / 2;
@@ -571,7 +571,7 @@ export function killMonster(state: GameState, m: Monster): void {
     spawnBurst(state, pcx, pcy, 3, [1, 0.85, 0.3], 'spark_03', 60, 4, 0.3);
   }
   state.player.skillPoints = (state.player.skillPoints ?? 0) + 1;
-  state.killsTotal = (state.killsTotal ?? 0) + 1;
+  state.combat.killsTotal = (state.combat.killsTotal ?? 0) + 1;
   state.run.kills = (state.run.kills ?? 0) + 1;
   if (def.boss) {
     state.run.bossKilled = true;
@@ -601,7 +601,7 @@ export function killMonster(state: GameState, m: Monster): void {
       if (Math.hypot(pdx, pdy) <= DEATH_EXPLODE_RADIUS && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
         const boom = Math.round(def.contactDmg * DEATH_EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level));
         state.player.hp -= boom;
-        state.lastKiller = m.type;
+        state.combat.lastKiller = m.type;
         spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${boom}`, '#ff7043');
         spawnPlayerHitFx(state);
       }

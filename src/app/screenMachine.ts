@@ -134,12 +134,12 @@ function _titleAct(idx: number, state: GameState, ctx: ScreenKeyContext): void {
   if (hasSave) {
     if (idx === 0) { ctx.continueLastSave(); return; }
     if (idx === 1) { ctx.startNewgameFromTitle(); return; }
-    if (idx === 2) { state.settingsOpen = true; return; }
+    if (idx === 2) { state.ui.settingsOpen = true; return; }
     ctx.openCharactersList();
     return;
   }
   if (idx === 0) { ctx.startNewgameFromTitle(); return; }
-  if (idx === 1) { state.settingsOpen = true; return; }
+  if (idx === 1) { state.ui.settingsOpen = true; return; }
   ctx.openCharactersList();
 }
 export function titleAct(idx: number, state: GameState, ctx: ScreenKeyContext): void { _titleAct(idx, state, ctx); }
@@ -182,17 +182,17 @@ function handleCloseConfirm(e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
 }
 
 function handleKeybindEdit(state: GameState, e: KeyboardEvent): boolean {
-  if (!state.settingsOpen || !state.keybindEdit) return false;
-  if (e.key === 'Escape') { state.keybindEdit = null; return true; }
+  if (!state.ui.settingsOpen || !state.ui.keybindEdit) return false;
+  if (e.key === 'Escape') { state.ui.keybindEdit = null; return true; }
   const kb = loadKeybinds();
   const nk = normKey(e.key);
-  if (state.keybindEdit.startsWith('skills.')) {
-    kb.skills[state.keybindEdit.slice(7) as 'Q' | 'W' | 'E' | 'R'] = nk;
+  if (state.ui.keybindEdit.startsWith('skills.')) {
+    kb.skills[state.ui.keybindEdit.slice(7) as 'Q' | 'W' | 'E' | 'R'] = nk;
   } else {
-    (kb as unknown as Record<string, string>)[state.keybindEdit] = nk;
+    (kb as unknown as Record<string, string>)[state.ui.keybindEdit] = nk;
   }
   saveKeybinds(kb);
-  state.keybindEdit = null;
+  state.ui.keybindEdit = null;
   pushToast(state, '键位已更新', '#9cf');
   return true;
 }
@@ -242,13 +242,13 @@ function handleTitleKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
   const hasSave = state.charList.length > 0;
   _syncTitleFocus(hasSave);
 
-  if (state.settingsOpen) {
-    if (k === '2' || k === 'escape') { state.settingsOpen = false; return true; }
+  if (state.ui.settingsOpen) {
+    if (k === '2' || k === 'escape') { state.ui.settingsOpen = false; return true; }
     if (k === 'r') { resetKeybinds(); pushToast(state, '键位已恢复默认', '#9cf'); return true; }
     if (k === 'n') {
       const next = cycleDifficultyGated(state.difficulty, state.cleared);
       requestDifficulty(state, next);
-      state.titleMsg = `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`;
+      state.ui.titleMsg = `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`;
       return true;
     }
     if (k === 'f') {
@@ -274,8 +274,8 @@ function handleTitleKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
 
 function handleCharactersKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
   const k = e.key.toLowerCase();
-  if (state.collectOpen) {
-    if (k === 'escape' || k === 'c') { state.collectOpen = false; return true; }
+  if (state.ui.collectOpen) {
+    if (k === 'escape' || k === 'c') { state.ui.collectOpen = false; return true; }
     return true;
   }
   if (state.charConfirmDel) {
@@ -299,7 +299,7 @@ function handleCharactersKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyC
   if (k === 'arrowdown' || k === 's') { state.charSel = Math.min(state.charList.length - 1, state.charSel + 1); return true; }
   if (k === 'enter') {
     const target = state.charList[state.charSel];
-    if (!target) { state.titleMsg = '没有可选角色 (按 N 新建)'; return true; }
+    if (!target) { state.ui.titleMsg = '没有可选角色 (按 N 新建)'; return true; }
     ctx.enterTargetCharacter(target);
     return true;
   }
@@ -340,7 +340,7 @@ function handleNewgameKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
   if (k === 'enter') { ctx.startFromNewgame(); return true; }
   if (k === 'escape') {
     setScreen(state, state.ngFrom === 'town' ? 'town' : 'title');
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     ngNaming = false;
     return true;
   }
@@ -393,20 +393,20 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
       state.player.potions = { hp: 3, mp: 3 };
       ctx.enterTown(state);
     }
-    state.dying = false;
+    state.ui.dying = false;
     state.deathSummary = null;
     inf('ui', 'death → town/rerun');
     return true;
   }
   if (k === '2') {
     if (ds.hardcore) {
-      state.dying = false;
+      state.ui.dying = false;
       state.deathSummary = null;
       setScreen(state, 'title');
     } else {
       state.player.gold -= deathGoldPenalty(state.player.gold, 'revive', false);
       revivePlayer(state);
-      state.dying = false;
+      state.ui.dying = false;
       state.deathSummary = null;
       setScreen(state, 'dungeon');
     }
@@ -415,17 +415,17 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
   }
   if (k === '3' && !ds.hardcore) {
     ctx.startRun(state, state.theme, state.difficulty);
-    state.dying = false;
+    state.ui.dying = false;
     state.deathSummary = null;
-    state.deathUndo = 0;
+    state.ui.deathUndo = 0;
     inf('ui', 'death → rerun');
     return true;
   }
-  if (k === '4' && !ds.hardcore && state.deathUndo > 0) {
+  if (k === '4' && !ds.hardcore && state.ui.deathUndo > 0) {
     revivePlayer(state);
-    state.dying = false;
+    state.ui.dying = false;
     state.deathSummary = null;
-    state.deathUndo = 0;
+    state.ui.deathUndo = 0;
     setScreen(state, 'dungeon');
     pushToast(state, '已撤销死亡 (免费)', '#8f8');
     inf('ui', 'death → undo (free revive)');
@@ -452,21 +452,21 @@ function handleVictoryKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
 function handlePauseKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
   const k = e.key.toLowerCase();
   if (k === '1') { setScreen(state, resumeScreen(state)); inf('gl', 'resumed'); return true; }
-  if (k === '2') { state.settingsOpen = !state.settingsOpen; return true; }
+  if (k === '2') { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
   if (k === '3') {
-    state.settingsOpen = false;
+    state.ui.settingsOpen = false;
     void ctx.persistNow().then(() => pushToast(state, '已保存, 返回主菜单', '#9cf'));
     setScreen(state, 'title');
     inf('ui', '返回主菜单 (已保存)');
     return true;
   }
   if (k === '4') {
-    state.settingsOpen = false;
+    state.ui.settingsOpen = false;
     ctx.enterTown(state);
     inf('ui', '进入城镇');
     return true;
   }
-  if (state.settingsOpen) {
+  if (state.ui.settingsOpen) {
     if (k === 'r') { resetKeybinds(); pushToast(state, '键位已恢复默认', '#9cf'); return true; }
     if (k === '+' || k === '=') {
       state.volume = Math.min(1, state.volume + 0.05);
@@ -496,7 +496,7 @@ function handlePauseKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
     return true;
   }
   if (k === 'escape') {
-    if (state.settingsOpen) state.settingsOpen = false;
+    if (state.ui.settingsOpen) state.ui.settingsOpen = false;
     else setScreen(state, resumeScreen(state));
     inf('gl', state.screen === 'pause' ? 'paused' : 'resumed');
     return true;

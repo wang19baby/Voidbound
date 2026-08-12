@@ -42,9 +42,9 @@ export function drawTopRightStats(ctx2d: CanvasRenderingContext2D, state: GameSt
   ctx2d.fillText(`金 ${state.player.gold ?? 0}`, rx, HUD_PAD);
   ctx2d.fillStyle = '#fff';
   ctx2d.font = '13px monospace';
-  ctx2d.fillText(`积分 ${state.score}`, rx, HUD_PAD + 22);
+  ctx2d.fillText(`积分 ${state.combat.score}`, rx, HUD_PAD + 22);
   ctx2d.fillStyle = '#bbb';
-  ctx2d.fillText(`击杀 ${state.killsTotal ?? 0}`, rx, HUD_PAD + 40);
+  ctx2d.fillText(`击杀 ${state.combat.killsTotal ?? 0}`, rx, HUD_PAD + 40);
   ctx2d.fillStyle = '#9cc';
   ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, rx, HUD_PAD + 58);
   if (state.screen === 'dungeon') {
@@ -75,7 +75,7 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
   const cellPy = mh / state.viewport.h * BX;
   for (let by = camBy0; by <= camBy1; by++) {
     for (let bx = camBx0; bx <= camBx1; bx++) {
-      if (state.explored.has(`${bx},${by}`)) {
+      if (state.ui.explored.has(`${bx},${by}`)) {
         ctx2d.fillStyle = 'rgba(180,200,255,0.14)';
         ctx2d.fillRect(mx + (bx * BX - state.camera.x) * (mw / state.viewport.w), my + (by * BX - state.camera.y) * (mh / state.viewport.h), cellPx + 0.5, cellPy + 0.5);
       }
@@ -83,7 +83,7 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
   }
   for (const w of state.world.walls) {
     const bl = Math.floor(w.pos.x / BX) + ',' + Math.floor(w.pos.y / BX);
-    if (!state.explored.has(bl)) continue;
+    if (!state.ui.explored.has(bl)) continue;
     ctx2d.fillStyle = '#5a5a6a';
     ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
   }
@@ -93,7 +93,7 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
   }
   ctx2d.fillStyle = '#fff';
   ctx2d.fillRect(mx + state.player.pos.x * sx - 2, my + state.player.pos.y * sy - 2, 5, 5);
-  const explFrac = Math.min(1, state.explored.size / ((WORLD_W / BX) * (WORLD_H / BX)));
+  const explFrac = Math.min(1, state.ui.explored.size / ((WORLD_W / BX) * (WORLD_H / BX)));
   ctx2d.fillStyle = '#8f8';
   ctx2d.font = '11px monospace';
   ctx2d.fillText(`探索 ${Math.round(explFrac * 100)}%`, rx, my + mh + 4);

@@ -35,11 +35,11 @@ export function drawPickupToasts(ctx2d: CanvasRenderingContext2D, state: GameSta
 
 // COMBO (顶部中央, toast 下方)
 export function drawCombo(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number): void {
-  if (!(state.combo.count > 1 && state.combo.timer > 0)) return;
+  if (!(state.combat.combo.count > 1 && state.combat.combo.timer > 0)) return;
   ctx2d.textAlign = 'center';
   ctx2d.fillStyle = '#ffd64a';
   ctx2d.font = 'bold 22px monospace';
-  ctx2d.fillText(`COMBO x${state.combo.count}`, vw / 2, 118);
+  ctx2d.fillText(`COMBO x${state.combat.combo.count}`, vw / 2, 118);
   ctx2d.textAlign = 'left';
 }
 
@@ -108,8 +108,8 @@ export function drawDamageNumbers(ctx2d: CanvasRenderingContext2D, state: GameSt
 
 // 升级全屏金光 (US-019)
 export function drawLevelUpFlash(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
-  if (state.levelUpFlash <= 0) return;
-  const a = Math.min(1, state.levelUpFlash / 0.3);
+  if (state.combat.levelUpFlash <= 0) return;
+  const a = Math.min(1, state.combat.levelUpFlash / 0.3);
   ctx2d.globalAlpha = a * 0.30;
   ctx2d.fillStyle = '#ffd700';
   ctx2d.fillRect(0, 0, vw, vh);

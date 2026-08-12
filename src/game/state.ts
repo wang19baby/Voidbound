@@ -17,6 +17,10 @@ import type { DamageNum } from './fx/damageNum';
 import type { DeathFx } from './fx/deathFx';
 import type { Toast } from './toast';
 import type { EnemyProjectile } from './monsters/proj';
+import type { CombatState } from './state/combat';
+import type { UiState } from './state/ui';
+import { createEmptyCombatState } from './state/combat';
+import { createEmptyUiState } from './state/ui';
 
 export interface Camera {
   x: number;
@@ -234,32 +238,20 @@ export interface GameState {
   monsters: Monster[];
   /** 技能/机制视觉特效 (UX_REVIEW §8.3): 扩散环/爆裂/闪电/辉光 */
   vfx: Vfx[];
-  score: number;
   /** 屏幕状态机 (OPT-010) */
   screen: Screen;
   /** 暂停来源 (dungeon/town, 恢复用) */
   pauseFrom: Screen;
-  dying: boolean;
   theme: 'forest' | 'desert' | 'ruin' | 'void';
   resources: RenderResources;
   /** 难度 (US-011, F-DIFF) */
   difficulty: Difficulty;
   /** 跑局状态 (OPT-012) */
   run: RunState;
-  /** 累计击杀 (HUD 显示) */
-  killsTotal: number;
   /** 场景: 地下城 / 城镇 (US-021) */
   mode: 'dungeon' | 'town';
   /** 进入城镇前的地下城坐标 (出发时还原) */
   townReturn: { x: number; y: number } | null;
-  /** 连击 (US-017) */
-  combo: { count: number; timer: number };
-  /** 升级全屏闪光剩余秒 (US-019) */
-  levelUpFlash: number;
-  /** B-V2 Boss 入场演出: >0 = 横幅+全屏泛光脉动剩余秒; 文案在 introText */
-  bossIntroT: number;
-  bossIntroText: string;
-  bossIntroTitle: string;
   /** 装备面板: 选中背包索引 / 当前页 (C-502 网格分页) */
   equipSel: number;
   equipPage: number;
@@ -269,12 +261,6 @@ export interface GameState {
   rejectedRunes: SkillSlot[];
   /** 施法失败红闪 (OPT-007): 技能槽 + 倒计时秒 */
   castFailFlash: { slot: SkillSlot; t: number } | null;
-  /** 屏幕震动幅度 (OPT-026): 受击/Boss 二阶段触发, 每帧衰减 */
-  cameraShake: number;
-  /** 命中停顿 (V0 画质): >0 时冻结世界模拟, 仅渲染; 暴击触发 ~0.1s */
-  hitStop: number;
-  /** 最近一次伤害来源 (内容扩充): 死亡结算显示击杀者 */
-  lastKiller: string | null;
   /** 环境粒子 (OPT-027): 主题氛围微尘 */
   envFx: Array<{ x: number; y: number; vx: number; vy: number; t: number; life: number }>;
   /** 死亡触发毒池 (A-W3 death_trigger): 站内每秒伤害 (本次 A.1 收口, 类型安全) */
@@ -302,14 +288,10 @@ export interface GameState {
   materials: Partial<Record<import('./equipment').MaterialId, number>>;
   /** 城镇鼠标走向目标 (v3): 点击 NPC 自动走向, 到达后自动交互 (null=无) */
   townWalk: { kind: import('./town').NpcKind; x: number; y: number } | null;
-  /** C (P2-8): 已探索 64px 块 "cx,cy" (会话内) */
-  explored: Set<string>;
-  /** C (死亡撤销): 死亡后 N 秒内可免费撤销, 0=已过期 */
-  deathUndo: number;
-  /** C (P1-4): 收集总览覆盖层 (characters 屏) */
-  collectOpen: boolean;
-  /** C (P3-10): 键位编辑捕获目标 (设置面板点条目后按新键) */
-  keybindEdit: string | null;
+  /** 战斗相关子状态 (PR #1 T4-a): 连击/震屏/停顿/击杀者/Boss 入场/升级闪光/积分/累计击杀 */
+  combat: CombatState;
+  /** UI 相关子状态 (PR #1 T4-b): 设置面板/收集覆盖层/键位编辑/死亡撤销/探索度/标题消息 */
+  ui: UiState;
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;

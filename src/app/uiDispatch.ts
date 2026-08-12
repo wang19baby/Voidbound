@@ -79,7 +79,7 @@ export function handleUiClick(ctx: UiCtx): boolean {
       const cx = w / 2, btnW = 320, btnH = 38;
       const hasSave = state.charList.length > 0;
       // TS-009: 设置齿轮入口
-      if (inRect(mx, my, w - 50, h - 50, 36, 36)) { state.settingsOpen = !state.settingsOpen; return true; }
+      if (inRect(mx, my, w - 50, h - 50, 36, 36)) { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
       // TS-003: 右侧最近存档卡片
       const cards = hasSave
         ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
@@ -94,7 +94,7 @@ export function handleUiClick(ctx: UiCtx): boolean {
         return true;
       }
       // 设置面板键位条目 (P3-10)
-      if (state.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
+      if (state.ui.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
       // 菜单项
       const itemYs: Array<{ y: number; idx: number }> = hasSave
         ? [{ y: menuY0 + 40, idx: 1 }, { y: menuY0 + 80, idx: 2 }, { y: menuY0 + 120, idx: 3 }]
@@ -131,16 +131,16 @@ export function handleUiClick(ctx: UiCtx): boolean {
     }
     case 'pause': {
       // 设置面板键位条目 (P3-10)
-      if (state.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
+      if (state.ui.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
       const totalW = 460, segW = totalW / 4;
       const x0 = w / 2 - totalW / 2, y0 = h / 2 - 30, segH = 44;
       const segs: Array<() => void> = [
         () => ctx.setScreen(state, ctx.resumeScreen(state)),
-        () => { state.settingsOpen = !state.settingsOpen; },
-        () => { state.settingsOpen = false; void persistNowApp(state).then(() => pushToast(state, '已保存, 返回主菜单', '#9cf')); ctx.setScreen(state, 'title'); },
-        () => { state.settingsOpen = false; ctx.enterTown(); },
+        () => { state.ui.settingsOpen = !state.ui.settingsOpen; },
+        () => { state.ui.settingsOpen = false; void persistNowApp(state).then(() => pushToast(state, '已保存, 返回主菜单', '#9cf')); ctx.setScreen(state, 'title'); },
+        () => { state.ui.settingsOpen = false; ctx.enterTown(); },
       ];
-      if (!state.settingsOpen) {
+      if (!state.ui.settingsOpen) {
         for (let i = 0; i < segs.length; i++) {
           if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
         }
@@ -154,23 +154,23 @@ export function handleUiClick(ctx: UiCtx): boolean {
       const ds = state.deathSummary;
       const segs: Array<() => void> = ds.hardcore
         ? [
-            () => { ctx.hardcoreWipe(state); ctx.startRun(); state.dying = false; state.deathSummary = null; },
-            () => { state.dying = false; state.deathSummary = null; ctx.setScreen(state, 'title'); },
+            () => { ctx.hardcoreWipe(state); ctx.startRun(); state.ui.dying = false; state.deathSummary = null; },
+            () => { state.ui.dying = false; state.deathSummary = null; ctx.setScreen(state, 'title'); },
           ]
         : [
-            () => { state.player.gold -= ctx.deathGoldPenalty(state.player.gold, 'town', false); state.player.potions = { hp: 3, mp: 3 }; ctx.enterTown(); state.dying = false; state.deathSummary = null; },
-            () => { state.player.gold -= ctx.deathGoldPenalty(state.player.gold, 'revive', false); ctx.revivePlayer(state); state.dying = false; state.deathSummary = null; ctx.setScreen(state, 'dungeon'); },
-            () => { ctx.startRun(); state.dying = false; state.deathSummary = null; },
+            () => { state.player.gold -= ctx.deathGoldPenalty(state.player.gold, 'town', false); state.player.potions = { hp: 3, mp: 3 }; ctx.enterTown(); state.ui.dying = false; state.deathSummary = null; },
+            () => { state.player.gold -= ctx.deathGoldPenalty(state.player.gold, 'revive', false); ctx.revivePlayer(state); state.ui.dying = false; state.deathSummary = null; ctx.setScreen(state, 'dungeon'); },
+            () => { ctx.startRun(); state.ui.dying = false; state.deathSummary = null; },
           ];
       for (let i = 0; i < segs.length; i++) {
         if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
       }
       // C (死亡撤销): 撤销按钮 (5s 窗口)
-      if (!ds.hardcore && state.deathUndo > 0 && inRect(mx, my, w / 2 - 150, h / 2 + 120, 300, 36)) {
+      if (!ds.hardcore && state.ui.deathUndo > 0 && inRect(mx, my, w / 2 - 150, h / 2 + 120, 300, 36)) {
         ctx.revivePlayer(state);
-        state.dying = false;
+        state.ui.dying = false;
         state.deathSummary = null;
-        state.deathUndo = 0;
+        state.ui.deathUndo = 0;
         ctx.setScreen(state, 'dungeon');
         pushToast(state, '已撤销死亡 (免费)', '#8f8');
         return true;
@@ -243,7 +243,7 @@ export function handleUiClick(ctx: UiCtx): boolean {
       // 返回 (按来源)
       if (inRect(mx, my, w - 220, 20, 200, 40) || inRect(mx, my, 20, 20, 200, 40)) {
         ctx.setScreen(state, state.ngFrom === 'town' ? 'town' : 'title');
-        state.titleMsg = '';
+        state.ui.titleMsg = '';
         setNgNaming(false);
         return true;
       }
@@ -252,11 +252,11 @@ export function handleUiClick(ctx: UiCtx): boolean {
     case 'characters': {
       const cx = w / 2;
       // C (P1-4): 收集总览关闭
-      if (state.collectOpen) {
-        if (inRect(mx, my, w / 2 - 90, h - 84, 180, 40)) { state.collectOpen = false; return true; }
+      if (state.ui.collectOpen) {
+        if (inRect(mx, my, w / 2 - 90, h - 84, 180, 40)) { state.ui.collectOpen = false; return true; }
         return true;
       }
-      if (inRect(mx, my, w - 150, 20, 130, 30)) { state.collectOpen = !state.collectOpen; return true; }
+      if (inRect(mx, my, w - 150, 20, 130, 30)) { state.ui.collectOpen = !state.ui.collectOpen; return true; }
       if (state.charConfirmDel) {
         if (inRect(mx, my, cx - 200, h / 2 + 20 - 16, 400, 40)) {
           const target = state.charList[state.charSel];

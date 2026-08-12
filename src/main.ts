@@ -11,6 +11,8 @@ import { attachKeyboard } from './input/keyboard';
 import { attachMouse, type MouseHandle } from './input/mouse';
 import { updatePlayer, castFireball, usePotion, startDodge } from './game/player';
 import { updateCamera, pickPlayerSprite, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
+import { createEmptyCombatState } from './game/state/combat';
+import { createEmptyUiState } from './game/state/ui';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
@@ -200,9 +202,7 @@ const state = {
   _owned: [] as import('./game/equipment').Equipment[],
   _toasts: [] as import('./game/toast').Toast[],
   _enemyProj: [] as import('./game/monsters/proj').EnemyProjectile[],
-  score: 0,
   paused: false,
-  dying: false,
   deathSummary: null as DeathSummary | null,
   reviveInvuln: 0,
   theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
@@ -222,21 +222,13 @@ const state = {
   trainerSel: 0,
   /** 仓库操作闪光 (C-503 动画): 存取成功后 0.3s 高亮面板 */
   whFlash: 0,
-  settingsOpen: false,
   screen: 'title' as Screen,
   pauseFrom: 'dungeon' as Screen,
   ngSel: ngDefault(),
   /** 新局屏来源: title=标题新游戏(可选职业) / town=城镇出发(职业锁定当前角色) */
   ngFrom: 'title' as 'title' | 'town',
-  titleMsg: '',
   difficulty: 'normal' as Difficulty,
   run: emptyRun('forest'),
-  killsTotal: 0,
-  combo: { count: 0, timer: 0 },
-  levelUpFlash: 0,
-  bossIntroT: 0,
-  bossIntroText: '',
-  bossIntroTitle: '',
   volume: 0.8,
   equipSel: 0,
   equipPage: 0,
@@ -245,9 +237,6 @@ const state = {
   confirmHardcore: false,
   pendingDifficulty: null,
   castFailFlash: null,
-  cameraShake: 0,
-  hitStop: 0,
-  lastKiller: null,
   envFx: [],
   resources: res,
   // M5 W2 多角色 (C-201~203): 当前角色 / 角色列表 / 选中索引 / 新建流程
@@ -261,20 +250,16 @@ const state = {
   tutorShown: false,
   tutorStep: -1,
   tutorT: 0,
-  /** C: 探索度 (P2-8) 已探索 64px 块 (会话内, 不持久化) */
-  explored: new Set<string>(),
-  /** C: 死亡撤销窗口 (P0-2): 死亡后 N 秒内可免费撤销, 0 = 已过期 */
-  deathUndo: 0,
-  /** C: 收集总览覆盖层 (P1-4): characters 屏 */
-  collectOpen: false,
-  /** C: 键位自定义 (P3-10): 设置面板正在捕获的新键条目 (null=无) */
-  keybindEdit: null as string | null,
   // C-503 仓库: 账号层共享 (跨角色)
   warehouse: [] as Equipment[],
   // M5 W4 C-401 材料: 独立计数
   materials: emptyMaterials(),
   // v3 鼠标化: 城镇 NPC 走向目标
   townWalk: null as { kind: NpcKind; x: number; y: number } | null,
+  // PR #1 T4-a: 战斗子状态 (连击/震屏/停顿/击杀者/Boss 入场/升级闪光/积分/累计击杀)
+  combat: createEmptyCombatState(),
+  // PR #1 T4-b: UI 子状态 (设置面板/收集覆盖层/键位编辑/死亡撤销/探索度/标题消息)
+  ui: createEmptyUiState(),
 };
 
 // US-024-c: drawTitle 已搬到 screens/title.ts, 启动时装配一次 TitleCtx, 主循环每帧复用
@@ -436,7 +421,7 @@ if (e.key === 'o' || e.key === 'O') {
       state.player.mp = d.player_mp;
       state.player.facing.x = d.facing_x;
       state.player.facing.y = d.facing_y;
-      state.score = d.score;
+      state.combat.score = d.score;
       state.player.gold = d.gold ?? 0;
       state.player.level = d.level ?? 1;
       // 装备层还原 (重建 id, 统一走拥有列表)
@@ -705,7 +690,7 @@ function loopImpl(now: number) {
   }
 
   // 设置滑条拖动 (v3 鼠标化): LMB 按住且在滑条±容差带 → 音量即点即得 (title/pause 共用同一几何)
-  if (state.settingsOpen && mouse.state().buttons.LMB) {
+  if (state.ui.settingsOpen && mouse.state().buttons.LMB) {
     const p = mouse.state().pos;
     const sx = state.viewport.w / 2 - 120, sy = state.viewport.h / 2 - 22, sw = 240, sh = 10;
     if (p.y >= sy - 14 && p.y <= sy + sh + 14 && p.x >= sx - 10 && p.x <= sx + sw + 10) {
@@ -782,8 +767,8 @@ function loopImpl(now: number) {
   }
 
   // V0 命中停顿: 冻结世界模拟 (输入/怪物/弹幕/回血), 仍渲染 — 暴击时 ~0.1s 的打击感
-  if (state.hitStop > 0) {
-    state.hitStop = Math.max(0, state.hitStop - dt);
+  if (state.combat.hitStop > 0) {
+    state.combat.hitStop = Math.max(0, state.combat.hitStop - dt);
     drawFrame();
     mouse.reset();
     return; // 包装器统一 rAF
@@ -806,7 +791,7 @@ function loopImpl(now: number) {
     const px = Math.floor((state.player.pos.x + state.player.size.w / 2) / BX);
     const py = Math.floor((state.player.pos.y + state.player.size.h / 2) / BX);
     for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) state.explored.add(`${px + dx},${py + dy}`);
+      for (let dx = -1; dx <= 1; dx++) state.ui.explored.add(`${px + dx},${py + dy}`);
     }
   }
   updateCamera(state);
@@ -833,18 +818,18 @@ function loopImpl(now: number) {
         const py = state.player.pos.y;
         if (px >= pk.x && px <= pk.x + pk.r && py >= pk.y && py <= pk.y + pk.r) {
           state.player.hp -= pk.dps * dt;
-          state.lastKiller = '毒池';
+          state.combat.lastKiller = '毒池';
         }
       }
     }
   }
-  if (state.combo.timer > 0) {
-    state.combo.timer -= dt;
-    if (state.combo.timer <= 0) state.combo.count = 0;
+  if (state.combat.combo.timer > 0) {
+    state.combat.combo.timer -= dt;
+    if (state.combat.combo.timer <= 0) state.combat.combo.count = 0;
   }
-  if (state.levelUpFlash > 0) state.levelUpFlash -= dt;
+  if (state.combat.levelUpFlash > 0) state.combat.levelUpFlash -= dt;
   // B-V2 Boss 入场演出倒计时
-  if (state.bossIntroT > 0) state.bossIntroT -= dt;
+  if (state.combat.bossIntroT > 0) state.combat.bossIntroT -= dt;
   resolveFireballHits(state);
   resolveMeleeHits(state);
   cullLoot(state, nowSec);  // OPT-032: 60s 后地面装备消失
@@ -852,18 +837,18 @@ function loopImpl(now: number) {
   state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + 2 * dt);  // 被动回血
 
   // 死亡检测 (OPT-011, B1): 进入死亡结算屏, 由玩家选择 (不再 2s 强制原地复活)
-  if (state.player.hp <= 0 && !state.dying && state.screen === 'dungeon') {
-    state.dying = true;
+  if (state.player.hp <= 0 && !state.ui.dying && state.screen === 'dungeon') {
+    state.ui.dying = true;
     state.deathSummary = deathSummary(state);
-    state.deathUndo = 5;  // C (死亡撤销): 5s 免费撤销窗口 (仅软核)
+    state.ui.deathUndo = 5;  // C (死亡撤销): 5s 免费撤销窗口 (仅软核)
     setScreen(state, 'death');
-    inf('combat', 'YOU DIED (score=' + state.score + ')');
+    inf('combat', 'YOU DIED (score=' + state.combat.score + ')');
   }
   // 原地复活无敌 (OPT-011): 竖屏后倒计时
   if (state.reviveInvuln > 0) state.reviveInvuln -= dt;
   // C (死亡撤销): death 屏倒计时归零 (5s 窗口)
-  if (state.screen === 'death' && state.deathUndo > 0) {
-    state.deathUndo = Math.max(0, state.deathUndo - dt);
+  if (state.screen === 'death' && state.ui.deathUndo > 0) {
+    state.ui.deathUndo = Math.max(0, state.ui.deathUndo - dt);
   }
   // 施法失败红闪 (OPT-007): 倒计时
   if (state.castFailFlash) {
@@ -960,14 +945,14 @@ function loopImpl(now: number) {
   // OPT-026 屏幕震动: 渲染期间偏移相机, 之后还原 + 衰减
   const camX0 = state.camera.x;
   const camY0 = state.camera.y;
-  if (state.cameraShake > 0.3) {
-    state.camera.x += (Math.random() - 0.5) * state.cameraShake;
-    state.camera.y += (Math.random() - 0.5) * state.cameraShake;
+  if (state.combat.cameraShake > 0.3) {
+    state.camera.x += (Math.random() - 0.5) * state.combat.cameraShake;
+    state.camera.y += (Math.random() - 0.5) * state.combat.cameraShake;
   }
   drawFrame();
   state.camera.x = camX0;
   state.camera.y = camY0;
-  if (state.cameraShake > 0) state.cameraShake = Math.max(0, state.cameraShake - 30 * dt);
+  if (state.combat.cameraShake > 0) state.combat.cameraShake = Math.max(0, state.combat.cameraShake - 30 * dt);
   mouse.reset();
 }
 
@@ -1401,10 +1386,10 @@ function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode?:
   state.theme = theme;
   state.difficulty = difficulty;
   state.run.mode = mode ?? state.run.mode ?? 'linear';
-  state.score = 0;
-  state.dying = false;
+  state.combat.score = 0;
+  state.ui.dying = false;
   state.fireballs.length = 0;
-  state.combo = { count: 0, timer: 0 };
+  state.combat.combo = { count: 0, timer: 0 };
   state.player.dodgeT = 0;
   state.player.dodgeCd = 0;
   state.player.potionCd = 0;
@@ -1444,10 +1429,10 @@ function ensureDungeonRun(state: GameState): void {
 
 /** B-V2 Boss 入场演出: 横幅倒计时 + 泛光种子; 全屏渲染层读取 */
 function triggerBossIntro(state: GameState, title: string, text: string): void {
-  state.bossIntroT = 2.8;
-  state.bossIntroTitle = title;
-  state.bossIntroText = text;
-  state.cameraShake = Math.min(20, (state.cameraShake ?? 0) + 10);
+  state.combat.bossIntroT = 2.8;
+  state.combat.bossIntroTitle = title;
+  state.combat.bossIntroText = text;
+  state.combat.cameraShake = Math.min(20, (state.combat.cameraShake ?? 0) + 10);
 }
 
 /** 秒 → mm:ss */
@@ -1507,7 +1492,7 @@ function drawCharacters() {
     hudCtx.fillText('收集进度', hudCanvas.width - 85, 36);
   }
   // C (P1-4): 收集总览覆盖层
-  if (state.collectOpen) {
+  if (state.ui.collectOpen) {
     drawCollectionPanel();
     return;
   }
@@ -1581,10 +1566,10 @@ function drawCharacters() {
   hudCtx.fillStyle = '#fff';
   hudCtx.font = 'bold 15px monospace';
   hudCtx.fillText('[↑/↓] 选择 · [Enter] 进入/切换 · [N] 新建 · [D] 删除 · [Esc] 返回', cx, hudCanvas.height - 46);
-  if (state.titleMsg) {
+  if (state.ui.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '14px monospace';
-    hudCtx.fillText(state.titleMsg, cx, hudCanvas.height - 80);
+    hudCtx.fillText(state.ui.titleMsg, cx, hudCanvas.height - 80);
   }
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
@@ -1755,7 +1740,7 @@ function drawFrameToScreen() {
     hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hudCtx.textAlign = 'center';
-    if (!state.settingsOpen) {
+    if (!state.ui.settingsOpen) {
       hudCtx.fillStyle = '#fff';
       hudCtx.font = 'bold 48px monospace';
       hudCtx.textBaseline = 'middle';
@@ -1804,15 +1789,15 @@ function drawFrameToScreen() {
       // C (死亡撤销): 第 4 按钮 + 倒计时 (5s 窗口)
       const ux = hudCanvas.width / 2, uy = hudCanvas.height / 2 + 120;
       const uR: [number, number, number, number] = [ux - 150, uy, 300, 36];
-      const uHit = state.deathUndo > 0 && inRect(mouse.state().pos.x, mouse.state().pos.y, ...uR);
-      hudCtx.fillStyle = state.deathUndo > 0 ? (uHit ? 'rgba(140,255,140,0.18)' : 'rgba(40,70,40,0.7)') : 'rgba(30,30,34,0.5)';
+      const uHit = state.ui.deathUndo > 0 && inRect(mouse.state().pos.x, mouse.state().pos.y, ...uR);
+      hudCtx.fillStyle = state.ui.deathUndo > 0 ? (uHit ? 'rgba(140,255,140,0.18)' : 'rgba(40,70,40,0.7)') : 'rgba(30,30,34,0.5)';
       hudCtx.fillRect(...uR);
-      hudCtx.strokeStyle = state.deathUndo > 0 ? '#8f8' : '#444';
+      hudCtx.strokeStyle = state.ui.deathUndo > 0 ? '#8f8' : '#444';
       hudCtx.lineWidth = uHit ? 2 : 1;
       hudCtx.strokeRect(...uR);
-      hudCtx.fillStyle = state.deathUndo > 0 ? '#8f8' : '#8a8a96';
+      hudCtx.fillStyle = state.ui.deathUndo > 0 ? '#8f8' : '#8a8a96';
       hudCtx.font = 'bold 15px monospace';
-      hudCtx.fillText(state.deathUndo > 0 ? `[4] 撤销死亡 (${state.deathUndo.toFixed(1)}s · 免费)` : '撤销窗口已过', ux, uy + 18);
+      hudCtx.fillText(state.ui.deathUndo > 0 ? `[4] 撤销死亡 (${state.ui.deathUndo.toFixed(1)}s · 免费)` : '撤销窗口已过', ux, uy + 18);
     }
     hudCtx.textAlign = 'left';
   }
@@ -1829,7 +1814,7 @@ function drawFrameToScreen() {
     hudCtx.fillStyle = '#fff';
     hudCtx.font = '20px monospace';
     hudCtx.fillText(`用时 ${formatTime(state.run.timeSec)} · 击杀 ${state.run.kills} · 难度 ${DIFFICULTY_MODS[state.difficulty].name}`, hudCanvas.width / 2, hudCanvas.height / 2 - 60);
-    hudCtx.fillText(`得分 ${state.score} · 掉落入背包 ${state.run.collectedLoot} 件`, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
+    hudCtx.fillText(`得分 ${state.combat.score} · 掉落入背包 ${state.run.collectedLoot} 件`, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
     if (state.run.best[state.difficulty] !== undefined) {
       hudCtx.fillStyle = '#aaa';
       hudCtx.font = '15px monospace';
@@ -1923,8 +1908,8 @@ function drawFrameToScreen() {
   }
 
   // B-V2 Boss 入场演出: 横幅 + 全屏泛光脉动 (2.8s 倒计时)
-  if (state.bossIntroT > 0) {
-    const t = state.bossIntroT;
+  if (state.combat.bossIntroT > 0) {
+    const t = state.combat.bossIntroT;
     const fadeIn = Math.min(1, (2.8 - t) / 0.4);
     const pulse = 0.5 + 0.5 * Math.sin(t * 8);
     // 边缘泛红脉动
@@ -1937,10 +1922,10 @@ function drawFrameToScreen() {
     hudCtx.textBaseline = 'middle';
     hudCtx.fillStyle = `rgba(255, 90, 90, ${fadeIn})`;
     hudCtx.font = 'bold 64px monospace';
-    hudCtx.fillText(state.bossIntroTitle, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
+    hudCtx.fillText(state.combat.bossIntroTitle, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
     hudCtx.fillStyle = `rgba(255, 220, 150, ${fadeIn})`;
     hudCtx.font = 'bold 24px monospace';
-    hudCtx.fillText(state.bossIntroText, hudCanvas.width / 2, hudCanvas.height / 2 + 26);
+    hudCtx.fillText(state.combat.bossIntroText, hudCanvas.width / 2, hudCanvas.height / 2 + 26);
     hudCtx.textAlign = 'left';
     hudCtx.textBaseline = 'top';
   }

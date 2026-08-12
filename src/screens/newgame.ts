@@ -409,7 +409,7 @@ export function startCreateNewgame(state: GameState): void {
   setNgLaunchT(-1);
   setNgNaming(true);
   setScreen(state, 'newgame');
-  state.titleMsg = '';
+  state.ui.titleMsg = '';
   inf('ui', '新建角色 → 新局选择屏 (输入名字)');
 }
 

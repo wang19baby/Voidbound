@@ -63,7 +63,7 @@ export function drawCharacters(ctx: CharactersCtx): void {
     hudCtx.fillText('收集进度', hudCanvas.width - 85, 36);
   }
   // C (P1-4): 收集总览覆盖层
-  if (state.collectOpen) {
+  if (state.ui.collectOpen) {
     drawCollectionPanel(ctx);
     return;
   }
@@ -137,10 +137,10 @@ export function drawCharacters(ctx: CharactersCtx): void {
   hudCtx.fillStyle = '#fff';
   hudCtx.font = 'bold 15px monospace';
   hudCtx.fillText('[↑/↓] 选择 · [Enter] 进入/切换 · [N] 新建 · [D] 删除 · [Esc] 返回', cx, hudCanvas.height - 46);
-  if (state.titleMsg) {
+  if (state.ui.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '14px monospace';
-    hudCtx.fillText(state.titleMsg, cx, hudCanvas.height - 80);
+    hudCtx.fillText(state.ui.titleMsg, cx, hudCanvas.height - 80);
   }
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';

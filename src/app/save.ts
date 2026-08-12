@@ -36,7 +36,7 @@ export function buildSavePayload(state: GameState): SaveData {
     player_mp: state.player.mp,
     facing_x: state.player.facing.x,
     facing_y: state.player.facing.y,
-    score: state.score,
+    score: state.combat.score,
     world_w: state.world.w,
     world_h: state.world.h,
     level: state.player.level,
@@ -150,9 +150,9 @@ export function continueLastSave(state: GameState, ctx: SaveCtx): void {
       setName: it.setName,
     }));
     if (loadedD) resumeFromSave(state, loadedD, ctx);
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     inf('save', `读档并继续 (角色 ${state.currentChar}, 含账号层)`);
-  }).catch((err: unknown) => { state.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
+  }).catch((err: unknown) => { state.ui.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
 }
 
 /** 读档场景分派 (v11): 上次在城镇 → 进城镇整理; 否则进地牢继续 */
@@ -181,7 +181,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
       ctx.ensureDungeonRun(state);
       setScreen(state, 'dungeon');
     }
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     inf('ui', `继续角色 ${target.id}`);
     return;
   }
@@ -192,7 +192,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
     state.player.pos.x = d.player_x; state.player.pos.y = d.player_y;
     state.player.hp = d.player_hp; state.player.mp = d.player_mp;
     state.player.facing.x = d.facing_x; state.player.facing.y = d.facing_y;
-    state.score = d.score; state.player.gold = d.gold ?? 0;
+    state.combat.score = d.score; state.player.gold = d.gold ?? 0;
     state.player.level = d.level ?? 1;
     state.player.skillPoints = d.skill_points ?? 0;
     state.player.exp = d.exp ?? 0;
@@ -231,7 +231,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
       if (sk) sk.level = sl.level;
     }
     resumeFromSave(state, d, ctx);
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     void persistNowApp(state);  // 更新 last_char
     inf('save', `切换到角色 ${target.id} (Lv${d.level ?? 1} ${d.class ?? 'barbarian'})`);
   }).catch((err: unknown) => {
@@ -240,7 +240,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
     bindClass(state, cls);
     ctx.startRun(state, 'forest', 'normal');
     setScreen(state, 'dungeon');
-    state.titleMsg = '';
+    state.ui.titleMsg = '';
     void persistNowApp(state);
     inf('save', `角色 ${target.id} 无存档, 以 ${CLASS_DEFS[cls].name} 开新局 (${String(err)})`);
   });

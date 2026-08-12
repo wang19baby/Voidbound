@@ -30,11 +30,11 @@ export interface DeathSrc {
 export function deathSummary(state: DeathSrc): DeathSummary {
   return {
     level: state.player.level,
-    kills: state.killsTotal,
-    maxCombo: state.combo.count,
+    kills: state.combat.killsTotal,
+    maxCombo: state.combat.combo.count,
     gold: state.player.gold,
     hardcore: state.difficulty === 'hardcore',
-    killer: state.lastKiller ?? null,
+    killer: state.combat.lastKiller ?? null,
   };
 }
 

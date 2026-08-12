@@ -9,7 +9,7 @@
 //
 // 事件总线:
 // - startRun 后 emit run.started (FX 服务可订阅做 bgm 切换/难度提示)
-// - Boss 触发器 (state.bossIntroT) 由 triggerBossIntro 设置
+// - Boss 触发器 (state.combat.bossIntroT) 由 triggerBossIntro 设置
 
 import type { GameState, Theme } from '../game/state';
 import type { Difficulty } from '../game/difficulty';
@@ -62,9 +62,9 @@ export function ensureDungeonRun(state: GameState): void {
 
 /** Boss 入场演出: 全屏泛光脉动 + 横幅文案 */
 export function triggerBossIntro(state: GameState, title: string, text: string): void {
-  state.bossIntroT = 2.5;
-  state.bossIntroTitle = title;
-  state.bossIntroText = text;
+  state.combat.bossIntroT = 2.5;
+  state.combat.bossIntroTitle = title;
+  state.combat.bossIntroText = text;
 }
 
 // 类型引用防止 tree-shake

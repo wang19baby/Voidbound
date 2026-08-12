@@ -58,7 +58,7 @@ export function comboScoreMult(count: number): number {
 
 /** 连击推进: 窗口内击杀 → count++, 超窗重置; 返回新连击数 */
 export function advanceCombo(state: GameState): number {
-  const c = state.combo;
+  const c = state.combat.combo;
   if (c.timer <= 0) c.count = 0;
   c.count++;
   c.timer = COMBO_WINDOW;

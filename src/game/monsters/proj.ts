@@ -96,8 +96,8 @@ export function updateEnemyProj(state: GameState, dt: number): void {
                     state.player.size.w, state.player.size.h)) {
         // 撞玩家 → 扣血 + 消失
         state.player.hp -= p.dmg;
-        state.lastKiller = '弹幕';  // 死亡结算显示
-        state.cameraShake = Math.min(10, (state.cameraShake ?? 0) + 3);  // OPT-026
+        state.combat.lastKiller = '弹幕';  // 死亡结算显示
+        state.combat.cameraShake = Math.min(10, (state.combat.cameraShake ?? 0) + 3);  // OPT-026
         spawnPlayerHitFx(state);
         release = true;
       } else if (p.pos.x < 0 || p.pos.x > state.world.w || p.pos.y < 0 || p.pos.y > state.world.h) {

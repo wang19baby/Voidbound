@@ -39,7 +39,7 @@ export function gainExp(state: GameState, amount: number): number {
     ups++;
   }
   if (ups > 0) {
-    state.levelUpFlash = 0.5;
+    state.combat.levelUpFlash = 0.5;
     pushToast(state, `升级到 Lv ${p.level}`, '#ffd64a');
     playSfxClient('levelup');  // OPT-025
   }
