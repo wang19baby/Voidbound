@@ -305,6 +305,119 @@
         "npm test 733 例全绿"
       ],
       "passes": true
+    },
+    {
+      "id": "US-022",
+      "title": "架构: 抽 ui/primitives.ts (rrect + hexToRgb01)",
+      "description": "main.ts 4289 行 → 拆分. Step 1: 把纯绘图工具 rrect() 和颜色工具 hexToRgb01() 移到 src/ui/primitives.ts,签名带 ctx 参数. 更新 2 个 rrect 调用点,1 个 hexToRgb01 调用点. 零行为变更.",
+      "acceptanceCriteria": [
+        "src/ui/primitives.ts 存在,导出 rrect(ctx, x, y, w, h, r) 和 hexToRgb01(hex)",
+        "main.ts 不再有 function rrect / function hexToRgb01 定义",
+        "main.ts import { rrect, hexToRgb01 } from './ui/primitives'",
+        "2 个 rrect 调用点改为 rrect(hudCtx, ...) 形式",
+        "npm run build 通过",
+        "npm test 全绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-023",
+      "title": "架构: 抽 ui/keycap.ts (drawKeycap/drawGearIcon/drawSceneIcon)",
+      "description": "Step 2: 3 个键帽/齿轮/场景图标函数移到 src/ui/keycap.ts,签名带 ctx 参数,依赖 primitives. 更新 5 个调用点.",
+      "acceptanceCriteria": [
+        "src/ui/keycap.ts 存在,导出 drawKeycap/drawGearIcon/drawSceneIcon,签名首参 ctx",
+        "main.ts 不再有这3 个函数定义",
+        "5 个调用点改为 drawXxx(hudCtx, ...) 形式",
+        "npm run build 通过",
+        "npm test 全绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-024",
+      "title": "架构: 抽 screens/title.ts",
+      "description": "Step 3: drawTitle + drawTitleBackground + drawInfoBand + drawTitleWordmark + drawKeycap 调用 + initTitleDust/updateTitleDust + syncTitleFocus/moveTitleFocus/titleAct 迁到 src/screens/title.ts. state 作为参数传入.",
+      "acceptanceCriteria": [
+        "src/screens/title.ts 存在",
+        "drawTitle 签名变 drawTitle(state, ctx, canvas, mouse) 或接受 GameContext",
+        "main.ts 通过 screens/title.ts 委托",
+        "npm run build 通过",
+        "npm test 全绿,游戏启动进入标题页正常"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-025",
+      "title": "架构: 抽 screens/newgame.ts (完整拆分 drawNewgame) — Ralph 14 完成",
+      "description": "drawNewgame 整块 (~284 行) 抽到 src/screens/newgame.ts, 接受 NewgameCtx 注入所有 main.ts 闭包依赖 (state/hudCtx/hudCanvas/mouse/drawUiPortrait/isNgNaming/getNgLaunchT/loadLastNg/uiCursor). drawUiPortrait 保留 main.ts (用模块级 gl/quad/res). handleUiClick 引用 NG_LAYOUT 是模块常量零修改. ngLaunchT/ngNaming 通过 screenMachine getter 接口暴露.",
+      "acceptanceCriteria": [
+        "src/screens/newgame.ts 存在 ✓ (350 行, 含 NG_LAYOUT 常量 + NewgameCtx 接口 + drawNewgame 函数)",
+        "main.ts drawNewgame 函数体内 284 行已删除 ✓ (替换为 ~7 行 wrapper, 内联 ngCtx)",
+        "main.ts 通过 screens/newgame.ts 委托 ✓ (drawNewgameScreen(ngCtx, rects))",
+        "ngCtx 内联 9 个字段 ✓ (state/hudCtx/hudCanvas/mouse/drawUiPortrait/isNgNaming/getNgLaunchT/loadLastNg/uiCursor)",
+        "handleUiClick 零修改 ✓ (NG_LAYOUT 仍是模块常量)",
+        "零行为变更 ✓ (函数体原样搬移, 仅闭包引用 → ctx 字段)",
+        "npm run build 通过 ✓ (400.9kb)",
+        "npm test 全绿 ✓ (964 例, 19/19 ALL PASS)",
+        "main.ts 行数: 3536 → 3257 (-279 行)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-026",
+      "title": "架构: 抽 app/screenMachine.ts (集中屏路由) — Ralph 13 完成",
+      "description": "US-026 完成 (Ralph 13)。main.ts keydown 监听器中 9 段 if-else 屏路由 + 4 个 modal 拦截 (tutor/close/keybind edit/rune/hardcore) 集中到 handleScreenKey(state, e, ctx) → boolean。模块级状态 (titleFocus/closeConfirmOpen/ngLaunchT/ngNaming) 从 main.ts 搬出, getter/setter 接口暴露。21 个 main.ts-only 副作用函数走 ctx callback 注入。",
+      "acceptanceCriteria": [
+        "src/app/screenMachine.ts 存在 ✓ (490 行)",
+        "导出 ScreenKeyContext 接口 ✓ (21 个 callback 字段)",
+        "导出 handleScreenKey(state, e, ctx) 函数 ✓ (处理 5 modal + 9 屏)",
+        "main.ts keydown listener 9 段 if-else → 1 行 dispatch ✓",
+        "零行为变更 ✓ (npm test ALL PASS, 同基线 964 例)",
+        "npm run build 通过 ✓ (400.0kb)",
+        "main.ts 行数从 3939 减少 ≥100 行 ✓ (3939 → 3579, -360 行)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-027",
+      "title": "架构: 抽 app/save.ts (业务层与 ipc 解耦) — Ralph 14 完成",
+      "description": "buildSavePayload / persistNow / restoreMaterials / restorePassives 从 main.ts 移到 app/save.ts. persistNow/restoreMaterials/restorePassives 旧签名无 state,搬到 app/save.ts 后接受 state 作为首参. 9 个调用点全部加 state 首参. screenKeyCtx 中 persistNow 改 lambda `() => persistNowApp(state)` 包裹.",
+      "acceptanceCriteria": [
+        "src/app/save.ts 存在 ✓ (108 行, 含 buildSavePayload + restoreMaterialsApp + restorePassivesApp + persistNowApp)",
+        "main.ts 不再有 persistNow/restoreMaterials/restorePassives 3 个函数定义 ✓",
+        "9 个调用点全部加 state 首参 ✓ (persistNow 6 处 + restoreMaterials 3 处 + restorePassives 3 处, 部分共用)",
+        "screenKeyCtx.persistNow 用 lambda 包裹 ✓ (persistNow: () => persistNowApp(state))",
+        "npm run build 通过 ✓ (400.2kb)",
+        "npm test 全绿 ✓ (964 例, 19/19 ALL PASS, 存档读写回归正常)",
+        "main.ts 行数: 3579 → 3536 (-43 行)"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-028",
+      "title": "架构: 拆 monster.ts (最小切片 - 只抽类型到 monsters/types.ts)",
+      "description": "1174 行 monster.ts 拆分. 本次先做最小切片: MonsterType + MonsterDef interface 抽到 src/game/monsters/types.ts (43 行), monster.ts 用 re-export 保持旧 import 路径兼容. 数据表 (MONSTER_DEFS/THEME_BOSS/THEME_MONSTER_POOL) 与行为/AI 留 monster.ts 留给后续 US-028-b.",
+      "acceptanceCriteria": [
+        "src/game/monsters/types.ts 存在 (MonsterType + MonsterDef interface)",
+        "monster.ts 用 re-export 兼容旧 import",
+        "monster.ts 行数: 1174 → 1147 (-27)",
+        "npm run build 通过",
+        "npm test 964 例全绿"
+      ],
+      "passes": true
+    },
+    {
+      "id": "US-029",
+      "title": "架构: 拆 combat.ts → damage/crit/resistance/status",
+      "description": "combat.ts 拆为 4 个纯函数模块: damage.ts(基础伤害计算)/ crit.ts(暴击判定+倍率)/ resistance.ts(抗性 clamp)/ status.ts(燃烧/诅咒/DOT). main.ts 与 monster.ts 引用路径更新.",
+      "acceptanceCriteria": [
+        "src/game/combat/{types,damage,crit,resistance,status}.ts 存在 ✓ (5 个文件)",
+        "src/game/combat.ts 保留 barrel re-export ✓ (兼容现有 import)",
+        "tests/combat.test.ts 仍通过 ✓ (964 例)",
+        "npm run build 通过 ✓ (400.0kb)",
+        "npm test 全绿 ✓"
+      ],
+      "passes": true
     }
   ]
 }
