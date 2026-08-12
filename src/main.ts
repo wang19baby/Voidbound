@@ -29,14 +29,32 @@ import { TOWN_DEFS, townNpcs, nearestNpc, genMerchantStock, genMysteryStock, buy
 import { RUNE_FORGE_COST } from './game/equipment';
 import { playBgmClient, playSfxClient, setVolumeClient } from './ipc/sfx';
 import { baseCombat } from './game/combat';
-import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
+import { DIFFICULTIES, DIFFICULTY_MODS, DIFFICULTY_GATES, cycleDifficulty, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from './game/difficulty';
 import { spawnDamageNum, getDamageNums, updateDamageNums } from './game/damageNum';
 import { moveGridSel, flipPage, pageStart, pageOf, pageCount, cellIndex, slotRects, inRect, EQ_LAYOUT } from './game/uigrid';
+import { rrect, hexToRgb01 } from './ui/primitives';
+import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
+import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime } from './screens/title';
+import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
+import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
+import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, drawNewgame as drawNewgameScreen, type NewgameCtx } from './screens/newgame';
+import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp } from './app/save';
+import { handleUiClick as handleUiClickDispatch, buildUiCtx, type UiCtx } from './app/uiDispatch';
+import {
+  handleScreenKey,
+  getTitleFocus, isCloseConfirmOpen, setCloseConfirmOpen,
+  getNgLaunchT, setNgLaunchT, isNgNaming, setNgNaming,
+  syncTitleFocus, moveTitleFocus, titleAct,
+  triggerCloseConfirm,
+  type ScreenKeyContext,
+} from './app/screenMachine';
 import { pushToast, getToasts, updateToasts } from './game/toast';
 import { deathSummary, deathGoldPenalty, type DeathSummary } from './game/deathSettle';
 import { moveSelection, ngResolve, ngDefault, themeUnlocked, type NewgameSel } from './game/newgame';
 import { bindClass, CLASS_DEFS, CLASS_IDS, CLASS_SPRITES, type ClassId } from './game/class';
-import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, keyLabel, normKey, type Keybinds } from './game/keybind';
+import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, keyLabel, normKey, keyHintMainText, keyHintSkillsText, type Keybinds } from './game/keybind';
+// TS-008: 版本号来自 package.json (esbuild JSON loader 内联, 树摇后仅留 version)
+import { version as GAME_VERSION } from '../package.json';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
 import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint, recomputePassives, type PassiveId } from './game/passive';
 import { getSkillCooldowns } from './game/cooldown';
@@ -226,13 +244,9 @@ const state = {
   currentChar: 'char_0',
   charList: [] as CharacterSummary[],
   charSel: 0,
-  charCreating: false,
   charConfirmDel: false,
-  /** 文本输入 (M5 非目标收尾): 角色命名手输 (创建面板内联) */
+  /** 文本输入: 新建角色命名 (newgame 屏内联) */
   charNameInput: '',
-  charNamingClass: 'barbarian' as ClassId,
-  /** 新建角色默认难度 (创建面板可调, 默认普通) */
-  charCreateDiff: 'normal' as Difficulty,
   /** v4 首局引导: 每次运行首次进 dungeon 激活; step 0..2 显示气泡, >=3 关闭 */
   tutorShown: false,
   tutorStep: -1,
@@ -279,6 +293,33 @@ loadAccount().then(a => {
   inf('save', `account loaded at boot: cleared=${state.cleared.length} chars=${(a.characters ?? []).length} wh=${state.warehouse.length} last=${state.currentChar}`);
 }).catch(e => wrn('save', `boot account load failed: ${e}`));
 
+// === US-026 screenKeyCtx: 屏路由集中器的依赖注入 (19 个 main.ts 副作用函数) ===
+// 函数声明被 JS hoisting, 此处引用安全
+const screenKeyCtx: ScreenKeyContext = {
+  confirmCloseSave,
+  confirmCloseCancel,
+  continueLastSave,
+  openCharactersList,
+  saveLastNg,
+  loadLastNg,
+  createCharacterNow,
+  startNewgameFromTitle,
+  startFromNewgame,
+  doLaunchRun,
+  enterTargetCharacter,
+  persistNow: () => persistNowApp(state),
+  fadeBgm,
+  startRun,
+  ensureDungeonRun,
+  enterTown,
+  triggerBossIntro,
+  formatTime,
+  interactTown,
+  handleTownPanelKey,
+  revivePlayer,
+  hardcoreWipe,
+};
+
 // v4: 标题"继续游戏"进度摘要用 — 预加载角色列表 (失败静默, 无角色时继续按钮隐藏)
 listCharacters().then(list => {
   state.charList = list;
@@ -287,557 +328,155 @@ listCharacters().then(list => {
 
 
 window.addEventListener('keydown', (e) => {
-  // v4 首局引导: 任意键跳下一步 (不触发其他逻辑)
-  if (state.tutorStep >= 0 && state.tutorStep < 3 && state.screen === 'dungeon') {
-    state.tutorStep++;
-    state.tutorT = 0;
-    return;
-  }
-  // 关窗确认 (最高优先级): Y 保存退出 / N·Esc 取消
-  if (closeConfirmOpen) {
-    const k = e.key.toLowerCase();
-    if (k === 'y') {
-      confirmCloseSave();
-    } else if (k === 'n' || k === 'escape') {
-      confirmCloseCancel();
-      inf('ui', '取消关闭');
-    }
-    return;
-  }
-  // C (P3-10): 键位编辑捕获 — 设置面板点条目后按新键
-  if (state.settingsOpen && state.keybindEdit) {
-    const kb2 = loadKeybinds();
-    if (e.key === 'Escape') { state.keybindEdit = null; return; }
-    const nk = normKey(e.key);
-    if (state.keybindEdit.startsWith('skills.')) {
-      kb2.skills[state.keybindEdit.slice(7) as 'Q' | 'W' | 'E' | 'R'] = nk;
-    } else {
-      (kb2 as unknown as Record<string, string>)[state.keybindEdit] = nk;
-    }
-    saveKeybinds(kb2);
-    state.keybindEdit = null;
-    pushToast(state, '键位已更新', '#9cf');
-    return;
-  }
-  // 符文三选一: 1/2/3 选择, Esc 拒绝 (优先于其他按键)
-  if (state.runeChoice) {
-    if (e.key === '1' || e.key === '2' || e.key === '3') {
-      chooseRune(state, Number(e.key) - 1);
-      return;
-    }
-    if (e.key === 'Escape' || e.key === '0') {
-      rejectRune(state);
-      return;
-    }
-    return;
-  }
-  // 硬核二段确认 (OPT-006/015): 全界面阻塞, Y 确认 / Esc·1 取消
-  if (state.confirmHardcore) {
-    const k = e.key.toLowerCase();
-    if (k === 'y') {
-      const pd = state.pendingDifficulty;
-      if (pd) {
-        state.difficulty = pd;
-        pushToast(state, `难度 → ${DIFFICULTY_MODS[pd].name}`, '#f66');
-        inf('game', `难度 → ${DIFFICULTY_MODS[pd].name}`);
-      }
-      state.confirmHardcore = false;
-      state.pendingDifficulty = null;
-    } else if (k === 'escape' || k === '1') {
-      state.confirmHardcore = false;
-      state.pendingDifficulty = null;
-      inf('game', '硬核切换取消');
-    }
-    return;
-  }
-  // 标题画面 (GAME_FLOW §1.2): 有存档 1 继续 / 2 新游戏 / 3 设置; 无存档 1 新游戏 / 2 设置; R 角色管理
-  if (state.screen === 'title') {
-    const k = e.key.toLowerCase();
-    const hasSave = state.charList.length > 0;
-    if (state.settingsOpen) {
-      if (k === '2' || k === 'escape') { state.settingsOpen = false; return; }
-      if (k === 'r') { resetKeybinds(); pushToast(state, '键位已恢复默认', '#9cf'); return; }
-      if (k === 'n') { requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared)); state.titleMsg = `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`; return; }
-      if (k === 'f') { void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs))); return; }
-      if (k === '+' || k === '=') { state.volume = Math.min(1, state.volume + 0.05); setVolumeClient(state.volume); return; }
-      if (k === '-' || k === '_') { state.volume = Math.max(0, state.volume - 0.05); setVolumeClient(state.volume); return; }
-      return;
-    }
-    const startNewgame = () => {
-      state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-      state.ngFrom = 'title';
-      setScreen(state, 'newgame');
-      state.titleMsg = '';
-      inf('ui', '新游戏 → 选择屏');
-    };
-    if (k === '1') {
-      if (hasSave) { continueLastSave(); } else { startNewgame(); }
-      return;
-    }
-    if (k === '2') {
-      if (hasSave) { startNewgame(); } else { state.settingsOpen = true; }
-      return;
-    }
-    if (k === '3' && hasSave) { state.settingsOpen = true; return; }
-    if (k === 'r') {
-      // C-202 角色管理: 拉列表进角色屏
-      listCharacters().then(list => {
-        state.charList = list;
-        state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
-        state.charCreating = false;
-        state.charConfirmDel = false;
-        setScreen(state, 'characters');
-        state.titleMsg = '';
-        inf('ui', `角色管理: ${list.length} 个角色`);
-      }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
-    }
-    else if (k === 'o') {
-      // C-203 继续: 读账号层取最近角色, 再读该角色档 (场景分派)
-      continueLastSave();
-    }
-    return;
-  }
-  // 角色管理 (C-202): 列表 ↑/↓ · Enter 进入 · N 新建 · D 删除(二次确认) · Esc 返回标题
-  if (state.screen === 'characters') {
-    const k = e.key.toLowerCase();
-    // C (P1-4): 收集总览拦截 (Esc/C 关闭)
-    if (state.collectOpen) {
-      if (k === 'escape' || k === 'c') { state.collectOpen = false; return; }
-      return;
-    }
-    if (state.charConfirmDel) {
-      if (k === 'y') {
-        const target = state.charList[state.charSel];
-        if (target) {
-          state.charList = state.charList.filter(c => c.id !== target.id);
-          if (state.charSel >= state.charList.length) state.charSel = Math.max(0, state.charList.length - 1);
-          if (state.currentChar === target.id) state.currentChar = 'char_0';
-          void deleteCharacter(target.id).then(() => pushToast(state, `已删除角色 ${target.id}`, '#f66'))
-            .catch(e => wrn('save', `delete ${target.id}: ${e}`));
-          inf('ui', `角色删除: ${target.id}`);
-        }
-        state.charConfirmDel = false;
-      } else if (k === 'escape' || k === 'n') {
-        state.charConfirmDel = false;
-      }
-      return;
-    }
-    if (state.charCreating) {
-      // 创建面板: 1-6 职业 / Z·X 难度 / 键入命名 / Enter 创建 / Esc 取消
-      const ci = parseInt(k, 10);
-      if (ci >= 1 && ci <= 6) {
-        state.charNamingClass = CLASS_IDS[ci - 1];
-        state.titleMsg = '';
-        inf('ui', `职业 → ${CLASS_DEFS[CLASS_IDS[ci - 1]].name}`);
-        return;
-      }
-      if (k === 'z') { charDiffStep(-1); return; }
-      if (k === 'x') { charDiffStep(1); return; }
-      if (k === 'enter') { confirmCreateCharacter(state); return; }
-      if (k === 'backspace') { state.charNameInput = state.charNameInput.slice(0, -1); return; }
-      if (k === 'escape') { state.charCreating = false; state.charNameInput = ''; return; }
-      // 单字符追加 (字母数字下划线), 忽略功能键
-      if (/^[a-zA-Z0-9_]$/.test(e.key)) {
-        if (state.charNameInput.length < 24) state.charNameInput += e.key;
-      }
-      return;
-    }
-    if (k === 'arrowup' || k === 'w') { state.charSel = Math.max(0, state.charSel - 1); return; }
-    if (k === 'arrowdown' || k === 's') { state.charSel = Math.min(state.charList.length - 1, state.charSel + 1); return; }
-    if (k === 'enter') {
-      const target = state.charList[state.charSel];
-      if (!target) { state.titleMsg = '没有可选角色 (按 N 新建)'; return; }
-      enterTargetCharacter(state, target);
-      return;
-    }
-    if (k === 'n') { openCreatePanel(state); return; }
-    if (k === 'd') {
-      if (state.charList.length > 0) state.charConfirmDel = true;
-      return;
-    }
-    if (k === 'escape') { setScreen(state, 'title'); return; }
-    return;
-  }
-  // 新局选择屏 (OPT-013): 1-5 难度 / ←→或A/D 主题 / Enter 开始 / Esc 返回
-  if (state.screen === 'newgame') {
-    const k = e.key.toLowerCase();
-    const mv = moveSelection(state.ngSel, k);
-    if (mv) { state.ngSel = mv; return; }
-    if (k === 'enter') {
-      const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
-      if (!unlockedDifficulty(state.cleared, difficulty)) {
-        pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66');
-        return;
-      }
-      if (!themeUnlocked(state.cleared, theme)) {
-        pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66');
-        return;
-      }
-      bindClass(state, classId);  // M5 C-103: 新局绑定职业
-      startRun(state, theme, difficulty, mode);
-      return;
-    }
-    if (k === 'escape') {
-      setScreen(state, state.ngFrom === 'town' ? 'town' : 'title');
-      state.titleMsg = '';
-      return;
-    }
-    return;
-  }
-  // 装备面板 (US-014): Tab 切换 (仅 dungeon), 优先于暂停逻辑
-  if (keyMatch(e, loadKeybinds().equip) && state.screen === 'dungeon') {
-    e.preventDefault();
-    setScreen(state, 'equipment');
-    inf('ui', 'equipment panel open');
+// US-026 屏路由集中器: 9 段 if-else + 4 个 modal 拦截 → 单点 dispatch
+// 返回 true 表示 action 已消费, 调用方应 return; false 表示透传到 game actions
+if (handleScreenKey(state, e, screenKeyCtx)) return;
 
+// 保留 game-world actions (potions / dodge / skills / save/load / log level) —
+// 屏路由之外的低层输入, screenMachine.ts 不涉及
+// Ctrl+1..6: 分配技能点 (LMB/RMB/Q/W/E/R)
+if (e.ctrlKey) {
+  const idx = '123456'.indexOf(e.key);
+  if (idx >= 0) {
+    const errMsg = assignSkillPoint(state, SKILL_SLOTS[idx]);
+    if (errMsg) wrn('skill', `${SKILL_SLOTS[idx]} assign failed: ${errMsg}`);
     return;
   }
-  // 装备面板 (C-502): 方向键选格 / PageUp·PageDown·滚轮翻页 / A·Enter 装备 / U 卸下 / Tab·Esc 关闭
-  if (state.screen === 'equipment') {
-    const k = e.key.toLowerCase();
-    if (keyMatch(e, loadKeybinds().equip) || e.key === 'Escape') {
-      setScreen(state, 'dungeon');
-      inf('ui', 'equipment panel closed');
-      return;
-    }
-    const total = getOwned(state).length;
-    if (k === 'arrowup') { state.equipSel = moveGridSel(state.equipSel, 'up', total); return; }
-    if (k === 'arrowdown') { state.equipSel = moveGridSel(state.equipSel, 'down', total); return; }
-    if (k === 'arrowleft') { state.equipSel = moveGridSel(state.equipSel, 'left', total); return; }
-    if (k === 'arrowright') { state.equipSel = moveGridSel(state.equipSel, 'right', total); return; }
-    if (k === 'pageup') { state.equipSel = pageStart(flipPage(pageOf(state.equipSel), -1, total), total); return; }
-    if (k === 'pagedown') { state.equipSel = pageStart(flipPage(pageOf(state.equipSel), 1, total), total); return; }
-    const selEq = getOwned(state)[state.equipSel];
-    if (k === 'a' || k === 'enter') {
-      if (selEq && equipItem(state, selEq)) {
-        const col = RARITY_COLORS[selEq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
-        pushToast(state, `已穿戴 ${selEq.name}`, `#${col}`);
-        playSfxClient('ui_click');
-      } else if (selEq) {
-        pushToast(state, '穿戴失败', '#ff5555');
+}
+// 药水 (F-CBT-002): 键位可改 (默认 1 = HP, 2 = MP)
+const kb = loadKeybinds();
+if (keyMatch(e, kb.potionHp)) {
+  if (usePotion(state, 'hp')) playSfxClient('hit');
+  else wrn('skill', `potion HP failed (cd or empty)`);
+  return;
+}
+if (keyMatch(e, kb.potionMp)) {
+  if (usePotion(state, 'mp')) playSfxClient('hit');
+  else wrn('skill', `potion MP failed (cd or empty)`);
+  return;
+}
+// 翻滚 (F-CBT-001): 无敌位移 (键位可改)
+if (keyMatch(e, kb.dodge, { repeat: false })) {
+  if (startDodge(state)) {
+    dbg('player', 'dodge roll (i-frame 0.2s)');
+  }
+  return;
+}
+// 统一交互键 (A 收敛): 地牢门旁按交互键 → 面板 [回城/继续] (原 V 键退役)
+if (keyMatch(e, kb.interact) && state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
+  setScreen(state, 'portal');
+  inf('ui', 'portal 交互 → [回城/继续]');
+  return;
+}
+// 技能键 (键位可改, 默认 Q=火球 F=多重火球(原W槽) E=回血 R=大招)
+const skillSlot = skillSlotByKey(e, kb);
+if (skillSlot) {
+  const nowSec = performance.now() / 1000;
+  const aimDir = mouseAimDirection(state, mouse.state());
+  if (!tryCastSlot(skillSlot, state, aimDir, nowSec)) {
+    notifyCastFail(state, skillSlot);
+    return;
+  }
+  if (skillSlot === 'Q') invoke('play_sfx', { name: 'fireball' }).catch(() => {});
+}
+if (e.key === 'l' || e.key === 'L') {
+  const order: LogLevel[] = ['DBG', 'INF', 'WRN'];
+  const cur = (window as unknown as { __lvl?: LogLevel }).__lvl ?? 'INF';
+  const next = order[(order.indexOf(cur) + 1) % order.length];
+  (window as unknown as { __lvl?: LogLevel }).__lvl = next;
+  setLogLevel(next);
+  inf('gl', `log level → ${next}`);
+}
+if (e.key === 'p' || e.key === 'P') {
+  persistNowApp(state);
+}
+if (e.key === 'o' || e.key === 'O') {
+  // O=读档 (R 已让给大招)
+  if (!(window as unknown as { __lvl?: LogLevel }).__lvl) {
+    loadGame(state.currentChar).then(d => {
+      state.player.pos.x = d.player_x;
+      state.player.pos.y = d.player_y;
+      state.player.hp = d.player_hp;
+      state.player.mp = d.player_mp;
+      state.player.facing.x = d.facing_x;
+      state.player.facing.y = d.facing_y;
+      state.score = d.score;
+      state.player.gold = d.gold ?? 0;
+      state.player.level = d.level ?? 1;
+      // 装备层还原 (重建 id, 统一走拥有列表)
+      const owned = getOwned(state);
+      owned.length = 0;
+      for (const it of d.owned) {
+        owned.push({
+          id: allocEquipmentId(),
+          name: it.name,
+          rarity: it.rarity,
+          type: it.eq_type,
+          pos: { x: 0, y: 0 },
+          size: { w: 24, h: 24 },
+          affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+          pickedUp: true,
+          setName: it.setName,
+        });
       }
-      return;
-    }
-    if (k === 'u') {  // 卸下仅 U 键 (D 已让给角色删除语义, 卸下用鼠标点击亦可)
-      const slot = selEq ? selEq.type : undefined;
-      if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
-      return;
-    }
-    return;
-  }
-  // 死亡结算 (OPT-011, B1): 软核 1 回城(金-25%补药) / 2 原地复活(金-10%+5s无敌) / 3 重开; 硬核 1 重开清档 / 2 主菜单
-  if (state.screen === 'death') {
-    const k = e.key.toLowerCase();
-    const ds = state.deathSummary;
-    if (!ds) return;
-    if (k === '1') {
-      if (ds.hardcore) {
-        hardcoreWipe(state);
-        startRun(state, state.theme, state.difficulty);
-      } else {
-        state.player.gold -= deathGoldPenalty(state.player.gold, 'town', false);
-        state.player.potions = { hp: 3, mp: 3 };
-        enterTown(state);
+      // 穿戴层还原 (OPT-014): 按槽重建
+      state.player.equipped = {};
+      for (const e of d.equipped ?? []) {
+        state.player.equipped[e.slot] = {
+          id: allocEquipmentId(),
+          name: e.item.name,
+          rarity: e.item.rarity,
+          type: e.slot,
+          pos: { x: 0, y: 0 },
+          size: { w: 24, h: 24 },
+          affixes: e.item.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+          pickedUp: true,
+          setName: e.item.setName,
+        };
       }
-      state.dying = false;
-      state.deathSummary = null;
-      inf('ui', 'death → town/rerun');
-      return;
-    }
-    if (k === '2') {
-      if (ds.hardcore) {
-        state.dying = false;
-        state.deathSummary = null;
-        setScreen(state, 'title');
-      } else {
-        state.player.gold -= deathGoldPenalty(state.player.gold, 'revive', false);
-        revivePlayer(state);
-        state.dying = false;
-        state.deathSummary = null;
-        setScreen(state, 'dungeon');
+      recomputeCombat(state);
+      // 永久层: 符文绑定 (按槽) + 主题
+      for (const rr of d.runes ?? []) {
+        const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
+        if (sk) sk.rune = rr.rune;
       }
-      inf('ui', 'death → revive/menu');
-      return;
-    }
-    if (k === '3' && !ds.hardcore) {
-      startRun(state, state.theme, state.difficulty);
-      state.dying = false;
-      state.deathSummary = null;
-      state.deathUndo = 0;
-      inf('ui', 'death → rerun');
-      return;
-    }
-    if (k === '4' && !ds.hardcore && state.deathUndo > 0) {
-      // C (死亡撤销): 免费满状态复活回原位置 (5s 窗口)
-      revivePlayer(state);
-      state.dying = false;
-      state.deathSummary = null;
-      state.deathUndo = 0;
-      setScreen(state, 'dungeon');
-      pushToast(state, '已撤销死亡 (免费)', '#8f8');
-      inf('ui', 'death → undo (free revive)');
-      return;
-    }
-    return;
-  }
-  // 通关结算 (OPT-012): 1 再来一局(同主题同难度) / 2 回城
-  if (state.screen === 'victory') {
-    const k = e.key.toLowerCase();
-    if (k === '1') {
-      startRun(state, state.run.theme, state.difficulty);
-      inf('ui', 'victory → 再来一局');
-    } else if (k === '2') {
-      enterTown(state);
-      inf('ui', 'victory → 回城');
-    }
-    return;
-  }
-  // Esc (战斗/城镇): 打开暂停菜单
-  if (e.key === 'Escape' && (state.screen === 'dungeon' || state.screen === 'town')) {
-    state.pauseFrom = state.screen;
-    setScreen(state, 'pause');
-    inf('gl', 'paused');
-    return;
-  }
-  // 暂停/设置菜单: 阻断游戏按键
-  if (state.screen === 'pause') {
-    const k = e.key.toLowerCase();
-    if (k === '1') { setScreen(state, resumeScreen(state)); inf('gl', 'resumed'); return; }
-    if (k === '2') { state.settingsOpen = !state.settingsOpen; return; }
-    if (k === '3') {
-      state.settingsOpen = false;
-      void persistNow().then(() => pushToast(state, '已保存, 返回主菜单', '#9cf'));
-      setScreen(state, 'title');
-      inf('ui', '返回主菜单 (已保存)');
-      return;
-    }
-    if (k === '4') {
-      state.settingsOpen = false;
-      enterTown(state);
-      inf('ui', '进入城镇');
-      return;
-    }
-    if (state.settingsOpen) {
-      if (k === 'r') { resetKeybinds(); pushToast(state, '键位已恢复默认', '#9cf'); return; }
-      if (k === '+' || k === '=') {
-        state.volume = Math.min(1, state.volume + 0.05);
-        setVolumeClient(state.volume);
-        inf('audio', `volume → ${Math.round(state.volume * 100)}%`);
-        return;
-      }
-      if (k === '-' || k === '_') {
-        state.volume = Math.max(0, state.volume - 0.05);
-        setVolumeClient(state.volume);
-        inf('audio', `volume → ${Math.round(state.volume * 100)}%`);
-        return;
-      }
-      if (k === 'f') {
-        void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
-          getCurrentWindow().isFullscreen().then(fs => getCurrentWindow().setFullscreen(!fs)));
-        return;
-      }
-    }
-    if (k === 'n') {
-      if (state.pauseFrom !== 'town') {
-        pushToast(state, '战斗中无法调整难度 (回城后在祭坛)', '#ff5555');
-        return;
-      }
-      requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared));
-      inf('game', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
-      return;
-    }
-    if (k === 'escape') {
-      if (state.settingsOpen) state.settingsOpen = false;
-      else setScreen(state, resumeScreen(state));
-      inf('gl', state.screen === 'pause' ? 'paused' : 'resumed');
-      return;
-    }
-    return; // 暂停时忽略游戏按键
-  }
-  // A-W1 门结算: Boss 死后门前 V 交互 → [回城/继续] 面板
-  if (state.screen === 'portal') {
-    const k = e.key.toLowerCase();
-    if (k === '1') {
-      // 回城: 提前结算 (战利品/经验保留) — collectAllLoot + 记录最佳 + 持久化, 进胜利结算屏
-      leaveThroughPortal(state);
-      const collected = collectAllLoot(state);
-      state.run.collectedLoot = state.run.collectedLoot + collected.length;
-      if (collected.length > 0) pushToast(state, `掉落已入背包 ×${collected.length}`, '#ffd64a');
-      if (state.run.bossKilled) {
-        const prev = state.run.best[state.difficulty];
-        if (prev === undefined || state.run.timeSec < prev) {
-          state.run.best[state.difficulty] = state.run.timeSec;
-          pushToast(state, `新纪录! ${formatTime(state.run.timeSec)}`, '#ffd64a');
-        }
-      }
-      const cIdx = state.charList.findIndex(c => c.id === state.currentChar);
-      if (cIdx >= 0) {
-        state.charList[cIdx] = { ...state.charList[cIdx], level: state.player.level, difficulty: state.difficulty, theme: state.run.theme };
-      }
-      void persistNow();
-      setScreen(state, 'victory');
-      inf('ui', 'portal → 回城结算 (victory)');
-    } else if (k === '2' || k === 'escape') {
-      // 继续: 留在本局 (门仍在 Boss 死亡位)
-      setScreen(state, 'dungeon');
-      inf('ui', 'portal → 继续战斗');
-    }
-    return;
-  }
-  // 城镇: E 交互 + 面板按键
-  if (state.mode === 'town') {
-    const k = e.key.toLowerCase();
-    if (state.townPanel) {
-      handleTownPanelKey(state, e, k);
-      return;
-    }
-    if (keyMatch(e, loadKeybinds().interact)) { interactTown(state); return; }
-    if (k === '1' || k === '2' || k === '3' || k === '4') return; // 面板关闭时忽略数字
-    return; // 城镇阻断游戏键 (技能/药水等)
-  }
-  // Ctrl+1..6: 分配技能点 (LMB/RMB/Q/W/E/R)
-  if (e.ctrlKey) {
-    const idx = '123456'.indexOf(e.key);
-    if (idx >= 0) {
-      const errMsg = assignSkillPoint(state, SKILL_SLOTS[idx]);
-      if (errMsg) wrn('skill', `${SKILL_SLOTS[idx]} assign failed: ${errMsg}`);
-      return;
-    }
-  }
-  // 药水 (F-CBT-002): 键位可改 (默认 1 = HP, 2 = MP)
-  const kb = loadKeybinds();
-  if (keyMatch(e, kb.potionHp)) {
-    if (usePotion(state, 'hp')) playSfxClient('hit');
-    else wrn('skill', `potion HP failed (cd or empty)`);
-    return;
-  }
-  if (keyMatch(e, kb.potionMp)) {
-    if (usePotion(state, 'mp')) playSfxClient('hit');
-    else wrn('skill', `potion MP failed (cd or empty)`);
-    return;
-  }
-  // 翻滚 (F-CBT-001): 无敌位移 (键位可改)
-  if (keyMatch(e, kb.dodge, { repeat: false })) {
-    if (startDodge(state)) {
-      dbg('player', 'dodge roll (i-frame 0.2s)');
-    }
-    return;
-  }
-  // 统一交互键 (A 收敛): 地牢门旁按交互键 → 面板 [回城/继续] (原 V 键退役)
-  if (keyMatch(e, kb.interact) && state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
-    setScreen(state, 'portal');
-    inf('ui', 'portal 交互 → [回城/继续]');
-    return;
-  }
-  // 技能键 (键位可改, 默认 Q=火球 F=多重火球(原W槽) E=回血 R=大招)
-  const skillSlot = skillSlotByKey(e, kb);
-  if (skillSlot) {
-    const nowSec = performance.now() / 1000;
-    const aimDir = mouseAimDirection(state, mouse.state());
-    if (!tryCastSlot(skillSlot, state, aimDir, nowSec)) {
-      notifyCastFail(state, skillSlot);
-      return;
-    }
-    if (skillSlot === 'Q') invoke('play_sfx', { name: 'fireball' }).catch(() => {});
-  }
-  if (e.key === 'l' || e.key === 'L') {
-    const order: LogLevel[] = ['DBG', 'INF', 'WRN'];
-    const cur = (window as unknown as { __lvl?: LogLevel }).__lvl ?? 'INF';
-    const next = order[(order.indexOf(cur) + 1) % order.length];
-    (window as unknown as { __lvl?: LogLevel }).__lvl = next;
-    setLogLevel(next);
-    inf('gl', `log level → ${next}`);
-  }
-  if (e.key === 'p' || e.key === 'P') {
-    persistNow();
-  }
-  if (e.key === 'o' || e.key === 'O') {
-    // O=读档 (R 已让给大招)
-    if (!(window as unknown as { __lvl?: LogLevel }).__lvl) {
-      loadGame(state.currentChar).then(d => {
-        state.player.pos.x = d.player_x;
-        state.player.pos.y = d.player_y;
-        state.player.hp = d.player_hp;
-        state.player.mp = d.player_mp;
-        state.player.facing.x = d.facing_x;
-        state.player.facing.y = d.facing_y;
-        state.score = d.score;
-        state.player.gold = d.gold ?? 0;
-        state.player.level = d.level ?? 1;
-        // 装备层还原 (重建 id, 统一走拥有列表)
-        const owned = getOwned(state);
-        owned.length = 0;
-        for (const it of d.owned) {
-          owned.push({
-            id: allocEquipmentId(),
-            name: it.name,
-            rarity: it.rarity,
-            type: it.eq_type,
-            pos: { x: 0, y: 0 },
-            size: { w: 24, h: 24 },
-            affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-            pickedUp: true,
-            setName: it.setName,
-          });
-        }
-        // 穿戴层还原 (OPT-014): 按槽重建
-        state.player.equipped = {};
-        for (const e of d.equipped ?? []) {
-          state.player.equipped[e.slot] = {
-            id: allocEquipmentId(),
-            name: e.item.name,
-            rarity: e.item.rarity,
-            type: e.slot,
-            pos: { x: 0, y: 0 },
-            size: { w: 24, h: 24 },
-            affixes: e.item.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-            pickedUp: true,
-            setName: e.item.setName,
-          };
-        }
-        recomputeCombat(state);
-        // 永久层: 符文绑定 (按槽) + 主题
-        for (const rr of d.runes ?? []) {
-          const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
-          if (sk) sk.rune = rr.rune;
-        }
-        if (d.theme && d.theme !== state.theme) {
-          state.theme = d.theme;
-          fadeBgm(`bgm_${state.theme}`, state.volume);
+      if (d.theme && d.theme !== state.theme) {
+        state.theme = d.theme;
+        fadeBgm(`bgm_${state.theme}`, state.volume);
   invoke('js_log', { msg: '[boot] bgm set' }).catch(() => {});
 
-        }
-        if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
-        // 技能进度还原 (OPT-003): 等级按槽回填 registry + 技能点/经验
-        for (const sl of d.skill_levels ?? []) {
-          const sk = getSkill(sl.slot);
-          if (sk) sk.level = sl.level;
-        }
-        state.player.skillPoints = d.skill_points ?? 0;
-        state.player.exp = d.exp ?? 0;
-        bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
-        if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-        restoreMaterials(d);  // M5 W4 C-401
-        restorePassives(d);  // v9 被动技能树
-        inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
-        resumeFromSave(state, d);  // v11: 场景分派 (上次在城镇 → 回城镇整理)
-        return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
-      }).then(a => {
-        state.cleared = a.cleared ?? [];
-        state.run.best = {};
-        for (const b of a.best ?? []) state.run.best[b.difficulty] = b.ms;
-        state.legacy = a.legacy ?? [];
-        state.warehouse = (a.warehouse ?? []).map(it => ({
-          id: allocEquipmentId(), name: it.name, rarity: it.rarity, type: it.eq_type,
-          pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
-          affixes: it.affixes.map(a2 => ({ stat: a2.stat, value: a2.value, element: a2.element })),
-          pickedUp: true, setName: it.setName,
-        }));
-        inf('save', `account loaded: cleared=${state.cleared.length} legacy=${state.legacy.length} wh=${state.warehouse.length}`);
-      }).catch(e => wrn('save', `load failed: ${e}`));
-    }
+      }
+      if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
+      // 技能进度还原 (OPT-003): 等级按槽回填 registry + 技能点/经验
+      for (const sl of d.skill_levels ?? []) {
+        const sk = getSkill(sl.slot);
+        if (sk) sk.level = sl.level;
+      }
+      state.player.skillPoints = d.skill_points ?? 0;
+      state.player.exp = d.exp ?? 0;
+      bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
+      if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+      restoreMaterialsApp(state, d);  // M5 W4 C-401
+      restorePassivesApp(state, d);  // v9 被动技能树
+      inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
+      resumeFromSave(state, d);  // v11: 场景分派 (上次在城镇 → 回城镇整理)
+      return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
+    }).then(a => {
+      state.cleared = a.cleared ?? [];
+      state.run.best = {};
+      for (const b of a.best ?? []) state.run.best[b.difficulty] = b.ms;
+      state.legacy = a.legacy ?? [];
+      state.warehouse = (a.warehouse ?? []).map(it => ({
+        id: allocEquipmentId(), name: it.name, rarity: it.rarity, type: it.eq_type,
+        pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
+        affixes: it.affixes.map(a2 => ({ stat: a2.stat, value: a2.value, element: a2.element })),
+        pickedUp: true, setName: it.setName,
+      }));
+      inf('save', `account loaded: cleared=${state.cleared.length} legacy=${state.legacy.length} wh=${state.warehouse.length}`);
+    }).catch(e => wrn('save', `load failed: ${e}`));
   }
-  // [OPT-015] T 键主题循环已移除 (调试功能不再暴露给玩家)
+}
+// [OPT-015] T 键主题循环已移除 (调试功能不再暴露给玩家)
 });
 
 /** 鼠标位置 → 世界坐标方向 (Diablo 风格: 技能瞄准鼠标) */
@@ -881,14 +520,13 @@ function autoPauseOnBlur(): void {
 window.addEventListener('blur', autoPauseOnBlur);
 document.addEventListener('visibilitychange', () => { if (document.hidden) autoPauseOnBlur(); });
 
-// 关窗确认 (OPT-002 升级): Rust 拦截 CloseRequested → 弹确认 → Y 保存后 emit close-confirmed → Rust 销毁
-let closeConfirmOpen = false;
+// 关窗确认 (US-026): isCloseConfirmOpen() 移至 app/screenMachine.ts 模块状态
 let closeConfirmSaving = false;
 let closeEmit: ((event: string) => Promise<void>) | null = null;
 void import('@tauri-apps/api/event').then(({ listen, emit }) => {
   closeEmit = emit;
   void listen('close-requested', () => {
-    closeConfirmOpen = true;
+    setCloseConfirmOpen(true);
     closeConfirmSaving = false;
     inf('ui', 'close-requested: 显示退出确认');
   });
@@ -905,10 +543,10 @@ function confirmCloseSave(): void {
   };
   // 标题页无游戏进度, 直接退出; 其余屏先持久化再退出
   if (state.screen === 'title') { done(); return; }
-  void persistNow().finally(done);
+  void persistNowApp(state).finally(done);
 }
 function confirmCloseCancel(): void {
-  closeConfirmOpen = false;
+  setCloseConfirmOpen(false);
 }
 
 inf('loop', 'main loop start');
@@ -919,6 +557,25 @@ let lastFpsT = performance.now();
 let loopStartedLogged = false;
 let loopCrashCooldown = 0;
 let titleListAt = 0;  // title 屏角色列表节流刷新 (最近游玩 mtime 变化)
+
+/** 非战斗屏 (title/newgame/characters) 鼠标点击: 完整边沿生命周期 (修复: 原分支无 sync, wasClicked 恒 false) */
+function handleScreenClick(): void {
+  mouse.sync();
+  if (isCloseConfirmOpen()) {
+    // 关窗确认优先 (与 drawFrame 同规则): Y 保存退出 / N 取消
+    const cp = mouse.state().pos;
+    const yH = inRect(cp.x, cp.y, state.viewport.w / 2 - 140, state.viewport.h / 2 + 40, 120, 40);
+    const nH = inRect(cp.x, cp.y, state.viewport.w / 2 + 20, state.viewport.h / 2 + 40, 120, 40);
+    if (mouse.wasClicked('LMB')) {
+      if (yH) confirmCloseSave();
+      else if (nH) confirmCloseCancel();
+    }
+    canvas.style.cursor = (yH || nH) ? 'pointer' : 'default';
+  } else if (mouse.wasClicked('LMB')) {
+    handleUiClick(state, mouse.state().pos.x, mouse.state().pos.y);
+  }
+  mouse.reset();
+}
 function loop(now: number) {
   // 心跳 (每帧可被 js_log 确认): 首帧 + 崩溃转发, 防止 rAF 内异常静默冻结
   if (!loopStartedLogged) {
@@ -935,15 +592,24 @@ function loop(now: number) {
           state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
         }).catch(() => { /* 列表刷新失败忽略: 沿用旧列表 */ });
       }
+      handleScreenClick();
       drawTitle();
     } else if (state.screen === 'newgame') {
+      // 出发过场倒计时: 期间冻结选择交互, 结束后开跑
+      if (getNgLaunchT() > 0) {
+        setNgLaunchT(getNgLaunchT() - 16.67);
+        if (getNgLaunchT() <= 0) doLaunchRun();
+      } else {
+        handleScreenClick();
+      }
       drawNewgame();
     } else if (state.screen === 'characters') {
+      handleScreenClick();
       drawCharacters();
     } else {
       loopImpl(now);
     }
-    if (closeConfirmOpen) drawCloseConfirm();
+    if (isCloseConfirmOpen()) drawCloseConfirm();
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -1335,6 +1001,8 @@ function interactTown(state: GameState) {
       // 出发 = 新开一局: 打开远征选择屏 (主题/难度/地图模式), 不再续接旧局
       state.townPanel = null;
       state.ngFrom = 'town';
+      setNgLaunchT(-1);
+      setNgNaming(false);
       state.ngSel = {
         classIdx: CLASS_IDS.indexOf(state.player.classId),
         diffIdx: DIFFICULTIES.indexOf(state.difficulty),
@@ -1468,41 +1136,9 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
   }
 }
 
-/** C-302 传送过场绘制: 黑屏 + 扩散光圈 + 目标镇文字 (1s) */
+/** C-302 传送过场绘制: 委托给 screens/teleport.ts (US-026 附带抽取) */
 function drawTeleportTransition() {
-  const t = state.teleportTo;
-  const remain = Math.max(0, state.teleportT);
-  const progress = 1 - remain;  // 0→1
-  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  // 深空背景 (渐入)
-  const fade = Math.min(1, progress * 2);
-  hudCtx.fillStyle = `rgba(4,6,12,${fade})`;
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  // 扩散光圈 (中心 → 全屏)
-  const cx = hudCanvas.width / 2;
-  const cy = hudCanvas.height / 2;
-  const maxR = Math.hypot(cx, cy);
-  const ringR = 30 + progress * maxR;
-  hudCtx.beginPath();
-  hudCtx.arc(cx, cy, ringR, 0, Math.PI * 2);
-  hudCtx.strokeStyle = `rgba(160, 220, 255, ${0.7 * (1 - progress)})`;
-  hudCtx.lineWidth = 3;
-  hudCtx.stroke();
-  hudCtx.beginPath();
-  hudCtx.arc(cx, cy, Math.max(4, ringR * 0.6), 0, Math.PI * 2);
-  hudCtx.strokeStyle = `rgba(120, 180, 255, ${0.5 * (1 - progress)})`;
-  hudCtx.lineWidth = 2;
-  hudCtx.stroke();
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = `rgba(207, 232, 255, ${fade})`;
-  hudCtx.font = 'bold 30px monospace';
-  hudCtx.fillText(`传送中… ${t && TOWN_DEFS[t] ? TOWN_DEFS[t].name : ''}`, hudCanvas.width / 2, hudCanvas.height / 2 + 40);
-  hudCtx.fillStyle = '#668';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText(`[${Math.ceil(remain)}s]`, hudCanvas.width / 2, hudCanvas.height / 2 + 74);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
+  drawTeleportTransitionScreen(hudCtx, hudCanvas, state.teleportTo, state.teleportT);
 }
 
 /** 城镇绘制: 背景/NPC/玩家/提示/面板 */
@@ -1700,7 +1336,7 @@ function drawTownPanel() {
         hudCtx.fillStyle = '#c9aaff';
         hudCtx.font = 'bold 15px monospace';
         hudCtx.fillText(`${i + 1}. ${slotDisplay(slot)} — ${r ? RUNE_DEFS[r].name : ''}`, 60, y); y += 26;
-        hudCtx.fillStyle = '#667';
+        hudCtx.fillStyle = '#8a8a96';
         hudCtx.font = '12px monospace';
         hudCtx.fillText(`   ${r ? RUNE_DEFS[r].desc : ''}`, 60, y); y += 26;
       });
@@ -1789,16 +1425,48 @@ function formatTime(sec: number): string {
 /** 主属性显示名 (新建角色信息卡) */
 const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
 
-/** 按键提示 (A 收敛): 单点生成, 键位自定义后即时反映 */
+/** 按键提示 (A 收敛): 单点生成, 键位自定义后即时反映 (纯函数在 keybind.ts) */
 function keyHintMain(): string {
-  const kb = loadKeybinds();
-  return `WASD 移动 · 左/右键 攻击 · ${keyLabel(kb.skills.Q)}/${keyLabel(kb.skills.W)}/${keyLabel(kb.skills.E)}/${keyLabel(kb.skills.R)} 技能 · ${keyLabel(kb.dodge)} 翻滚 · ${keyLabel(kb.potionHp)}/${keyLabel(kb.potionMp)} 药水 · ${keyLabel(kb.equip)} 装备 · ${keyLabel(kb.interact)} 交互 · Esc 暂停`;
+  return keyHintMainText(loadKeybinds());
 }
 /** 设置面板技能名行 (键位动态) */
 function keyHintSkills(): string {
-  const kb = loadKeybinds();
-  return `${keyLabel(kb.skills.Q)} 火球 · ${keyLabel(kb.skills.W)} 连发 · ${keyLabel(kb.skills.E)} 回血 · ${keyLabel(kb.skills.R)} 大招`;
+  return keyHintSkillsText(loadKeybinds());
 }
+
+// ===== 标题屏打磨 (TS-001~009, 2026-08-12) =====
+
+/** TS-008: 存档格式标签 (与 src-tauri/src/save.rs SAVE_FORMAT_VERSION=11 同步维护) */
+const SAVE_FMT_LABEL = 'v11';
+
+/** US-026: getTitleFocus()/closeConfirmOpen/getNgLaunchT()/isNgNaming() 已移至 app/screenMachine.ts 模块状态
+ *  本地不再保留副本, 所有读用 getter, 所有写用 setter。
+ *  syncTitleFocus/moveTitleFocus/titleAct 三个函数由 screenMachine.ts 导出 (签名带 state+ctx)。
+ *  startNewgameFromTitle/openCharactersList 仍在本文件 (ctx 引用, 也被 drawTitle 等使用)。
+ */
+/** 新游戏 → 新局选择屏 (职业/难度/主题预填当前) — ctx callback */
+function startNewgameFromTitle(): void {
+  state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+  state.ngFrom = 'title';
+  setNgLaunchT(-1);
+  setNgNaming(false);
+  setScreen(state, 'newgame');
+  state.titleMsg = '';
+  inf('ui', '新游戏 → 选择屏');
+}
+
+/** 角色管理列表 (拉取后进屏) — ctx callback */
+function openCharactersList(): void {
+  listCharacters().then(list => {
+    state.charList = list;
+    state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
+    state.charConfirmDel = false;
+    setScreen(state, 'characters');
+    state.titleMsg = '';
+    inf('ui', `角色管理: ${list.length} 个角色`);
+  }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
+}
+
 
 /** C (P3-10): 键位条目几何 (绘制与命中共用) */
 function settingsKeyRects(): Array<{ key: string; label: string; value: string; x: number; y: number; w: number; h: number }> {
@@ -1855,7 +1523,7 @@ function drawSettingsPanel() {
   hudCtx.fillRect(sliderX, sliderY, 240, 10);
   hudCtx.fillStyle = '#c9aaff';
   hudCtx.fillRect(sliderX, sliderY, 240 * state.volume, 10);
-  hudCtx.strokeStyle = '#666';
+  hudCtx.strokeStyle = '#888';
   hudCtx.strokeRect(sliderX, sliderY, 240, 10);
   hudCtx.fillStyle = '#fff';
   hudCtx.font = '16px monospace';
@@ -1910,88 +1578,139 @@ function uiCursor(rects: Array<[number, number, number, number]>): void {
 }
 
 /** 创建角色确认 (C-202): 校验命名 → 入列表 → 进新局选择屏 (职业/难度已预填) */
-function confirmCreateCharacter(state: GameState): void {
+/** 创建角色 (newgame 出发前调用, ngFrom==='create'): 成功返回 true, 名字冲突等失败 false */
+function createCharacterNow(): boolean {
   let name = state.charNameInput.trim();
   if (name.length === 0) name = `char_${state.charList.length}`;
   // 安全化: 只留字母数字下划线, 防存档路径穿越
   name = name.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24);
   if (name.length === 0) name = `char_${state.charList.length}`;
   const used = new Set(state.charList.map(c => c.id));
-  if (used.has(name)) { state.titleMsg = `角色名 ${name} 已存在`; return; }
+  if (used.has(name)) { pushToast(state, `角色名 ${name} 已存在`, '#f66'); return false; }
+  const { classId, difficulty } = ngResolve(state.ngSel);
   state.currentChar = name;
   state.charList = [...state.charList, {
-    id: name, class: state.charNamingClass, level: 1, difficulty: state.charCreateDiff, theme: 'forest',
+    id: name, class: classId, level: 1, difficulty, theme: 'forest',
     last_played: Math.floor(Date.now() / 1000),
   }];
-  state.charCreating = false;
   state.charNameInput = '';
-  state.ngSel = {
-    classIdx: CLASS_IDS.indexOf(state.charNamingClass),
-    diffIdx: DIFFICULTIES.indexOf(state.charCreateDiff),
-    themeIdx: 0,
-    modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear'),
-  };
-  state.ngFrom = 'title';
+  pushToast(state, `新建角色: ${name} (${DIFFICULTY_MODS[difficulty].name})`, '#9cf');
+  void persistNowApp(state);
+  inf('ui', `新建角色 ${name} → 出发`);
+  return true;
+}
+
+/** 新建角色 (角色管理 [N]): 直接进新局选择屏, 命名框融入 (ngFrom='create') */
+function startCreateNewgame(): void {
+  state.charNameInput = '';
+  state.ngSel = { classIdx: 0, diffIdx: 0, themeIdx: 0, modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+  state.ngFrom = 'create';
+  setNgLaunchT(-1);
+  setNgNaming(true);
   setScreen(state, 'newgame');
   state.titleMsg = '';
-  pushToast(state, `新建角色: ${name} (${DIFFICULTY_MODS[state.charCreateDiff].name})`, '#9cf');
-  inf('ui', `新建角色 ${name} → 新局选择屏`);
+  inf('ui', '新建角色 → 新局选择屏 (输入名字)');
 }
 
-/** 打开新建角色面板 (默认职业野蛮人/难度普通/名字占位) */
-function openCreatePanel(state: GameState): void {
-  state.charCreating = true;
-  state.charConfirmDel = false;
-  state.charNamingClass = CLASS_IDS[0];
-  state.charCreateDiff = 'normal';
-  state.charNameInput = `${CLASS_IDS[0]}_`;
-  state.titleMsg = '';
+// === 新局出发流程 (US-026: getNgLaunchT()/isNgNaming() 移至 app/screenMachine.ts) ===
+const NG_LAST_KEY = 'voidbound.lastNg';  // 上次配置记忆 (localStorage)
+
+function saveLastNg(): void {
+  try {
+    localStorage.setItem(NG_LAST_KEY, JSON.stringify(state.ngSel));
+  } catch { /* 隐私/禁用时静默 */ }
+}
+function loadLastNg(): NewgameSel | null {
+  try {
+    const raw = localStorage.getItem(NG_LAST_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as NewgameSel;
+    if (typeof p?.classIdx === 'number' && typeof p?.diffIdx === 'number' && typeof p?.themeIdx === 'number' && typeof p?.modeIdx === 'number') return p;
+    return null;
+  } catch { return null; }
 }
 
-/** 创建面板难度步进 (跳过未解锁, 普通恒可选中) */
-function charDiffStep(dir: 1 | -1): void {
-  const cur = DIFFICULTIES.indexOf(state.charCreateDiff);
-  for (let step = 1; step < DIFFICULTIES.length; step++) {
-    const idx = (cur + dir * step + DIFFICULTIES.length) % DIFFICULTIES.length;
-    const d = DIFFICULTIES[idx];
-    if (unlockedDifficulty(state.cleared, d)) {
-      state.charCreateDiff = d;
-      state.titleMsg = '';
-      inf('ui', `创建难度 → ${DIFFICULTY_MODS[d].name}`);
-      return;
-    }
-  }
+/** 新局出发 (键盘 Enter / 鼠标开始 / 命名确认共用): 解锁校验 → 创建模式先建角色 → 0.7s 过场 */
+function startFromNewgame(): void {
+  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
+  if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return; }
+  if (!themeUnlocked(state.cleared, theme)) { pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66'); return; }
+  if (state.ngFrom === 'create' && !createCharacterNow()) return;  // 创建失败(重名等)留在选择屏
+  saveLastNg();
+  setNgLaunchT(NG_LAUNCH_MS);
+  playSfxClient('ui_click');
+  inf('ui', `出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
+}
+
+/** 过场结束真正开跑 (loop newgame 分支倒计时触发) */
+function doLaunchRun(): void {
+  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
+  bindClass(state, classId);  // M5 C-103: 新局绑定职业
+  startRun(state, theme, difficulty, mode);
 }
 
 /** 主题显示名 (卡片摘要用) */
 const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
 
-/** 标题画面 (GAME_FLOW §1.2): 主菜单 */
+/** 标题画面 (GAME_FLOW §1.2): 主菜单 — TS-001~009 打磨版 (2026-08-12) */
 function drawTitle() {
-  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.fillStyle = '#0b0b12';
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#c9aaff';
-  hudCtx.font = 'bold 72px monospace';
-  hudCtx.fillText('VOIDBOUND', hudCanvas.width / 2, hudCanvas.height / 2 - 140);
-  hudCtx.fillStyle = '#888';
-  hudCtx.font = '18px monospace';
-  hudCtx.fillText('虚空之缚 — 2D 随机地下城 ARPG (战斗原型)', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
-  hudCtx.fillStyle = '#eee';
-  hudCtx.font = 'bold 22px monospace';
+  const w = hudCanvas.width, h = hudCanvas.height;
   const mx = mouse.state().pos.x;
   const my = mouse.state().pos.y;
   const lmb = mouse.state().buttons.LMB;
+  const kb = loadKeybinds();
   const menuRects: Array<[number, number, number, number]> = [];
   const hasSave = state.charList.length > 0;
+  syncTitleFocus(hasSave);
   // 最近存档排序: 按 last_played 降序取前 5 (0/缺失排最后)
   const recentCards = hasSave
     ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
     : [];
-  // 右侧最近存档卡片区 (与主菜单左右分区)
-  const cardX = hudCanvas.width - 460, cardW = 360, cardY0 = 330, cardH = 42, cardGap = 6;
+  // 立绘职业: 当前角色优先, 无存档用默认 (TS-001)
+  const curChar = hasSave ? (state.charList.find(c => c.id === state.currentChar) ?? state.charList[0]) : null;
+  const portraitClass: ClassId = (curChar?.class as ClassId) ?? (state.player.classId as ClassId) ?? 'barbarian';
+  // 主菜单布局 (与 handleUiClick 同几何): 有存档 → 金色大按钮 + [2][3][R]; 无存档 → [1][2][R]
+  const menuY0 = h / 2 - 30;
+  const menuItems: Array<{ y: number; label: string; key: string; icon: 'sword' | 'gear' | 'portrait'; sub: string }> = hasSave
+    ? [
+        { y: menuY0 + 40, label: '新游戏', key: '2', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
+        { y: menuY0 + 80, label: '设置', key: '3', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
+        { y: menuY0 + 120, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
+      ]
+    : [
+        { y: menuY0, label: '新游戏', key: '1', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
+        { y: menuY0 + 40, label: '设置', key: '2', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
+        { y: menuY0 + 80, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
+      ];
+  const itemW = 320, itemH = 38;
+
+  // ---- GL 层 (TS-001 立绘 + 脚下光环; TS-004 菜单 GL 图标): 先清空, 2D 层对应区域挖孔 ----
+  const px = 24, py = h - 206, pw = 180, ph = 180;  // 左下角 (右下被最近存档卡片占用)
+  const iconSprites: Array<{ x: number; y: number; atlas: string; name: string }> = [];
+  for (const it of menuItems) {
+    if (it.icon === 'sword') iconSprites.push({ x: w / 2 - itemW / 2 + 14, y: it.y - itemH / 2 + 9, atlas: 'icons', name: 'skill_melee' });
+    else if (it.icon === 'portrait') iconSprites.push({ x: w / 2 - itemW / 2 + 14, y: it.y - itemH / 2 + 9, atlas: 'characters', name: CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian });
+  }
+  gl.clearColor(0.043, 0.043, 0.071, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  // 脚下光环 (城镇 NPC 同类画法: ui/slide_horizontal_color additive)
+  drawSprite(gl, quad, res, { x: px + 24, y: py + ph - 24 }, { w: 132, h: 22 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1], blend: 'add' });
+  drawSprite(gl, quad, res, { x: px, y: py }, { w: pw, h: ph }, 'characters', CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian, {});
+  for (const ip of iconSprites) {
+    drawSprite(gl, quad, res, { x: ip.x, y: ip.y }, { w: 20, h: 20 }, ip.atlas, ip.name, {});
+  }
+
+  // ---- 2D 层 ----
+  drawTitleBackground(hudCtx, hudCanvas);  // TS-002: 基色 + 径向渐变 + 微尘 (委托 screens/title.ts)
+  // 挖孔露出 GL: 立绘+光环 / 菜单 GL 图标
+  hudCtx.clearRect(px - 8, py - 8, pw + 16, ph + 36);
+  for (const ip of iconSprites) hudCtx.clearRect(ip.x - 2, ip.y - 2, 24, 24);
+
+  // TS-005: 标题外发光 + 副标字距 + 玩家向文案
+  drawTitleWordmark(hudCtx, hudCanvas);
+
+  // 右侧最近存档卡片区 — TS-003: 加场景图标 (当前角色用内存 scene, 其余用存档摘要)
+  const cardX = w - 460, cardW = 360, cardY0 = 330, cardH = 42, cardGap = 6;
   recentCards.forEach((c, i) => {
     const cy = cardY0 + i * (cardH + cardGap);
     const hit = inRect(mx, my, cardX, cy, cardW, cardH);
@@ -2004,56 +1723,140 @@ function drawTitle() {
     const rep = CLASS_DEFS[(c.class as ClassId) ?? 'barbarian'];
     hudCtx.textAlign = 'left';
     hudCtx.textBaseline = 'middle';
+    drawSceneIcon(hudCtx, cardX + 22, cy + 14, c.id === state.currentChar ? state.mode : (c.scene ?? 'dungeon'));
     hudCtx.fillStyle = rep?.color ?? '#eee';
     hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(`${rep?.name ?? c.class} ${c.id}`, cardX + 14, cy + 14);
+    hudCtx.fillText(`${rep?.name ?? c.class} ${c.id}`, cardX + 38, cy + 14);
     hudCtx.fillStyle = hit ? '#fff' : '#caa';
     hudCtx.font = '13px monospace';
     hudCtx.textAlign = 'right';
     hudCtx.fillText(`Lv${c.level} · ${THEME_NAMES[c.theme] ?? c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}`, cardX + cardW - 14, cy + 14);
     menuRects.push([cardX, cy, cardW, cardH]);
   });
-  // 主菜单: 有存档 → 继续游戏置首 (金色主 CTA); 无存档 → 原 3 项
-  const menuY0 = hudCanvas.height / 2 - 30;
-  const menuItems: Array<[number, string, boolean]> = hasSave
-    ? [[menuY0, '[1] ▶ 继续游戏', true], [menuY0 + 40, '[2] 新游戏', false], [menuY0 + 80, '[3] 设置', false], [menuY0 + 120, '[R] 角色管理', false]]
-    : [[menuY0, '[1] 新游戏', false], [menuY0 + 40, '[2] 设置', false], [menuY0 + 80, '[R] 角色管理', false]];
-  for (const [y, label, primary] of menuItems) {
-    const ry = y - 19, rw = 320, rh = 38;
-    const hit = inRect(mx, my, hudCanvas.width / 2 - rw / 2, ry, rw, rh);
-    const down = hit && lmb;  // 按下反馈: 松开瞬间已触发动作, 视觉加深
-    if (primary) {
-      // 金色主 CTA 盒
-      hudCtx.fillStyle = down ? 'rgba(255,214,74,0.35)' : hit ? 'rgba(255,214,74,0.16)' : 'rgba(40,34,10,0.55)';
-      hudCtx.fillRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
-      hudCtx.strokeStyle = down ? '#fff' : '#ffd64a';
-      hudCtx.lineWidth = down ? 2 : hit ? 2 : 1;
-      hudCtx.strokeRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
-      hudCtx.fillStyle = hit ? '#fff' : '#ffd64a';
-    } else if (hit) {
-      hudCtx.fillStyle = down ? 'rgba(102,204,255,0.32)' : 'rgba(102,204,255,0.13)';
-      hudCtx.fillRect(hudCanvas.width / 2 - rw / 2, ry, rw, rh);
-      hudCtx.fillStyle = down ? '#fff' : '#66ccff';
-    } else {
-      hudCtx.fillStyle = '#eee';
+  // 金色大按钮"继续游戏" — TS-003: + 相对时间 / 场景图标 / 跑局进度条 (剩余怪)
+  if (hasSave) {
+    const recent = recentCards[0];
+    const contW = 480, contH = 46;
+    const contX = w / 2 - contW / 2, contY = menuY0 - contH / 2;
+    const hit = inRect(mx, my, contX, contY, contW, contH);
+    const down = hit && lmb;
+    const focused = getTitleFocus() === 0;
+    const active = hit || focused;
+    hudCtx.fillStyle = down ? 'rgba(255,214,74,0.35)' : active ? 'rgba(255,214,74,0.16)' : 'rgba(40,34,10,0.55)';
+    hudCtx.fillRect(contX, contY, contW, contH);
+    hudCtx.strokeStyle = down ? '#fff' : '#ffd64a';
+    hudCtx.lineWidth = down ? 3 : active ? 2 : 1;
+    hudCtx.strokeRect(contX, contY, contW, contH);
+    if (focused) {
+      hudCtx.strokeStyle = '#ffd64a';
+      hudCtx.lineWidth = 2;
+      hudCtx.strokeRect(contX - 3, contY - 3, contW + 6, contH + 6);
     }
-    hudCtx.fillText(label, hudCanvas.width / 2, y);
-    menuRects.push([hudCanvas.width / 2 - rw / 2, ry, rw, rh]);
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillStyle = hit ? '#fff' : '#ffd64a';
+    hudCtx.font = 'bold 20px monospace';
+    hudCtx.fillText('[1] ▶ 继续游戏', w / 2, contY + contH / 2 - 9);
+    if (recent) {
+      // 行 1 右: 上次游玩距今
+      hudCtx.fillStyle = '#bba';
+      hudCtx.font = '12px monospace';
+      hudCtx.textAlign = 'right';
+      hudCtx.fillText(relTime(recent.last_played), contX + contW - 14, contY + contH / 2 - 9);
+      // 行 2: 场景图标 + 摘要
+      const rep = CLASS_DEFS[(recent.class as ClassId) ?? 'barbarian'];
+      drawSceneIcon(hudCtx, contX + 16, contY + contH / 2 + 13, recent.id === state.currentChar ? state.mode : (recent.scene ?? 'dungeon'));
+      hudCtx.fillStyle = '#caa';
+      hudCtx.font = '13px monospace';
+      hudCtx.textAlign = 'center';
+      hudCtx.fillText(`${rep?.name ?? recent.class} ${recent.id} · Lv${recent.level} · ${THEME_NAMES[recent.theme] ?? recent.theme} · ${DIFFICULTY_MODS[recent.difficulty]?.name ?? recent.difficulty}`, w / 2 + 10, contY + contH / 2 + 13);
+      // 跑局进度条 (仅当前角色 + 地牢 + 有跑局数据)
+      if (recent.id === state.currentChar && state.mode === 'dungeon' && state.run.total > 0) {
+        const alive = state.run.alive, total = state.run.total;
+        const frac = state.run.bossAlive ? 1 : Math.min(1, Math.max(0, 1 - alive / total));
+        const bx = contX + contW - 104, bw = 64, by = contY + contH / 2 + 9, bh = 5;
+        hudCtx.fillStyle = '#333';
+        hudCtx.fillRect(bx, by, bw, bh);
+        if (frac > 0) {
+          hudCtx.fillStyle = state.run.bossAlive ? '#ffd64a' : '#c9aaff';
+          hudCtx.fillRect(bx, by, Math.max(2, bw * frac), bh);
+        }
+        hudCtx.strokeStyle = '#8a8a96';
+        hudCtx.lineWidth = 1;
+        hudCtx.strokeRect(bx, by, bw, bh);
+        hudCtx.fillStyle = hit ? '#eed' : '#997';
+        hudCtx.font = '9px monospace';
+        hudCtx.textAlign = 'right';
+        hudCtx.fillText(state.run.bossAlive ? 'Boss' : `${alive}/${total}`, contX + contW - 34, by + bh / 2 + 3);
+      }
+    }
+    menuRects.push([contX, contY, contW, contH]);
   }
-  hudCtx.fillStyle = '#666';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText(keyHintMain(), hudCanvas.width / 2, hasSave ? 660 : 500);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
+  // 菜单项 (TS-004: 图标/键帽/副标题; TS-007: 金边外扩 + 文字右移 + 焦点环)
+  menuItems.forEach((it, i) => {
+    const focusIdx = hasSave ? i + 1 : i;
+    const ry = it.y - itemH / 2;
+    const rx = w / 2 - itemW / 2;
+    const hit = inRect(mx, my, rx, ry, itemW, itemH);
+    const down = hit && lmb;  // 按下反馈: 松开瞬间已触发动作, 视觉加深
+    const focused = getTitleFocus() === focusIdx;
+    const active = hit || focused;
+    if (active) {
+      hudCtx.fillStyle = down ? 'rgba(102,204,255,0.32)' : 'rgba(102,204,255,0.13)';
+      hudCtx.fillRect(rx, ry, itemW, itemH);
+      hudCtx.strokeStyle = '#ffd64a';
+      hudCtx.lineWidth = down ? 3 : 2;
+      hudCtx.strokeRect(rx - 2, ry - 2, itemW + 4, itemH + 4);
+    } else {
+      hudCtx.strokeStyle = 'rgba(42,42,58,0.7)';
+      hudCtx.lineWidth = 1;
+      hudCtx.strokeRect(rx, ry, itemW, itemH);
+    }
+    if (it.icon === 'gear') drawGearIcon(hudCtx, rx + 26, it.y, 8, active, down);  // 设置图标 (图集无齿轮, 程序化)
+    hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
+    hudCtx.fillStyle = active ? (down ? '#fff' : '#66ccff') : '#eee';
+    hudCtx.font = 'bold 22px monospace';
+    hudCtx.fillText(it.label, w / 2 + 6 + (active ? 4 : 0), it.y);
+    drawKeycap(hudCtx, w / 2 + itemW / 2 - 46, ry + 7, it.key, active);
+    // hover/焦点副标题 (TS-004): 菜单项左侧, 右对齐
+    if (active) {
+      hudCtx.textAlign = 'right';
+      hudCtx.fillStyle = '#9cf';
+      hudCtx.font = '12px monospace';
+      hudCtx.fillText(it.sub, rx - 16, it.y);
+      hudCtx.textAlign = 'center';
+    }
+    menuRects.push([rx, ry, itemW, itemH]);
+  });
+  // hover 填充画在 GL 图标孔之上 → 菜单绘制完重新挖孔 (仅图标区, 不影响金边/文字)
+  for (const ip of iconSprites) hudCtx.clearRect(ip.x - 2, ip.y - 2, 24, 24);
 
-  // 标题页状态消息 (读档反馈等)
+  // TS-006: 玩法说明带 (4 列, 键位随自定义)
+  drawInfoBand(hudCtx, hudCanvas, mouse.state().pos, kb, menuRects);
+
+  // TS-009: 设置齿轮入口 (右下角, 点击开设置面板)
+  const gearX = w - 36, gearY = h - 36;
+  const gearHit = inRect(mx, my, gearX - 14, gearY - 14, 28, 28);
+  drawGearIcon(hudCtx, gearX, gearY, 9, gearHit, gearHit && lmb);
+  menuRects.push([gearX - 14, gearY - 14, 28, 28]);
+
+  // 底部: 键位提示 / 状态消息 / 版本信息 (TS-008)
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillStyle = '#888';
+  hudCtx.font = '14px monospace';
+  hudCtx.fillText(keyHintMain(), w / 2, h - 46);
   if (state.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '16px monospace';
-    hudCtx.textAlign = 'center';
-    hudCtx.fillText(state.titleMsg, hudCanvas.width / 2, hasSave ? 690 : 550);
-    hudCtx.textAlign = 'left';
+    hudCtx.fillText(state.titleMsg, w / 2, h - 124);
   }
+  hudCtx.fillStyle = '#4a4a58';
+  hudCtx.font = '11px monospace';
+  hudCtx.fillText(`v${GAME_VERSION} · 战斗原型 · 存档 ${SAVE_FMT_LABEL}`, w / 2, h - 22);
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
 
   // 标题页设置面板 (C8: 与暂停共用 drawSettingsPanel, 含滑条/键位自定义)
   if (state.settingsOpen) {
@@ -2062,227 +1865,19 @@ function drawTitle() {
   uiCursor(menuRects);
 }
 
-/** 新局屏布局 (绘制与鼠标命中共用): x 相对 w/2, y 相对 cy=h/2-110 */
-const NG_LAYOUT = {
-  cy: -110,
-  classX: -600, classW: 300, classH: 40,   // 左列职业卡 (title 模式)
-  diffX: -230, diffW: 280, diffH: 36,      // 中列难度卡
-  rightX: 200, rightW: 360,                // 右列: 主题卡 + 模式卡
-  themeY: -6, themeW: 82, themeH: 72, themeGap: 8,
-  modeY: 74, modeH: 36, modeGap: 6,
-  startX: -200, startY: -92, startW: 400, startH: 48,
-};
-
-/** 新局/远征选择屏: 标题新游戏可换职业; 城镇出发职业锁定, 出发 = 新开一局 */
+/** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
 function drawNewgame() {
-  const w = hudCanvas.width;
-  const h = hudCanvas.height;
-  const fromTown = state.ngFrom === 'town';
-  const cy = h / 2 + NG_LAYOUT.cy;
-  const selClass = CLASS_DEFS[CLASS_IDS[state.ngSel.classIdx]];
-  const selTheme = THEMES[state.ngSel.themeIdx];
-  const selMode = MAP_MODES[state.ngSel.modeIdx];
   const rects: Array<[number, number, number, number]> = [];
-  const mx = mouse.state().pos.x;
-  const my = mouse.state().pos.y;
-  const hover = (x: number, y: number, ww: number, hh: number) => inRect(mx, my, x, y, ww, hh);
-
-  // GL 立绘 (左上, 2D 层挖孔)
-  const px = w / 2 - 620, py = 56, pw = 150, ph = 150;
-  drawUiPortrait(selClass.id, px, py, pw, ph);
-  hudCtx.clearRect(0, 0, w, h);
-  hudCtx.fillStyle = '#0b0b12';
-  hudCtx.fillRect(0, 0, w, h);
-  hudCtx.clearRect(px, py, pw, ph);
-  hudCtx.strokeStyle = '#556';
-  hudCtx.lineWidth = 2;
-  hudCtx.strokeRect(px - 4, py - 4, pw + 8, ph + 8);
-
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#c9aaff';
-  hudCtx.font = 'bold 44px monospace';
-  hudCtx.fillText(fromTown ? '远征出发' : '新游戏', w / 2, 76);
-  hudCtx.font = '14px monospace';
-  hudCtx.fillStyle = '#889';
-  hudCtx.fillText(fromTown ? '从城镇出发 = 新开一局 (选择目的地与挑战)' : '选择职业与挑战, 出发进入地牢', w / 2, 110);
-
-  // 左列: 职业 (town 模式锁定当前角色)
-  const cx = w / 2 + NG_LAYOUT.classX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#9cf';
-  hudCtx.fillText(fromTown ? `当前: ${selClass.name}` : '职业 [1-6]', cx + 140, cy - 40);
-  if (fromTown) {
-    hudCtx.font = 'bold 20px monospace';
-    hudCtx.fillStyle = selClass.color;
-    hudCtx.fillText(selClass.name, cx + 140, cy - 8);
-    hudCtx.font = '13px monospace';
-    hudCtx.fillStyle = '#bbb';
-    hudCtx.fillText(selClass.title, cx + 140, cy + 20);
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText(`${selClass.desc}`, cx + 140, cy + 44);
-  } else {
-    CLASS_IDS.forEach((id, i) => {
-      const def = CLASS_DEFS[id];
-      const sel = state.ngSel.classIdx === i;
-      const ry = cy + i * 46 - 14;
-      if (hover(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH)) {
-        hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-        hudCtx.fillRect(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH);
-      }
-      hudCtx.font = 'bold 18px monospace';
-      hudCtx.fillStyle = sel ? def.color : '#667';
-      hudCtx.fillText(`${i + 1} ${sel ? '▶ ' : '  '}${def.name}${sel ? ' ◀' : ''}`, cx + 150, cy + i * 46);
-      hudCtx.font = '12px monospace';
-      hudCtx.fillStyle = sel ? '#bbb' : '#445';
-      hudCtx.fillText(def.title, cx + 150, cy + i * 46 + 18);
-      rects.push([cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH]);
-    });
-    hudCtx.fillStyle = selClass.color;
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText(`${selClass.desc} · 主属性 ${ATTR_NAMES[selClass.attr] ?? selClass.attr}`, cx + 150, cy + 6 * 46 + 6);
-  }
-
-  // 中列: 难度 (Z/X)
-  const dx = w / 2 + NG_LAYOUT.diffX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#ffd';
-  hudCtx.fillText('难度 [Z/X]', dx + 140, cy - 40);
-  DIFFICULTIES.forEach((d, i) => {
-    const sel = state.ngSel.diffIdx === i;
-    const locked = !unlockedDifficulty(state.cleared, d);
-    const mod = DIFFICULTY_MODS[d];
-    const ry = cy + i * 44 - 16;
-    if (sel) {
-      hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
-    } else if (hover(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH)) {
-      hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
-    }
-    hudCtx.font = 'bold 18px monospace';
-    hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#4a4a55' : '#99a';
-    hudCtx.fillText(`${sel ? '▶ ' : '  '}${mod.name}${sel ? ' ◀' : ''}${locked ? ' (未解锁)' : ''}`, dx + 140, cy + i * 44);
-    hudCtx.font = '12px monospace';
-    hudCtx.fillStyle = sel ? '#caa' : '#667';
-    hudCtx.fillText(`HP×${mod.hpMult} 掉落×${mod.dropMult}${d === 'hardcore' ? ' 永久死亡' : ''}`, dx + 140, cy + i * 44 + 18);
-    rects.push([dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH]);
-  });
-
-  // 右列: 主题卡 (←/→) + 模式卡 (M)
-  const rx = w / 2 + NG_LAYOUT.rightX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#8f8';
-  hudCtx.fillText('主题 [←/→]', rx + 180, cy - 40);
-  THEMES.forEach((t, i) => {
-    const locked = !themeUnlocked(state.cleared, t);
-    const sel = state.ngSel.themeIdx === i;
-    const tx = rx + i * (NG_LAYOUT.themeW + NG_LAYOUT.themeGap);
-    const ty = cy + NG_LAYOUT.themeY;
-    hudCtx.fillStyle = locked ? '#16161e' : '#23232f';
-    hudCtx.fillRect(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH);
-    hudCtx.strokeStyle = sel ? '#ffd64a' : hover(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH) ? '#667' : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH);
-    hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#5a5a66' : '#ccc';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(t, tx + NG_LAYOUT.themeW / 2, ty + NG_LAYOUT.themeH / 2);
-    if (locked) {
-      hudCtx.fillStyle = '#887';
-      hudCtx.font = '10px monospace';
-      hudCtx.fillText('未解锁', tx + NG_LAYOUT.themeW / 2, ty + NG_LAYOUT.themeH / 2 + 14);
-    }
-    rects.push([tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH]);
-  });
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#fc9';
-  hudCtx.fillText('模式 [M]', rx + 180, cy + NG_LAYOUT.modeY - 22);
-  MAP_MODES.forEach((md, i) => {
-    const sel = state.ngSel.modeIdx === i;
-    const myy = cy + NG_LAYOUT.modeY + i * (NG_LAYOUT.modeH + NG_LAYOUT.modeGap);
-    hudCtx.fillStyle = sel ? 'rgba(255,204,153,0.18)' : hover(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH) ? 'rgba(255,255,255,0.06)' : 'rgba(20,20,28,0.9)';
-    hudCtx.fillRect(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH);
-    hudCtx.strokeStyle = sel ? '#fc9' : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH);
-    hudCtx.fillStyle = sel ? '#ffd64a' : '#99a';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(MAP_MODE_NAMES[md], rx + 12, myy + NG_LAYOUT.modeH / 2);
-    rects.push([rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH]);
-  });
-  hudCtx.fillStyle = '#778';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText(MAP_MODE_DESC[selMode], rx + 180, cy + NG_LAYOUT.modeY + 3 * (NG_LAYOUT.modeH + NG_LAYOUT.modeGap) + 6);
-
-  // 底部: 出发/开始 + 返回
-  const bx = w / 2 + NG_LAYOUT.startX;
-  const by = h + NG_LAYOUT.startY;
-  const startHit = hover(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  const startDown = startHit && mouse.state().buttons.LMB;
-  if (startHit) {
-    hudCtx.fillStyle = startDown ? 'rgba(201,170,255,0.35)' : 'rgba(201,170,255,0.18)';
-    hudCtx.fillRect(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  }
-  hudCtx.strokeStyle = startDown ? '#fff' : '#c9aaff';
-  hudCtx.lineWidth = startDown ? 3 : 2;
-  hudCtx.strokeRect(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  hudCtx.fillStyle = startHit ? '#fff' : '#bbb';
-  hudCtx.font = 'bold 18px monospace';
-  hudCtx.fillText(`[Enter] ${fromTown ? '出发 (新开一局)' : '开始'}`, w / 2, by + NG_LAYOUT.startH / 2);
-  rects.push([bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH]);
-
-  hudCtx.fillStyle = '#fff';
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText(`[Esc] 返回${fromTown ? '城镇' : '标题'} · 鼠标点击亦可`, w / 2, h - 36);
-  rects.push([20, 20, 200, 40]);
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '13px monospace';
-  hudCtx.textAlign = 'left';
-  hudCtx.fillText(`← 返回${fromTown ? '城镇' : '标题'}`, 24, 42);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-  uiCursor(rects);
+  const ngCtx: NewgameCtx = {
+    state, hudCtx, hudCanvas, mouse, drawUiPortrait,
+    isNgNaming, getNgLaunchT, loadLastNg, uiCursor,
+  };
+  drawNewgameScreen(ngCtx, rects);
 }
 
-/** 关窗确认覆盖层: 全屏遮罩 + [Y] 保存并退出 / [N] 取消 (键盘与鼠标均可) */
+/** 关窗确认覆盖层: 委托给 screens/close.ts (US-026 附带抽取) */
 function drawCloseConfirm() {
-  hudCtx.fillStyle = 'rgba(0,0,0,0.7)';
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#ffd';
-  hudCtx.font = 'bold 26px monospace';
-  hudCtx.fillText('确认退出?', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
-  hudCtx.fillStyle = '#9aa';
-  hudCtx.font = '15px monospace';
-  const inGame = state.screen !== 'title';
-  hudCtx.fillText(inGame ? (closeConfirmSaving ? '正在保存…' : '当前进度会自动保存') : '未进入游戏, 无需保存', hudCanvas.width / 2, hudCanvas.height / 2);
-  if (!closeConfirmSaving) {
-    const mx = mouse.state().pos.x;
-    const my = mouse.state().pos.y;
-    const yR: [number, number, number, number] = [hudCanvas.width / 2 - 140, hudCanvas.height / 2 + 40, 120, 40];
-    const nR: [number, number, number, number] = [hudCanvas.width / 2 + 20, hudCanvas.height / 2 + 40, 120, 40];
-    const yH = inRect(mx, my, ...yR);
-    const nH = inRect(mx, my, ...nR);
-    hudCtx.fillStyle = yH ? '#2a3a2a' : '#1c2a1c';
-    hudCtx.fillRect(...yR);
-    hudCtx.strokeStyle = yH ? '#fff' : '#5a5';
-    hudCtx.lineWidth = yH ? 2 : 1;
-    hudCtx.strokeRect(...yR);
-    hudCtx.fillStyle = '#8f8';
-    hudCtx.font = 'bold 18px monospace';
-    hudCtx.fillText(inGame ? '[Y] 保存并退出' : '[Y] 退出', hudCanvas.width / 2 - 80, hudCanvas.height / 2 + 60);
-    hudCtx.fillStyle = nH ? '#3a2a2a' : '#221c1c';
-    hudCtx.fillRect(...nR);
-    hudCtx.strokeStyle = nH ? '#fff' : '#a55';
-    hudCtx.lineWidth = nH ? 2 : 1;
-    hudCtx.strokeRect(...nR);
-    hudCtx.fillStyle = '#f88';
-    hudCtx.fillText('[N] 取消', hudCanvas.width / 2 + 80, hudCanvas.height / 2 + 60);
-  }
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
+  drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, closeConfirmSaving, mouse);
 }
 
 /** 角色管理屏 (C-202): 列表(职业/等级/难度) + 新建(N) + 删除(D 二次确认) + Enter 切换 */
@@ -2297,8 +1892,8 @@ function drawCharacters() {
   hudCtx.fillText('角色管理', hudCanvas.width / 2, 64);
   const cx = hudCanvas.width / 2;
 
-  // C (P1-4): 右上"收集进度"按钮 (创建/删除确认之外均可点)
-  if (!state.charCreating && !state.charConfirmDel) {
+  // C (P1-4): 右上"收集进度"按钮 (删除确认之外均可点)
+  if (!state.charConfirmDel) {
     const cbR: [number, number, number, number] = [hudCanvas.width - 150, 20, 130, 30];
     const cbHit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cbR);
     hudCtx.fillStyle = cbHit ? 'rgba(201,170,255,0.18)' : 'rgba(30,30,42,0.9)';
@@ -2313,11 +1908,6 @@ function drawCharacters() {
   // C (P1-4): 收集总览覆盖层
   if (state.collectOpen) {
     drawCollectionPanel();
-    return;
-  }
-
-  if (state.charCreating) {
-    drawCreatePanel(cx);
     return;
   }
 
@@ -2399,140 +1989,10 @@ function drawCharacters() {
   hudCtx.textBaseline = 'top';
 }
 
-/** 新建角色面板: 左职业卡 + 中立绘/信息 + 右难度(默认普通) + 底命名/按钮 (全部鼠标可点) */
-function drawCreatePanel(cx: number) {
-  const w = hudCanvas.width;
-  const h = hudCanvas.height;
-  const mx = mouse.state().pos.x;
-  const my = mouse.state().pos.y;
-  const hover = (x: number, y: number, ww: number, hh: number) => inRect(mx, my, x, y, ww, hh);
-  const rects: Array<[number, number, number, number]> = [];
-  const selDef = CLASS_DEFS[state.charNamingClass];
+/** 新建角色入口在角色管理 [N] / 新建按钮 → 直接进新局选择屏 (命名框融入, drawNewgame) */
 
-  // GL 立绘 (中左, 2D 挖孔)
-  const px = cx - 320, py = 96, pw = 240, ph = 240;
-  drawUiPortrait(state.charNamingClass, px, py, pw, ph);
-  hudCtx.clearRect(px, py, pw, ph);
-  hudCtx.strokeStyle = selDef.color;
-  hudCtx.lineWidth = 2;
-  hudCtx.strokeRect(px - 4, py - 4, pw + 8, ph + 8);
 
-  // 左列: 职业卡
-  const cxp = cx - 660, cw = 220, ch = 50;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#9cf';
-  hudCtx.fillText('职业 [1-6]', cxp + cw / 2, 100);
-  CLASS_IDS.forEach((id, i) => {
-    const def = CLASS_DEFS[id];
-    const sel = state.charNamingClass === id;
-    const cyy = 118 + i * (ch + 8);
-    hudCtx.fillStyle = sel ? 'rgba(255,255,255,0.10)' : hover(cxp, cyy, cw, ch) ? 'rgba(255,255,255,0.05)' : 'rgba(20,20,28,0.9)';
-    hudCtx.fillRect(cxp, cyy, cw, ch);
-    hudCtx.strokeStyle = sel ? def.color : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(cxp, cyy, cw, ch);
-    hudCtx.fillStyle = sel ? def.color : '#ccc';
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(`${i + 1} ${def.name}`, cxp + cw / 2, cyy + ch / 2 - 7);
-    hudCtx.fillStyle = sel ? '#bbb' : '#667';
-    hudCtx.font = '11px monospace';
-    hudCtx.fillText(def.title, cxp + cw / 2, cyy + ch / 2 + 12);
-    rects.push([cxp, cyy, cw, ch]);
-  });
-
-  // 中: 角色信息 (立绘右侧)
-  const ix = cx - 40;
-  hudCtx.textAlign = 'left';
-  hudCtx.fillStyle = selDef.color;
-  hudCtx.font = 'bold 30px monospace';
-  hudCtx.fillText(selDef.name, ix, 130);
-  hudCtx.fillStyle = '#bbb';
-  hudCtx.font = 'bold 16px monospace';
-  hudCtx.fillText(selDef.title, ix, 168);
-  hudCtx.fillStyle = '#ffd64a';
-  hudCtx.font = '15px monospace';
-  hudCtx.fillText(`主属性: ${ATTR_NAMES[selDef.attr] ?? selDef.attr}`, ix, 200);
-  hudCtx.fillStyle = '#9aa';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText(selDef.desc, ix, 226);
-  hudCtx.fillStyle = '#778';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText('每级自动成长主属性, 技能点自由分配', ix, 250);
-  hudCtx.textAlign = 'center';
-
-  // 右: 难度 (默认普通, Z/X)
-  const dxp = cx + 170, dw = 220, dh = 34;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#ffd';
-  hudCtx.fillText('难度 [Z/X] · 默认: 普通', dxp + dw / 2, 100);
-  DIFFICULTIES.forEach((d, i) => {
-    const sel = state.charCreateDiff === d;
-    const locked = !unlockedDifficulty(state.cleared, d);
-    const cyy = 118 + i * (dh + 6);
-    hudCtx.fillStyle = sel ? 'rgba(255,214,74,0.15)' : hover(dxp, cyy, dw, dh) ? 'rgba(255,255,255,0.05)' : 'rgba(20,20,28,0.9)';
-    hudCtx.fillRect(dxp, cyy, dw, dh);
-    hudCtx.strokeStyle = sel ? '#ffd64a' : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(dxp, cyy, dw, dh);
-    hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#5a5a66' : '#aaa';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(DIFFICULTY_MODS[d].name, dxp + dw / 2, cyy + dh / 2);
-    hudCtx.fillStyle = locked ? '#665' : '#667';
-    hudCtx.font = '10px monospace';
-    hudCtx.fillText(locked ? '未解锁' : `HP×${DIFFICULTY_MODS[d].hpMult}`, dxp + dw / 2, cyy + dh / 2 + 12);
-    rects.push([dxp, cyy, dw, dh]);
-  });
-
-  // 底: 命名输入 + 创建/取消按钮
-  const iy = h - 152;
-  hudCtx.textAlign = 'left';
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '14px monospace';
-  hudCtx.fillText('角色名 (字母数字下划线)', cx - 260, iy - 22);
-  hudCtx.fillStyle = '#0b0b12';
-  hudCtx.fillRect(cx - 260, iy, 400, 48);
-  hudCtx.strokeStyle = '#9cf';
-  hudCtx.lineWidth = 2;
-  hudCtx.strokeRect(cx - 260, iy, 400, 48);
-  hudCtx.fillStyle = '#fff';
-  hudCtx.font = 'bold 22px monospace';
-  hudCtx.textAlign = 'left';
-  hudCtx.fillText((state.charNameInput + '▌').slice(0, 25), cx - 246, iy + 32);
-  hudCtx.textAlign = 'center';
-  const cancelR: [number, number, number, number] = [cx - 380, iy, 96, 48];
-  const createR: [number, number, number, number] = [cx + 160, iy, 96, 48];
-  const lmbDown = mouse.state().buttons.LMB;
-  const cancelHit = hover(...cancelR);
-  const createHit = hover(...createR);
-  hudCtx.fillStyle = cancelHit ? (cancelHit && lmbDown ? '#4a2a2a' : '#3a2a2a') : '#221c1c';
-  hudCtx.fillRect(...cancelR);
-  hudCtx.strokeStyle = cancelHit ? (cancelHit && lmbDown ? '#fff' : '#a55') : '#a55';
-  hudCtx.lineWidth = cancelHit && lmbDown ? 2 : 1;
-  hudCtx.strokeRect(...cancelR);
-  hudCtx.fillStyle = '#f88';
-  hudCtx.font = 'bold 16px monospace';
-  hudCtx.fillText('取消', cx - 332, iy + 24);
-  hudCtx.fillStyle = createHit ? (createHit && lmbDown ? '#3a5a3a' : '#2a3a2a') : '#1c2a1c';
-  hudCtx.fillRect(...createR);
-  hudCtx.strokeStyle = createHit ? (createHit && lmbDown ? '#fff' : '#5a5') : '#5a5';
-  hudCtx.lineWidth = createHit && lmbDown ? 2 : 1;
-  hudCtx.strokeRect(...createR);
-  hudCtx.fillStyle = '#8f8';
-  hudCtx.fillText('创建', cx + 208, iy + 24);
-  rects.push(cancelR, createR);
-  rects.push([20, 20, 200, 40]);
-
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '13px monospace';
-  hudCtx.fillText('[1-6] 职业 · [Z/X] 难度 · 输入名字 · [Enter] 创建 · [Esc] 取消', cx, h - 84);
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '13px monospace';
-  hudCtx.textAlign = 'left';
-  hudCtx.fillText('← 返回', 24, 42);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-  uiCursor(rects);
-}
+/** 角色管理列表行命中 (新增按钮等, 见 handleUiClick) */
 
 /** C (P1-4): 收集总览覆盖层 (characters 屏, Esc/关闭按钮退出) */
 function drawCollectionPanel() {
@@ -2563,10 +2023,10 @@ function drawCollectionPanel() {
     hudCtx.strokeStyle = n > 0 ? '#ffd64a' : '#3a3a48';
     hudCtx.lineWidth = n > 0 ? 2 : 1;
     hudCtx.strokeRect(x, y, setW, 62);
-    hudCtx.fillStyle = n > 0 ? '#ffd64a' : '#667';
+    hudCtx.fillStyle = n > 0 ? '#ffd64a' : '#8a8a96';
     hudCtx.font = 'bold 16px monospace';
     hudCtx.fillText(SET_BONUSES[k].name, x + setW / 2, y + 21);
-    hudCtx.fillStyle = n > 0 ? '#eee' : '#556';
+    hudCtx.fillStyle = n > 0 ? '#eee' : '#8a8a96';
     hudCtx.font = '13px monospace';
     hudCtx.fillText(`拥有 ${n} 件`, x + setW / 2, y + 43);
   });
@@ -2631,14 +2091,14 @@ function drawFrame() {
     } else {
     // 关窗确认优先: Y/N 按钮命中 (防止被攻击分支吞掉)
     const cp = mouse.state().pos;
-    const yH = closeConfirmOpen && inRect(cp.x, cp.y, state.viewport.w / 2 - 140, state.viewport.h / 2 + 40, 120, 40);
-    const nH = closeConfirmOpen && inRect(cp.x, cp.y, state.viewport.w / 2 + 20, state.viewport.h / 2 + 40, 120, 40);
-    if (closeConfirmOpen && mouse.wasClicked('LMB')) {
+    const yH = isCloseConfirmOpen() && inRect(cp.x, cp.y, state.viewport.w / 2 - 140, state.viewport.h / 2 + 40, 120, 40);
+    const nH = isCloseConfirmOpen() && inRect(cp.x, cp.y, state.viewport.w / 2 + 20, state.viewport.h / 2 + 40, 120, 40);
+    if (isCloseConfirmOpen() && mouse.wasClicked('LMB')) {
       if (yH) confirmCloseSave();
       else if (nH) confirmCloseCancel();
     }
     // HUD 按钮优先: 技能栏 4 槽 / 药水 HP·MP / 翻滚 (悬停高亮 + pointer 光标)
-    const hudKey = closeConfirmOpen ? null : hudDungeonHit(mouse.state().pos.x, mouse.state().pos.y, state.viewport.w, state.viewport.h);
+    const hudKey = isCloseConfirmOpen() ? null : hudDungeonHit(mouse.state().pos.x, mouse.state().pos.y, state.viewport.w, state.viewport.h);
     setHudHover(hudKey);
     canvas.style.cursor = (yH || nH || hudKey) ? 'pointer' : 'default';
     if (mouse.wasClicked('LMB')) {
@@ -3068,7 +2528,7 @@ function drawFrameToScreen() {
       hudCtx.strokeStyle = state.deathUndo > 0 ? '#8f8' : '#444';
       hudCtx.lineWidth = uHit ? 2 : 1;
       hudCtx.strokeRect(...uR);
-      hudCtx.fillStyle = state.deathUndo > 0 ? '#8f8' : '#556';
+      hudCtx.fillStyle = state.deathUndo > 0 ? '#8f8' : '#8a8a96';
       hudCtx.font = 'bold 15px monospace';
       hudCtx.fillText(state.deathUndo > 0 ? `[4] 撤销死亡 (${state.deathUndo.toFixed(1)}s · 免费)` : '撤销窗口已过', ux, uy + 18);
     }
@@ -3230,11 +2690,6 @@ function fadeBgm(name: string, vol: number): void {
   }, 100);
 }
 
-/** #rrggbb → [r,g,b] 0-1 (投射物按伤害类型着色) */
-function hexToRgb01(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-}
 
 /** 主题环境粒子色 (OPT-027) */
 const THEME_ENV_COLOR: Record<Theme, [number, number, number]> = {
@@ -3270,59 +2725,7 @@ function updateEnvFx(state: GameState, dt: number): void {
 
 /** 当前局完整快照 → 存档负载 (OPT-002: P 键 / 回菜单 / 关窗共用) */
 function buildSavePayload(state: GameState): SaveData {
-  return {
-    player_x: state.player.pos.x,
-    player_y: state.player.pos.y,
-    player_hp: state.player.hp,
-    player_mp: state.player.mp,
-    facing_x: state.player.facing.x,
-    facing_y: state.player.facing.y,
-    score: state.score,
-    world_w: state.world.w,
-    world_h: state.world.h,
-    level: state.player.level,
-    owned: getOwned(state).map(eq => ({
-      name: eq.name,
-      rarity: eq.rarity,
-      eq_type: eq.type,
-      affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-      setName: eq.setName,
-    })),
-    equipped: getEquippedValues(state).map(eq => ({
-      slot: eq.type,
-      item: {
-        name: eq.name,
-        rarity: eq.rarity,
-        eq_type: eq.type,
-        affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-        setName: eq.setName,
-      },
-    })),
-    runes: SKILL_SLOTS.flatMap(slot => {
-      const r = skillRune(slot);
-      return r ? [{ slot, rune: r }] : [];
-    }),
-    theme: state.theme,
-    difficulty: state.difficulty,
-    gold: state.player.gold,
-    class: state.player.classId,  // M5 C-104
-    town: state.townId,  // M5 W3 C-302
-    materials: MATERIAL_IDS.filter(id => (state.materials[id] ?? 0) > 0).map(id => [id, state.materials[id] ?? 0]),
-    passives: PASSIVE_IDS.filter(id => (state.player.passives[id] ?? 0) > 0).map(id => [id, state.player.passives[id] ?? 0]),
-    mode: state.run.mode ?? 'linear',  // A-W2 v10 布局模式
-    scene: state.mode,  // v11: 上次场景 dungeon/town (读档分派)
-    skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
-    skill_points: state.player.skillPoints ?? 0,
-    exp: state.player.exp ?? 0,
-  };
-}
-
-/** 读档还原材料 (M5 W4 C-401) */
-function restoreMaterials(d: { materials?: Array<[string, number]> }): void {
-  state.materials = emptyMaterials();
-  for (const [id, n] of d.materials ?? []) {
-    if (MATERIAL_IDS.includes(id as MaterialId)) state.materials[id as MaterialId] = n;
-  }
+  return buildSavePayloadApp(state);
 }
 
 /** 继续最近角色 (标题 [O], 键盘/点击共用): 读最近角色档 → 按场景分派 */
@@ -3336,8 +2739,8 @@ function continueLastSave(): void {
     loadedD = d;
     bindClass(state, (d.class as ClassId) ?? 'barbarian');
     if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterials(d);  // M5 W4 C-401
-    restorePassives(d);  // v9 被动技能树
+    restoreMaterialsApp(state, d);  // M5 W4 C-401
+    restorePassivesApp(state, d);  // v9 被动技能树
     return loadAccount();
   }).then(a => {
     state.cleared = a.cleared ?? [];
@@ -3430,15 +2833,15 @@ function enterTargetCharacter(state: GameState, target: CharacterSummary): void 
     if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
     state.run.mode = validMapMode(d.mode ?? 'linear');  // A-W2 v10 模式还原
     if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterials(d);  // M5 W4 C-401
-    restorePassives(d);  // v9 被动技能树
+    restoreMaterialsApp(state, d);  // M5 W4 C-401
+    restorePassivesApp(state, d);  // v9 被动技能树
     for (const sl of d.skill_levels ?? []) {
       const sk = getSkill(sl.slot);
       if (sk) sk.level = sl.level;
     }
     resumeFromSave(state, d);
     state.titleMsg = '';
-    void persistNow();  // 更新 last_char
+    void persistNowApp(state);  // 更新 last_char
     inf('save', `切换到角色 ${target.id} (Lv${d.level ?? 1} ${d.class ?? 'barbarian'})`);
   }).catch((err: unknown) => {
     // 新建但未开局的角色无存档: 直接以该职业开新局 (normal/forest)
@@ -3447,44 +2850,9 @@ function enterTargetCharacter(state: GameState, target: CharacterSummary): void 
     startRun(state, 'forest', 'normal');
     setScreen(state, 'dungeon');
     state.titleMsg = '';
-    void persistNow();
+    void persistNowApp(state);
     inf('save', `角色 ${target.id} 无存档, 以 ${CLASS_DEFS[cls].name} 开新局 (${String(err)})`);
   });
-}
-
-/** 读档还原被动技能树 (v9) */
-function restorePassives(d: { passives?: Array<[string, number]> }): void {
-  state.player.passives = {};
-  for (const [id, n] of d.passives ?? []) {
-    if (PASSIVE_IDS.includes(id as PassiveId)) state.player.passives[id as PassiveId] = n;
-  }
-  recomputePassives(state);
-}
-
-/** 异步保存 (OPT-002/029): 角色档 + 账号层双写; 失败 toast 提示, 不阻塞 */
-function persistNow(): Promise<void> {
-  const chars = state.charList.map(c => c.id);
-  if (!chars.includes(state.currentChar)) chars.push(state.currentChar);
-  const acc: SaveAccount = {
-    cleared: state.cleared,
-    best: (Object.entries(state.run.best) as [Difficulty, number][]).map(([d, ms]) => ({ difficulty: d, ms })),
-    characters: chars,
-    last_char: state.currentChar,
-    legacy: state.legacy,
-    warehouse: state.warehouse.map(eq => ({
-      name: eq.name,
-      rarity: eq.rarity,
-      eq_type: eq.type,
-      affixes: eq.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-      setName: eq.setName,
-    })),
-  };
-  return Promise.all([saveGame(buildSavePayload(state), state.currentChar), saveAccount(acc)])
-    .then(([m]) => inf('save', `saved: ${m}`))
-    .catch(e => {
-      wrn('save', `save failed: ${e}`);
-      pushToast(state, `保存失败: ${String(e)}`, '#f66');
-    });
 }
 
 /** 施法失败反馈 (OPT-007): toast 区分 MP/CD; 主技能槽 0.4s 红闪 */
@@ -3526,361 +2894,16 @@ function handleHudClick(state: GameState, key: string, aimDir: { x: number; y: n
 }
 
 /** 鼠标 UI 点击 (C-501): 命中测试各屏关键 UI, 返回是否消费 */
+/** 鼠标点击主入口: 委托给 app/uiDispatch.ts (US-031) */
 function handleUiClick(state: GameState, mx: number, my: number): boolean {
-  const w = state.viewport.w;
-  const h = state.viewport.h;
-  // 关窗确认 (OPT-002): Y 保存退出 / N 取消 (键盘 Y·N + 鼠标按钮)
-  if (closeConfirmOpen) {
-    if (inRect(mx, my, w / 2 - 140, h / 2 + 40, 120, 40)) { confirmCloseSave(); return true; }
-    if (inRect(mx, my, w / 2 + 20, h / 2 + 40, 120, 40)) { confirmCloseCancel(); return true; }
-    return true;
-  }
-  // 符文三选一: 3 个符文盒 (覆盖于任何屏)
-  if (state.runeChoice) {
-    const boxW = 260, boxGap = 20, totalW = boxW * 3 + boxGap * 2;
-    const x0 = (w - totalW) / 2, y0 = h / 2 - 70;
-    for (let i = 0; i < state.runeChoice.options.length; i++) {
-      if (inRect(mx, my, x0 + i * (boxW + boxGap), y0, boxW, 84)) { chooseRune(state, i); return true; }
-    }
-    return true;
-  }
-  switch (state.screen) {
-    case 'title': {
-      const cx = w / 2, btnW = 320, btnH = 38;
-      const hasSave = state.charList.length > 0;
-      // 右侧最近存档卡片 (与 drawTitle 同布局)
-      const cards = hasSave
-        ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
-        : [];
-      for (let i = 0; i < cards.length; i++) {
-        if (inRect(mx, my, w - 460, 330 + i * 48, 360, 42)) { enterTargetCharacter(state, cards[i]); return true; }
-      }
-      const menuY0 = h / 2 - 30;
-      const items: Array<{ y: number; action: () => void }> = hasSave
-        ? [
-            { y: menuY0 - btnH / 2, action: () => { continueLastSave(); } },
-            { y: menuY0 + 40 - btnH / 2, action: () => {
-              state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-              state.ngFrom = 'title';
-              setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
-            { y: menuY0 + 80 - btnH / 2, action: () => { state.settingsOpen = true; } },
-            { y: menuY0 + 120 - btnH / 2, action: () => {
-              listCharacters().then(list => {
-                state.charList = list;
-                state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
-                state.charCreating = false;
-                state.charConfirmDel = false;
-                setScreen(state, 'characters');
-                state.titleMsg = '';
-                inf('ui', `角色管理: ${list.length} 个角色`);
-              }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
-            } },
-          ]
-        : [
-            { y: menuY0 - btnH / 2, action: () => {
-              state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-              state.ngFrom = 'title';
-              setScreen(state, 'newgame'); state.titleMsg = ''; inf('ui', '新游戏 → 选择屏'); } },
-            { y: menuY0 + 40 - btnH / 2, action: () => { state.settingsOpen = true; } },
-            { y: menuY0 + 80 - btnH / 2, action: () => {
-              listCharacters().then(list => {
-                state.charList = list;
-                state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
-                state.charCreating = false;
-                state.charConfirmDel = false;
-                setScreen(state, 'characters');
-                state.titleMsg = '';
-                inf('ui', `角色管理: ${list.length} 个角色`);
-              }).catch((err: unknown) => { state.titleMsg = `角色列表读取失败: ${String(err)}`; wrn('save', String(err)); });
-            } },
-          ];
-      // C (P3-10): 设置面板键位条目命中 (优先于菜单项)
-      if (state.settingsOpen && handleSettingsClick(mx, my)) return true;
-      for (const it of items) {
-        if (inRect(mx, my, cx - btnW / 2, it.y, btnW, btnH)) { it.action(); return true; }
-      }
-      return true;
-    }
-    case 'town': {
-      // C-505 城镇面板鼠标操作: 点击行对应键位 (与 handleTownPanelKey 同布局)
-      if (state.townPanel) {
-        const y0 = 70 + 34;
-        const rowH = 24;
-        const clicked = (my - y0) >= 0 ? Math.floor((my - y0) / rowH) : -1;
-        if (mx > 40 && clicked >= 0) {
-          const k = `${clicked + 1}`;
-          handleTownPanelKey(state, { key: k } as KeyboardEvent, k);
-          return true;
-        }
-      }
-      // v3 鼠标化: 点击 NPC → 自动走向, 到达 80px 自动交互 (同 E 行为)
-      for (const npc of townNpcs(state.townId)) {
-        if (inRect(mx, my, npc.pos.x - 30, npc.pos.y - 30, 60, 60)) {
-          if (state.townWalk?.kind === npc.kind) state.townWalk = null;  // 再点取消
-          else {
-            state.townWalk = { kind: npc.kind, x: npc.pos.x, y: npc.pos.y };
-            inf('ui', `走向 ${npc.name}...`);
-          }
-          return true;
-        }
-      }
-      return true;
-    }
-    case 'pause': {
-      // C (P3-10): 设置面板键位条目命中 (优先于 4 段按钮)
-      if (state.settingsOpen && handleSettingsClick(mx, my)) return true;
-      const totalW = 460, segW = totalW / 4;
-      const x0 = w / 2 - totalW / 2, y0 = h / 2 - 30, segH = 44;
-      const segs: Array<() => void> = [
-        () => setScreen(state, resumeScreen(state)),
-        () => { state.settingsOpen = !state.settingsOpen; },
-        () => { state.settingsOpen = false; void persistNow().then(() => pushToast(state, '已保存, 返回主菜单', '#9cf')); setScreen(state, 'title'); },
-        () => { state.settingsOpen = false; enterTown(state); },
-      ];
-      if (!state.settingsOpen) {
-        for (let i = 0; i < segs.length; i++) {
-          if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
-        }
-      }
-      return true;
-    }
-    case 'death': {
-      if (!state.deathSummary) return true;
-      const totalW = 420, segW = totalW / 3;
-      const x0 = w / 2 - totalW / 2, y0 = h / 2 + 60, segH = 40;
-      const ds = state.deathSummary;
-      const segs: Array<() => void> = ds.hardcore
-        ? [
-            () => { hardcoreWipe(state); startRun(state, state.theme, state.difficulty); state.dying = false; state.deathSummary = null; },
-            () => { state.dying = false; state.deathSummary = null; setScreen(state, 'title'); },
-          ]
-        : [
-            () => { state.player.gold -= deathGoldPenalty(state.player.gold, 'town', false); state.player.potions = { hp: 3, mp: 3 }; enterTown(state); state.dying = false; state.deathSummary = null; },
-            () => { state.player.gold -= deathGoldPenalty(state.player.gold, 'revive', false); revivePlayer(state); state.dying = false; state.deathSummary = null; setScreen(state, 'dungeon'); },
-            () => { startRun(state, state.theme, state.difficulty); state.dying = false; state.deathSummary = null; },
-          ];
-      for (let i = 0; i < segs.length; i++) {
-        if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
-      }
-      // C (死亡撤销): 撤销按钮 (5s 窗口)
-      if (!ds.hardcore && state.deathUndo > 0 && inRect(mx, my, w / 2 - 150, h / 2 + 120, 300, 36)) {
-        revivePlayer(state);
-        state.dying = false;
-        state.deathSummary = null;
-        state.deathUndo = 0;
-        setScreen(state, 'dungeon');
-        pushToast(state, '已撤销死亡 (免费)', '#8f8');
-        return true;
-      }
-      return true;
-    }
-    case 'victory': {
-      const totalW = 380, segW = totalW / 2;
-      const x0 = w / 2 - totalW / 2, y0 = h / 2 + 52, segH = 40;
-      const segs: Array<() => void> = [
-        () => { startRun(state, state.run.theme, state.difficulty); },
-        () => { enterTown(state); },
-      ];
-      for (let i = 0; i < segs.length; i++) {
-        if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
-      }
-      return true;
-    }
-    case 'newgame': {
-      const cy = h / 2 + NG_LAYOUT.cy;
-      // 职业列 (仅标题来源可换)
-      if (state.ngFrom !== 'town') {
-        for (let i = 0; i < CLASS_IDS.length; i++) {
-          if (inRect(mx, my, w / 2 + NG_LAYOUT.classX, cy + i * 46 - 14, NG_LAYOUT.classW, NG_LAYOUT.classH)) { state.ngSel.classIdx = i; return true; }
-        }
-      }
-      // 难度
-      for (let i = 0; i < DIFFICULTIES.length; i++) {
-        if (inRect(mx, my, w / 2 + NG_LAYOUT.diffX, cy + i * 44 - 16, NG_LAYOUT.diffW, NG_LAYOUT.diffH)) {
-          const d = DIFFICULTIES[i];
-          if (unlockedDifficulty(state.cleared, d)) state.ngSel.diffIdx = i;
-          else pushToast(state, `${DIFFICULTY_MODS[d].name} 未解锁 (通关前置)`, '#f66');
-          return true;
-        }
-      }
-      // 主题卡
-      for (let i = 0; i < THEMES.length; i++) {
-        if (inRect(mx, my, w / 2 + NG_LAYOUT.rightX + i * (NG_LAYOUT.themeW + NG_LAYOUT.themeGap), cy + NG_LAYOUT.themeY, NG_LAYOUT.themeW, NG_LAYOUT.themeH)) {
-          if (themeUnlocked(state.cleared, THEMES[i])) state.ngSel.themeIdx = i;
-          else pushToast(state, `主题 ${THEMES[i]} 未解锁 (通关森林后开放)`, '#f66');
-          return true;
-        }
-      }
-      // 模式卡
-      for (let i = 0; i < MAP_MODES.length; i++) {
-        if (inRect(mx, my, w / 2 + NG_LAYOUT.rightX, cy + NG_LAYOUT.modeY + i * (NG_LAYOUT.modeH + NG_LAYOUT.modeGap), NG_LAYOUT.rightW, NG_LAYOUT.modeH)) {
-          state.ngSel.modeIdx = i;
-          return true;
-        }
-      }
-      // 出发/开始
-      if (inRect(mx, my, w / 2 + NG_LAYOUT.startX, h + NG_LAYOUT.startY, NG_LAYOUT.startW, NG_LAYOUT.startH)) {
-        const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
-        if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return true; }
-        if (!themeUnlocked(state.cleared, theme)) { pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66'); return true; }
-        bindClass(state, classId);
-        startRun(state, theme, difficulty, mode);
-        return true;
-      }
-      // 返回 (按来源)
-      if (inRect(mx, my, 20, 20, 200, 40)) {
-        setScreen(state, state.ngFrom === 'town' ? 'town' : 'title');
-        state.titleMsg = '';
-        return true;
-      }
-      return true;
-    }
-    case 'characters': {
-      const cx = w / 2;
-      // C (P1-4): 收集总览 (关闭按钮/拦截)
-      if (state.collectOpen) {
-        if (inRect(mx, my, w / 2 - 90, h - 84, 180, 40)) { state.collectOpen = false; return true; }
-        return true;
-      }
-      if (inRect(mx, my, w - 150, 20, 130, 30)) { state.collectOpen = !state.collectOpen; return true; }
-      if (state.charCreating) {
-        // 职业卡 (左)
-        for (let i = 0; i < CLASS_IDS.length; i++) {
-          if (inRect(mx, my, cx - 660, 118 + i * 58, 220, 50)) {
-            state.charNamingClass = CLASS_IDS[i];
-            state.titleMsg = '';
-            inf('ui', `职业 → ${CLASS_DEFS[CLASS_IDS[i]].name}`);
-            return true;
-          }
-        }
-        // 难度卡 (右, 默认普通)
-        for (let i = 0; i < DIFFICULTIES.length; i++) {
-          if (inRect(mx, my, cx + 170, 118 + i * 40, 220, 34)) {
-            const d = DIFFICULTIES[i];
-            if (unlockedDifficulty(state.cleared, d)) state.charCreateDiff = d;
-            else pushToast(state, `${DIFFICULTY_MODS[d].name} 未解锁 (通关前置)`, '#f66');
-            return true;
-          }
-        }
-        // 创建 / 取消 / 返回
-        if (inRect(mx, my, cx + 160, h - 152, 96, 48)) { confirmCreateCharacter(state); return true; }
-        if (inRect(mx, my, cx - 380, h - 152, 96, 48)) { state.charCreating = false; state.charNameInput = ''; return true; }
-        if (inRect(mx, my, 20, 20, 200, 40)) { state.charCreating = false; state.charNameInput = ''; return true; }
-        return true;
-      }
-      if (state.charConfirmDel) {
-        if (inRect(mx, my, cx - 200, h / 2 + 20 - 16, 400, 40)) {
-          const target = state.charList[state.charSel];
-          if (target) {
-            state.charList = state.charList.filter(c => c.id !== target.id);
-            if (state.charSel >= state.charList.length) state.charSel = Math.max(0, state.charList.length - 1);
-            if (state.currentChar === target.id) state.currentChar = 'char_0';
-            void deleteCharacter(target.id).then(() => pushToast(state, `已删除角色 ${target.id}`, '#f66'))
-              .catch(e => wrn('save', `delete ${target.id}: ${e}`));
-            inf('ui', `角色删除: ${target.id}`);
-          }
-          state.charConfirmDel = false;
-          return true;
-        }
-        if (inRect(mx, my, 20, 20, 200, 40)) { state.charConfirmDel = false; return true; }
-        return true;
-      }
-      // 列表行: 点击选中 + 双击行为简化为单击选中, 底栏按钮进入
-      const rows = Math.min(state.charList.length, 8);
-      // v4 最近 3 角色快捷横排 (顶部卡片, 单击进入; 绘制在 drawCharacters)
-      const recent3 = state.charList.slice(0, 3);
-      if (recent3.length > 0) {
-        const cy0 = 128;
-        for (let i = 0; i < recent3.length; i++) {
-          const c = recent3[i];
-          if (inRect(mx, my, cx - 320 + i * 240, cy0, 220, 86)) {
-            state.charSel = state.charList.findIndex(c2 => c2.id === c.id);
-            enterTargetCharacter(state, c);
-            return true;
-          }
-        }
-      }
-      const y0 = h / 2 - rows * 26;
-      for (let i = 0; i < rows; i++) {
-        if (inRect(mx, my, cx - 320, y0 + i * 52 - 14, 640, 40)) { state.charSel = i; return true; }
-      }
-      if (inRect(mx, my, cx - 300, h - 100, 600, 40)) {
-        // 进入选中角色 (同 Enter)
-        const target = state.charList[state.charSel];
-        if (target) {
-          enterTargetCharacter(state, target);
-        }
-        return true;
-      }
-      if (inRect(mx, my, cx - 300, h - 60, 200, 40)) {
-        openCreatePanel(state); return true;
-      }
-      if (inRect(mx, my, cx + 100, h - 60, 200, 40)) {
-        if (state.charList.length > 0) state.charConfirmDel = true;
-        return true;
-      }
-      if (inRect(mx, my, 20, 20, 200, 40)) { setScreen(state, 'title'); return true; }
-      return true;
-    }
-    case 'portal': {
-      // [1] 回城结算 / [2] 继续战斗 (与键盘 1/2 同行为)
-      if (inRect(mx, my, w / 2 - 210, h / 2 + 58, 200, 44)) { leaveThroughPortal(state); return true; }
-      if (inRect(mx, my, w / 2 + 10, h / 2 + 58, 200, 44)) { setScreen(state, 'dungeon'); return true; }
-      return true;
-    }
-    case 'equipment': {
-      const slots = slotRects();
-      for (let i = 0; i < EQUIP_SLOTS.length; i++) {
-        const s = slots[i];
-        if (inRect(mx, my, s.x, s.y, EQ_LAYOUT.slotSize, EQ_LAYOUT.slotSize)) {
-          if (unequipSlot(state, EQUIP_SLOTS[i])) { pushToast(state, `已卸下: ${EQUIP_NAMES[EQUIP_SLOTS[i]]}`, '#9cf'); playSfxClient('ui_click'); }
-          return true;
-        }
-      }
-      const total = getOwned(state).length;
-      const pc = pageCount(total);
-      const curPage = Math.min(pageOf(state.equipSel), pc - 1);
-      for (const c of cellRects()) {
-        if (inRect(mx, my, c.x, c.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize)) {
-          const idx = cellIndex(c.col, c.row, curPage, total);
-          if (idx !== null) state.equipSel = idx;
-          return true;
-        }
-      }
-      if (inRect(mx, my, EQ_LAYOUT.btnEquip.x, EQ_LAYOUT.btnEquip.y, EQ_LAYOUT.btnEquip.w, EQ_LAYOUT.btnEquip.h)) {
-        const eq = getOwned(state)[state.equipSel];
-        if (eq && equipItem(state, eq)) {
-          const col = RARITY_COLORS[eq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
-          pushToast(state, `已穿戴 ${eq.name}`, `#${col}`);
-          playSfxClient('ui_click');
-        }
-        return true;
-      }
-      if (inRect(mx, my, EQ_LAYOUT.btnUnequip.x, EQ_LAYOUT.btnUnequip.y, EQ_LAYOUT.btnUnequip.w, EQ_LAYOUT.btnUnequip.h)) {
-        const eq = getOwned(state)[state.equipSel];
-        const slot = eq ? eq.type : undefined;
-        if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
-        return true;
-      }
-      // 关闭 / 翻页 (鼠标路径)
-      if (inRect(mx, my, EQ_LAYOUT.btnClose.x, EQ_LAYOUT.btnClose.y, EQ_LAYOUT.btnClose.w, EQ_LAYOUT.btnClose.h)) {
-        setScreen(state, 'dungeon');
-        inf('ui', 'equipment panel closed (btn)');
-        return true;
-      }
-      const eTotal = getOwned(state).length;
-      if (inRect(mx, my, EQ_LAYOUT.btnPrev.x, EQ_LAYOUT.btnPrev.y, EQ_LAYOUT.btnPrev.w, EQ_LAYOUT.btnPrev.h)) {
-        state.equipSel = pageStart(flipPage(pageOf(state.equipSel), -1, eTotal), eTotal);
-        return true;
-      }
-      if (inRect(mx, my, EQ_LAYOUT.btnNext.x, EQ_LAYOUT.btnNext.y, EQ_LAYOUT.btnNext.w, EQ_LAYOUT.btnNext.h)) {
-        state.equipSel = pageStart(flipPage(pageOf(state.equipSel), 1, eTotal), eTotal);
-        return true;
-      }
-      return true;
-    }
-  }
-  return false;
+  const uiCtx = buildUiCtx(state, mx, my, {
+    confirmCloseSave, confirmCloseCancel, continueLastSave,
+    enterTargetCharacter, titleAct, handleSettingsClick, handleTownPanelKey,
+    startFromNewgame, startCreateNewgame, enterTown, startRun,
+    hardcoreWipe, revivePlayer, leaveThroughPortal, setScreen, resumeScreen,
+    deathGoldPenalty, loadLastNg,
+  });
+  return handleUiClickDispatch(uiCtx);
 }
 
 /** 难度切换入口 (OPT-015): 未解锁拒绝 + toast; 硬核走二段确认 (OPT-006) */
