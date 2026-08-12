@@ -13,6 +13,8 @@ import { updatePlayer, castFireball, usePotion, startDodge } from './game/player
 import { updateCamera, pickPlayerSprite, resetPlayer, setScreen, resumeScreen, runPhase, emptyRun, THEMES, type Screen, type Theme, WORLD_W, WORLD_H } from './game/state';
 import { createEmptyCombatState } from './game/state/combat';
 import { createEmptyUiState } from './game/state/ui';
+import { createEmptyFxState } from './game/state/fx';
+import { createEmptyEquipState } from './game/state/equip';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
 import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
@@ -189,25 +191,11 @@ const state = {
     decor: [],
   },
   camera: { x: 0, y: 0 },
-  fireballs: [] as import('./game/state').Fireball[],
   fireballSize: 32,
-  monsters: [] as import('./game/monster').Monster[],
-  vfx: [] as import('./game/vfx').Vfx[],
-  // A.1 收口: 8 个类型逃逸字段改为正规 GameState 字段
-  _pools: [] as import('./game/monster').PoisonPool[],
-  _dmgNums: [] as import('./game/damageNum').DamageNum[],
-  _deathFx: [] as import('./game/deathFx').DeathFx[],
-  _swing: [] as import('./game/skill').MeleeSwing[],
-  _loot: [] as import('./game/equipment').Equipment[],
-  _owned: [] as import('./game/equipment').Equipment[],
-  _toasts: [] as import('./game/toast').Toast[],
-  _enemyProj: [] as import('./game/monsters/proj').EnemyProjectile[],
   paused: false,
   deathSummary: null as DeathSummary | null,
   reviveInvuln: 0,
   theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
-  runeChoice: null,
-  rejectedRunes: [],
   mode: 'dungeon' as 'dungeon' | 'town',
   townReturn: null as { x: number; y: number } | null,
   townPanel: null as TownPanel | null,
@@ -230,14 +218,11 @@ const state = {
   difficulty: 'normal' as Difficulty,
   run: emptyRun('forest'),
   volume: 0.8,
-  equipSel: 0,
-  equipPage: 0,
   cleared: [],
   legacy: [] as Array<{ slot: SkillSlot; rune: RuneId }>,
   confirmHardcore: false,
   pendingDifficulty: null,
   castFailFlash: null,
-  envFx: [],
   resources: res,
   // M5 W2 多角色 (C-201~203): 当前角色 / 角色列表 / 选中索引 / 新建流程
   currentChar: 'char_0',
@@ -252,14 +237,16 @@ const state = {
   tutorT: 0,
   // C-503 仓库: 账号层共享 (跨角色)
   warehouse: [] as Equipment[],
-  // M5 W4 C-401 材料: 独立计数
-  materials: emptyMaterials(),
   // v3 鼠标化: 城镇 NPC 走向目标
   townWalk: null as { kind: NpcKind; x: number; y: number } | null,
   // PR #1 T4-a: 战斗子状态 (连击/震屏/停顿/击杀者/Boss 入场/升级闪光/积分/累计击杀)
   combat: createEmptyCombatState(),
   // PR #1 T4-b: UI 子状态 (设置面板/收集覆盖层/键位编辑/死亡撤销/探索度/标题消息)
   ui: createEmptyUiState(),
+  // PR #2 T4-c: FX 子对象 (火球/怪物/VFX/毒池/伤害数字/死亡粒子/挥击/掉落/背包/Toast/敌弹/环境粒子)
+  fx: createEmptyFxState(),
+  // PR #2 T4-d: 装备/符文子对象 (选中索引/分页/符文三选一/拒绝变异的槽/材料)
+  equip: createEmptyEquipState(),
 };
 
 // US-024-c: drawTitle 已搬到 screens/title.ts, 启动时装配一次 TitleCtx, 主循环每帧复用
@@ -528,7 +515,7 @@ canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   if (state.screen !== 'equipment') return;
   const total = getOwned(state).length;
-  state.equipSel = pageStart(flipPage(pageOf(state.equipSel), e.deltaY > 0 ? 1 : -1, total), total);
+  state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), e.deltaY > 0 ? 1 : -1, total), total);
 });
 
 // 失焦自动暂停 (OPT-001): 战斗/城镇/装备面板中切走 → 暂停; 回焦点需手动继续
@@ -807,7 +794,7 @@ function loopImpl(now: number) {
   // A-W3 诅咒系 (滚动/时间清除)
   if (state.player.curseT > 0) state.player.curseT -= dt;
   // A-W3 毒池 (death_trigger): 站内每秒伤害
-  const pools = state._pools;
+  const pools = state.fx.pools;
   if (pools && pools.length > 0) {
     for (let pi = pools.length - 1; pi >= 0; pi--) {
       const pk = pools[pi];
@@ -885,7 +872,7 @@ function loopImpl(now: number) {
             x: state.player.pos.x + Math.cos(a) * 1400 + (Math.random() * 300 - 150),
             y: state.player.pos.y + Math.sin(a) * 1400 + (Math.random() * 300 - 150),
           };
-          state.monsters.push(ob);
+          state.fx.monsters.push(ob);
           const elemTag = `[${ELEMENT_DEFS[mainElem].name}+${ELEMENT_DEFS[subElem].name}]`;
           pushToast(state, `${elemTag} 元素 Boss: ${t} (${i + 1}/4)`, '#ff9530');
         }
@@ -899,7 +886,7 @@ function loopImpl(now: number) {
         // 4 外层 Boss 全清 → 中央最终主题 Boss
         const bossType = THEME_BOSS[state.run.theme];
         const boss = spawnMonster(state, bossType);
-        state.monsters.push(boss);
+        state.fx.monsters.push(boss);
         state.run.bossStage = 2;
         state.run.bossAlive = true;
         const bossName = MONSTER_DEFS[bossType].type;
@@ -911,7 +898,7 @@ function loopImpl(now: number) {
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
         const boss = spawnMonster(state, bossType);
-        state.monsters.push(boss);
+        state.fx.monsters.push(boss);
         state.run.bossAlive = true;
         const bossName = MONSTER_DEFS[bossType].type;
         const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
@@ -1058,7 +1045,7 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
       // C-401 灵铁可购 (材料独立计数不占背包)
       if (state.player.gold < IRON_SHARD_PRICE) { wrn('ui', `灵铁 ${IRON_SHARD_PRICE}金, 金币不足`); return; }
       state.player.gold -= IRON_SHARD_PRICE;
-      addMaterial(state, 'iron_shard', 1);
+      addMaterial(state.equip, 'iron_shard', 1);
       playSfxClient('ui_click');
       inf('ui', '购入 灵铁碎片 ×1');
       return;
@@ -1118,18 +1105,18 @@ function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
     const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
     const slot = mutated[n - 1];
     if (slot && n >= 1 && n <= mutated.length) {
-      if (materialCount(state, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
+      if (materialCount(state.equip, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
         pushToast(state, '奥术核心不足 (需要 5)', '#f66');
         return;
       }
-      if (materialCount(state, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
+      if (materialCount(state.equip, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
         pushToast(state, '虚空碎片不足 (需要 1)', '#f66');
         return;
       }
       if (runeForgePay(state)) {
         state.townPanel = null;
         // 打开三选一 (Esc 拒绝 = 保留原符文; 材料已扣)
-        state.runeChoice = { slot, options: pickRuneOptions(slot) };
+        state.equip.runeChoice = { slot, options: pickRuneOptions(slot) };
         pushToast(state, `符文锻造: ${slotDisplay(slot)} 重新变异`, '#c9aaff');
         playSfxClient('ui_click');
         inf('ui', `符文锻造 ${slot} → 三选一`);
@@ -1266,7 +1253,7 @@ function drawTownPanel() {
     hudCtx.fillText(`8. MP 药水 (${POTION_PRICES.mp}金) ×${state.player.potions?.mp ?? 0}/3`, 60, y); y += 22;
     hudCtx.fillStyle = '#9cf';
     drawIcon(hudCtx, res, 'mat_iron_shard', 34, y - 18, 20);
-    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state, 'iron_shard')}`, 60, y); y += 22;
+    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state.equip, 'iron_shard')}`, 60, y); y += 22;
   } else if (state.townPanel === 'sell') {
     hudCtx.fillText(`卖出 (金:${state.player.gold})  [1-9] 选择  [Esc] 返回`, 40, y); y += 34;
     const owned = getOwned(state);
@@ -1279,7 +1266,7 @@ function drawTownPanel() {
     });
   } else if (state.townPanel === 'smith') {
     drawIcon(hudCtx, res, 'mat_iron_shard', 14, y - 17, 20);
-    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
+    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state.equip, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
     hudCtx.fillStyle = '#889';
     hudCtx.font = '12px monospace';
     hudCtx.fillText('消耗: 100金 或 灵铁 (rare 10 / set 20 / unique 40)', 40, y); y += 24;
@@ -1341,10 +1328,10 @@ function drawTownPanel() {
     hudCtx.fillStyle = '#889';
     hudCtx.font = '12px monospace';
     drawIcon(hudCtx, res, 'mat_arcane_core', 14, y - 17, 20);
-    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state, 'arcane_core')} · `, 40, y);
-    const arcW = hudCtx.measureText(`持有: 奥术核心 ${materialCount(state, 'arcane_core')} · `).width;
+    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `, 40, y);
+    const arcW = hudCtx.measureText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `).width;
     drawIcon(hudCtx, res, 'mat_void_fragment', 40 + arcW - 3, y - 17, 20);
-    hudCtx.fillText(`虚空碎片 ${materialCount(state, 'void_fragment')}`, 40 + arcW + 19, y); y += 24;
+    hudCtx.fillText(`虚空碎片 ${materialCount(state.equip, 'void_fragment')}`, 40 + arcW + 19, y); y += 24;
     const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
     if (mutated.length === 0) {
       hudCtx.fillStyle = '#f88';
@@ -1388,7 +1375,7 @@ function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode?:
   state.run.mode = mode ?? state.run.mode ?? 'linear';
   state.combat.score = 0;
   state.ui.dying = false;
-  state.fireballs.length = 0;
+  state.fx.fireballs.length = 0;
   state.combat.combo = { count: 0, timer: 0 };
   state.player.dodgeT = 0;
   state.player.dodgeCd = 0;
@@ -1414,12 +1401,12 @@ function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode?:
 function ensureDungeonRun(state: GameState): void {
   state.run.theme = state.theme;
   resetWorldForMode(state.run.mode ?? 'linear');
-  if (state.monsters.length === 0) {
+  if (state.fx.monsters.length === 0) {
     spawnRunPool(state);
   } else {
-    state.run.total = state.monsters.length;
-    state.run.alive = state.monsters.filter(m => !MONSTER_DEFS[m.type].boss).length;
-    state.run.bossAlive = state.monsters.some(m => MONSTER_DEFS[m.type].boss);
+    state.run.total = state.fx.monsters.length;
+    state.run.alive = state.fx.monsters.filter(m => !MONSTER_DEFS[m.type].boss).length;
+    state.run.bossAlive = state.fx.monsters.some(m => MONSTER_DEFS[m.type].boss);
     state.run.bossKilled = false;
     state.run.victoryShown = false;
     state.run.bossStage = 0;

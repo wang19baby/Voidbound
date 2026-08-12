@@ -73,9 +73,9 @@ export function damageMonster(
 
 /** 检查所有火球与怪物的碰撞, 命中扣血 (火球 = 25 火伤) */
 export function resolveFireballHits(state: GameState): number {
-  const fireballs = state.fireballs;
+  const fireballs = state.fx.fireballs;
   let kills = 0;
-  state.monsters = state.monsters.filter(m => {
+  state.fx.monsters = state.fx.monsters.filter(m => {
     if (m.hp <= 0) return false;
     for (const f of fireballs) {
       if (aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {
@@ -102,7 +102,7 @@ export function resolveFireballHits(state: GameState): number {
         }
         // nova (内容扩充): 命中爆炸, 溅射周围 80px 内其他怪 60% 伤害
         if (f.rune === 'nova' && r.damage > 0) {
-          for (const other of state.monsters) {
+          for (const other of state.fx.monsters) {
             if (other === m || other.hp <= 0) continue;
             const dx = other.pos.x - f.pos.x;
             const dy = other.pos.y - f.pos.y;
@@ -122,10 +122,10 @@ export function resolveFireballHits(state: GameState): number {
 
 /** 检查所有挥击与怪物的碰撞 (近战 = 50 物理) */
 export function resolveMeleeHits(state: GameState): number {
-  // melees 存 state._swing (A.1 收口, 类型安全)
-  const swings = state._swing;
+  // melees 存 state.fx.swings (A.1 收口, 类型安全)
+  const swings = state.fx.swings;
   let kills = 0;
-  state.monsters = state.monsters.filter(m => {
+  state.fx.monsters = state.fx.monsters.filter(m => {
     if (m.hp <= 0) return false;
     for (const s of swings) {
       if (aabbOverlap(s.pos.x, s.pos.y, s.size.w, s.size.h, m.pos.x, m.pos.y, m.size.w, m.size.h)) {

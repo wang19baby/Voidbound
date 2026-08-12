@@ -225,7 +225,7 @@ export function slideAxis(rect: { x: number; y: number; w: number; h: number }, 
 /** 怪物是否处于任何增强光环覆盖下 (A-W1): 附近有增强怪携带同光环 → 生效; 自身为增强怪也受益 */
 function auraActive(state: GameState, m: Monster, aura: AuraType): boolean {
   if (m.aura === aura) return true;
-  for (const o of state.monsters) {
+  for (const o of state.fx.monsters) {
     if (o === m || o.hp <= 0 || o.aura !== aura) continue;
     const d = Math.hypot(o.pos.x - m.pos.x, o.pos.y - m.pos.y);
     if (d <= AURA_RADIUS + o.size.w / 2) return true;
@@ -237,7 +237,7 @@ function auraActive(state: GameState, m: Monster, aura: AuraType): boolean {
 export function updateMonsters(state: GameState, dt: number): void {
   const p = state.player.pos;
   const walls = state.world.walls;
-  for (const m of state.monsters) {
+  for (const m of state.fx.monsters) {
     if (m.hp <= 0) continue;
     const def = MONSTER_DEFS[m.type];
     const dx = p.x - m.pos.x;
@@ -400,7 +400,7 @@ export function updateMonsters(state: GameState, dt: number): void {
             const minion = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
             minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
             minion.spawned = true;
-            state.monsters.push(minion);
+            state.fx.monsters.push(minion);
             spawnRing(state, minion.pos.x + minion.size.w / 2, minion.pos.y + minion.size.h / 2, 44, 0.5, 'circle_02', [0.6, 0.35, 1]);
             m.aiSpawned = (m.aiSpawned ?? 0) + 1;
             m.aiCd = 4.0;
@@ -446,7 +446,7 @@ export function updateMonsters(state: GameState, dt: number): void {
                 const e = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)], undefined, { forceElite: true });
                 e.pos = { x: m.pos.x + (Math.random() * 120 - 60), y: m.pos.y + (Math.random() * 120 - 60) };
                 e.spawned = true;
-                state.monsters.push(e);
+                state.fx.monsters.push(e);
                 spawnRing(state, e.pos.x + e.size.w / 2, e.pos.y + e.size.h / 2, 40, 0.5, 'circle_02', [0.6, 0.35, 1]);
               }
               m.aiCd = SUMMON_ELITES_CD;
@@ -591,7 +591,7 @@ export function killMonster(state: GameState, m: Monster): void {
   else if (m.elite || m.lord) dropEliteLoot(state, cx, cy);
   else dropLoot(state, cx, cy);
   for (const [mid, n] of materialDrop(Math.random(), !!def.boss, !!m.elite || !!m.lord)) {
-    addMaterial(state, mid, n);
+    addMaterial(state.equip, mid, n);
   }
   if (m.mech === 'death_trigger') {
     const roll = Math.random();
@@ -617,7 +617,7 @@ export function killMonster(state: GameState, m: Monster): void {
         c.spawned = true;
         c.mech = undefined;
         c.pos = { x: cx + (i === 0 ? -28 : 28), y: cy };
-        state.monsters.push(c);
+        state.fx.monsters.push(c);
       }
       spawnBurst(state, cx, cy, 8, [0.8, 0.8, 0.4], 'spark_03', 160, 6, 0.4);
       inf('combat', `${def.type} 死亡触发: 分裂 ×${DEATH_SPLIT_COUNT}`);
@@ -626,7 +626,7 @@ export function killMonster(state: GameState, m: Monster): void {
         x: cx - DEATH_POOL_RADIUS / 2, y: cy - DEATH_POOL_RADIUS / 2,
         r: DEATH_POOL_RADIUS, dps: DEATH_POOL_DPS, t: DEATH_POOL_T,
       };
-      state._pools.push(pool);
+      state.fx.pools.push(pool);
       inf('combat', `${def.type} 死亡触发: 毒池`);
     }
   }
@@ -639,7 +639,7 @@ export function killMonster(state: GameState, m: Monster): void {
       c.aiSpawned = 1;
       c.spawned = true;
       c.pos = { x: cx + (i === 0 ? -24 : 24), y: cy };
-      state.monsters.push(c);
+      state.fx.monsters.push(c);
     }
     inf('combat', `${def.type} 分裂 ×2`);
   }

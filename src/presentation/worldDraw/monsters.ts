@@ -25,7 +25,7 @@ export function drawMonsters(ctx: DrawCtx): void {
     death_trigger: [1, 0.4, 0.4],
   };
 
-  for (const m of state.monsters) {
+  for (const m of state.fx.monsters) {
     const sp = worldToScreen(state, m.pos);
     if (sp.x + m.size.w < 0 || sp.x > vw) continue;
     if (sp.y + m.size.h < 0 || sp.y > vh) continue;

@@ -6,7 +6,7 @@
 //   淡出: additive 混合下把 tint 乘 fade (tint→黑 = 透明), 无需改 shader
 //   表: ELEMENT_FX (元素→颜色) + aoeVisual (AOE 特效参数) — 纯函数, 可单测
 //
-// B.1.6: 池化 state.vfx
+// B.1.6: 池化 state.fx.vfx
 
 import type { GameState } from '../state';
 import { Pool } from '../../core/pool';
@@ -71,7 +71,7 @@ const vfxPool = new Pool<Vfx>({
 });
 
 function push(state: GameState, v: Vfx): void {
-  state.vfx.push(v);
+  state.fx.vfx.push(v);
 }
 
 /** 扩散环 (AOE/终极/Boss 技能) */
@@ -152,19 +152,19 @@ export function spawnPlayerHitFx(state: GameState): void {
 /** 推进生命周期: 过期即移除 */
 export function updateVfx(state: GameState, dt: number): void {
   const toRelease: Vfx[] = [];
-  for (const v of state.vfx) {
+  for (const v of state.fx.vfx) {
     v.t += dt;
     if (v.t >= v.dur) toRelease.push(v);
   }
   for (const v of toRelease) {
-    const idx = state.vfx.indexOf(v);
-    if (idx >= 0) state.vfx.splice(idx, 1);
+    const idx = state.fx.vfx.indexOf(v);
+    if (idx >= 0) state.fx.vfx.splice(idx, 1);
     vfxPool.release(v);
   }
 }
 
 export function getVfx(state: GameState): readonly Vfx[] {
-  return state.vfx;
+  return state.fx.vfx;
 }
 
 /** 测试用: 重置池 */

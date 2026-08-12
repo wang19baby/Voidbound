@@ -124,9 +124,9 @@ export const MATERIAL_NAMES: Record<MaterialId, string> = {
   void_fragment: '虚空碎片',
 };
 
-/** 材料来源 (GameState 结构满足: materials 字段) */
+/** 材料来源 (GameState 结构满足: equip.materials 字段) */
 export interface MaterialSrc {
-  materials: Partial<Record<MaterialId, number>>;
+  equip: { materials: Partial<Record<MaterialId, number>> };
 }
 
 export function emptyMaterials(): Record<MaterialId, number> {
@@ -134,21 +134,20 @@ export function emptyMaterials(): Record<MaterialId, number> {
 }
 
 export function materialCount(state: MaterialSrc, id: MaterialId): number {
-  return state.materials?.[id] ?? 0;
+  return state.equip.materials?.[id] ?? 0;
 }
 
 /** 材料入库 (掉落/购买) */
 export function addMaterial(state: MaterialSrc, id: MaterialId, n: number): void {
-  if (!state.materials) state.materials = {};
-  state.materials[id] = (state.materials[id] ?? 0) + n;
+  const m = state.equip.materials;
+  m[id] = (m[id] ?? 0) + n;
 }
 
 /** 材料扣除 (消耗渠道); 不足返回 false 不扣 */
 export function spendMaterial(state: MaterialSrc, id: MaterialId, n: number): boolean {
-  const have = state.materials?.[id] ?? 0;
+  const have = state.equip.materials?.[id] ?? 0;
   if (have < n) return false;
-  state.materials = state.materials ?? {};
-  state.materials[id] = have - n;
+  state.equip.materials[id] = have - n;
   return true;
 }
 
@@ -205,10 +204,10 @@ export const LOOT_LIFETIME_SEC = 60;
 
 /** 清理过期地面掉落 (OPT-032): 主循环每帧调用; spawnT 单位为秒 */
 export function cullLoot(state: GameState, nowSec: number): void {
-  const before = state._loot.length;
-  state._loot = state._loot.filter(eq => eq.pickedUp || nowSec - (eq.spawnT ?? nowSec) < LOOT_LIFETIME_SEC);
-  if (state._loot.length !== before) {
-    void import('../util/log').then(({ dbg }) => dbg('loot', `culled ${before - state._loot.length} expired`));
+  const before = state.fx.loot.length;
+  state.fx.loot = state.fx.loot.filter(eq => eq.pickedUp || nowSec - (eq.spawnT ?? nowSec) < LOOT_LIFETIME_SEC);
+  if (state.fx.loot.length !== before) {
+    void import('../util/log').then(({ dbg }) => dbg('loot', `culled ${before - state.fx.loot.length} expired`));
   }
 }
 
@@ -305,10 +304,12 @@ export function aggregateCombat(items: readonly Equipment[]): CombatStats {
   return c;
 }
 
-/** 穿戴槽最小输入 (equipItem/unequipItem/recomputeCombat 依赖; GameState 结构满足, 便于单测) */
+/** 穿戴槽最小输入 (equipItem/unequipItem/recomputeCombat 依赖; GameState 结构满足, 便于单测)
+ *  PR #2 适配: _owned/_loot 已搬到 fx 子对象; equip 字段加 materials (测试 MaterialSrc 用) */
 export interface EquipState {
   player: { equipped: Partial<Record<EquipType, Equipment>>; hp: number; mp: number; combat: CombatStats };
-  _owned?: Equipment[];
+  fx?: { owned?: Equipment[]; loot?: Equipment[] };
+  equip?: { materials: Record<MaterialId, number> };
 }
 
 /** 当前穿戴 (聚合用) */
@@ -416,7 +417,7 @@ export function randomEquipment(chosen: Rarity, theme?: Theme, forcedSet?: SetNa
 export function collectAllLoot(state: GameState): Equipment[] {
   const picked: Equipment[] = [];
   let rejected = 0;
-  state._loot = state._loot.filter(eq => {
+  state.fx.loot = state.fx.loot.filter(eq => {
     if (eq.pickedUp) return false;
     if (getOwned(state).length >= BACKPACK_CAP) { rejected++; return true; }
     eq.pickedUp = true;
@@ -434,28 +435,29 @@ export function collectAllLoot(state: GameState): Equipment[] {
 
 /** 清空地上物品 (M5 实测修复: 回城/新局按规则清理) */
 export function clearGroundLoot(state: GameState): void {
-  state._loot.length = 0;
+  state.fx.loot.length = 0;
 }
 
-/** Boss 专属掉落 (OPT-021): 指定套装 + 落点, 直接进 _loot */
+/** Boss 专属掉落 (OPT-021): 指定套装 + 落点, 直接进 fx.loot */
 export function dropBossReward(state: GameState, x: number, y: number, set: SetName): Equipment {
   const eq = randomEquipment('set', state.theme, set);
   eq.pos = { x, y };
   eq.spawnT = performance.now() / 1000;
-  state._loot.push(eq);
+  state.fx.loot.push(eq);
   return eq;
 }
 
 /** 精英保底掉落 (内容扩充): rare 45% / set 40% / unique 15% + 主题倾向
- *  测试友好: _loot 可选 (mock 简化), 内部 lazy-init; GameState 场景 _loot 必填 */
-export function dropEliteLoot(state: { theme: Theme; _loot?: Equipment[] }, x: number, y: number): Equipment {
+ *  测试友好: fx.loot 可选 (mock 简化), 内部 lazy-init; GameState 场景 fx.loot 必填 */
+export function dropEliteLoot(state: { theme: Theme; fx?: { loot?: Equipment[] } }, x: number, y: number): Equipment {
   const r = Math.random();
   const rarity: Rarity = r < 0.15 ? 'unique' : r < 0.55 ? 'set' : 'rare';
   const eq = randomEquipment(rarity, state.theme);
   eq.pos = { x, y };
   eq.spawnT = performance.now() / 1000;
-  state._loot = state._loot ?? [];
-  state._loot.push(eq);
+  state.fx = state.fx ?? { loot: [] } as { loot?: Equipment[] };
+  state.fx.loot = state.fx.loot ?? [];
+  state.fx.loot.push(eq);
   return eq;
 }
 
@@ -524,7 +526,7 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
   // 难度词条加成 (D-03): 上限 6 条
   const extra = Math.min(mods.affixBonus, 6 - eq.affixes.length);
   for (let i = 0; i < extra; i++) eq.affixes.push(genAffix());
-  ext._loot.push(eq);
+  state.fx.loot.push(eq);
   // T1a: emit 事件 (FX/sfx/统计服务订阅)
   bus.emit('item.dropped', { item: eq, rarity: eq.rarity });
   return eq;
@@ -532,10 +534,8 @@ export function dropLoot(state: GameState, x: number, y: number): Equipment | nu
 
 /** 检查拾取: hp/mp 即时生效; 背包满不拾取 (留地 + 提示), 其余词条聚合进 combat */
 export function pickupLoot(state: GameState): Equipment[] {
-  const ext = state as GameState & { _loot?: Equipment[] };
-  if (!ext._loot) return [];
   const picked: Equipment[] = [];
-  ext._loot = ext._loot.filter(eq => {
+  state.fx.loot = state.fx.loot.filter(eq => {
     if (eq.pickedUp) return false;
     if (state.player.pos.x < eq.pos.x + eq.size.w &&
         state.player.pos.x + state.player.size.w > eq.pos.x &&
@@ -561,12 +561,12 @@ export function pickupLoot(state: GameState): Equipment[] {
 }
 
 export function getLoot(state: GameState): readonly Equipment[] {
-  return state._loot;
+  return state.fx.loot;
 }
 
 /** 已拾取(装备中)的列表 */
 export function getOwned(state: GameState): Equipment[] {
-  return state._owned;
+  return state.fx.owned;
 }
 
 export function describeAffix(a: Affix): string {

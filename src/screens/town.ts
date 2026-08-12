@@ -169,7 +169,7 @@ export function handleTownPanelKey(ctx: TownCtx, e: KeyboardEvent, k: string): v
       // C-401 灵铁可购 (材料独立计数不占背包)
       if (state.player.gold < IRON_SHARD_PRICE) { wrn('ui', `灵铁 ${IRON_SHARD_PRICE}金, 金币不足`); return; }
       state.player.gold -= IRON_SHARD_PRICE;
-      addMaterial(state, 'iron_shard', 1);
+      addMaterial(state.equip, 'iron_shard', 1);
       playSfxClient('ui_click');
       inf('ui', '购入 灵铁碎片 ×1');
       return;
@@ -229,18 +229,18 @@ export function handleTownPanelKey(ctx: TownCtx, e: KeyboardEvent, k: string): v
     const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
     const slot = mutated[n - 1];
     if (slot && n >= 1 && n <= mutated.length) {
-      if (materialCount(state, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
+      if (materialCount(state.equip, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
         pushToast(state, '奥术核心不足 (需要 5)', '#f66');
         return;
       }
-      if (materialCount(state, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
+      if (materialCount(state.equip, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
         pushToast(state, '虚空碎片不足 (需要 1)', '#f66');
         return;
       }
       if (runeForgePay(state)) {
         state.townPanel = null;
         // 打开三选一 (Esc 拒绝 = 保留原符文; 材料已扣)
-        state.runeChoice = { slot, options: pickRuneOptions(slot) };
+        state.equip.runeChoice = { slot, options: pickRuneOptions(slot) };
         pushToast(state, `符文锻造: ${slotDisplay(slot)} 重新变异`, '#c9aaff');
         playSfxClient('ui_click');
         inf('ui', `符文锻造 ${slot} → 三选一`);
@@ -379,7 +379,7 @@ export function drawTownPanel(ctx: TownCtx): void {
     hudCtx.fillText(`8. MP 药水 (${POTION_PRICES.mp}金) ×${state.player.potions?.mp ?? 0}/3`, 60, y); y += 22;
     hudCtx.fillStyle = '#9cf';
     drawIcon(hudCtx, res, 'mat_iron_shard', 34, y - 18, 20);
-    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state, 'iron_shard')}`, 60, y); y += 22;
+    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state.equip, 'iron_shard')}`, 60, y); y += 22;
   } else if (state.townPanel === 'sell') {
     hudCtx.fillText(`卖出 (金:${state.player.gold})  [1-9] 选择  [Esc] 返回`, 40, y); y += 34;
     const owned = getOwned(state);
@@ -392,7 +392,7 @@ export function drawTownPanel(ctx: TownCtx): void {
     });
   } else if (state.townPanel === 'smith') {
     drawIcon(hudCtx, res, 'mat_iron_shard', 14, y - 17, 20);
-    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
+    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state.equip, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
     hudCtx.fillStyle = '#889';
     hudCtx.font = '12px monospace';
     hudCtx.fillText('消耗: 100金 或 灵铁 (rare 10 / set 20 / unique 40)', 40, y); y += 24;
@@ -454,10 +454,10 @@ export function drawTownPanel(ctx: TownCtx): void {
     hudCtx.fillStyle = '#889';
     hudCtx.font = '12px monospace';
     drawIcon(hudCtx, res, 'mat_arcane_core', 14, y - 17, 20);
-    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state, 'arcane_core')} · `, 40, y);
-    const arcW = hudCtx.measureText(`持有: 奥术核心 ${materialCount(state, 'arcane_core')} · `).width;
+    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `, 40, y);
+    const arcW = hudCtx.measureText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `).width;
     drawIcon(hudCtx, res, 'mat_void_fragment', 40 + arcW - 3, y - 17, 20);
-    hudCtx.fillText(`虚空碎片 ${materialCount(state, 'void_fragment')}`, 40 + arcW + 19, y); y += 24;
+    hudCtx.fillText(`虚空碎片 ${materialCount(state.equip, 'void_fragment')}`, 40 + arcW + 19, y); y += 24;
     const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
     if (mutated.length === 0) {
       hudCtx.fillStyle = '#f88';

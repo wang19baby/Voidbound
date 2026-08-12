@@ -66,10 +66,10 @@ export function handleUiClick(ctx: UiCtx): boolean {
     return true;
   }
   // 符文三选一: 3 个符文盒 (覆盖于任何屏)
-  if (state.runeChoice) {
+  if (state.equip.runeChoice) {
     const boxW = 260, boxGap = 20, totalW = boxW * 3 + boxGap * 2;
     const x0 = (w - totalW) / 2, y0 = h / 2 - 70;
-    for (let i = 0; i < state.runeChoice.options.length; i++) {
+    for (let i = 0; i < state.equip.runeChoice.options.length; i++) {
       if (inRect(mx, my, x0 + i * (boxW + boxGap), y0, boxW, 84)) { chooseRune(state, i); return true; }
     }
     return true;
@@ -323,16 +323,16 @@ export function handleUiClick(ctx: UiCtx): boolean {
       }
       const total = getOwned(state).length;
       const pc = pageCount(total);
-      const curPage = Math.min(pageOf(state.equipSel), pc - 1);
+      const curPage = Math.min(pageOf(state.equip.sel), pc - 1);
       for (const c of cellRects()) {
         if (inRect(mx, my, c.x, c.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize)) {
           const idx = cellIndex(c.col, c.row, curPage, total);
-          if (idx !== null) state.equipSel = idx;
+          if (idx !== null) state.equip.sel = idx;
           return true;
         }
       }
       if (inRect(mx, my, EQ_LAYOUT.btnEquip.x, EQ_LAYOUT.btnEquip.y, EQ_LAYOUT.btnEquip.w, EQ_LAYOUT.btnEquip.h)) {
-        const eq = getOwned(state)[state.equipSel];
+        const eq = getOwned(state)[state.equip.sel];
         if (eq && equipItem(state, eq)) {
           const col = RARITY_COLORS[eq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
           pushToast(state, `已穿戴 ${eq.name}`, `#${col}`);
@@ -341,7 +341,7 @@ export function handleUiClick(ctx: UiCtx): boolean {
         return true;
       }
       if (inRect(mx, my, EQ_LAYOUT.btnUnequip.x, EQ_LAYOUT.btnUnequip.y, EQ_LAYOUT.btnUnequip.w, EQ_LAYOUT.btnUnequip.h)) {
-        const eq = getOwned(state)[state.equipSel];
+        const eq = getOwned(state)[state.equip.sel];
         const slot = eq ? eq.type : undefined;
         if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
         return true;
@@ -354,11 +354,11 @@ export function handleUiClick(ctx: UiCtx): boolean {
       }
       const eTotal = getOwned(state).length;
       if (inRect(mx, my, EQ_LAYOUT.btnPrev.x, EQ_LAYOUT.btnPrev.y, EQ_LAYOUT.btnPrev.w, EQ_LAYOUT.btnPrev.h)) {
-        state.equipSel = pageStart(flipPage(pageOf(state.equipSel), -1, eTotal), eTotal);
+        state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), -1, eTotal), eTotal);
         return true;
       }
       if (inRect(mx, my, EQ_LAYOUT.btnNext.x, EQ_LAYOUT.btnNext.y, EQ_LAYOUT.btnNext.w, EQ_LAYOUT.btnNext.h)) {
-        state.equipSel = pageStart(flipPage(pageOf(state.equipSel), 1, eTotal), eTotal);
+        state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), 1, eTotal), eTotal);
         return true;
       }
       return true;

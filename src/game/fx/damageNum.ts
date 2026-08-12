@@ -1,8 +1,8 @@
 // 伤害数字: 漂浮文字 (player pos 或 monster pos) 上浮 0.5s + 淡出
 // B.1.2: 用 Pool<DamageNum> 零 GC 容器替换直接数组
-// 约定: state._dmgNums 是渲染层消费的数组; pool 是回收站
-// spawn: pool.acquire() → push 进 state._dmgNums
-// update: 标记过期 → splice 出 state._dmgNums → pool.release()
+// 约定: state.fx.dmgNums 是渲染层消费的数组; pool 是回收站
+// spawn: pool.acquire() → push 进 state.fx.dmgNums
+// update: 标记过期 → splice 出 state.fx.dmgNums → pool.release()
 
 import type { GameState } from '../state';
 import { Pool } from '../../core/pool';
@@ -42,25 +42,25 @@ export function spawnDamageNum(state: GameState, x: number, y: number, text: str
   d.maxLife = 0.7;
   d.text = text;
   d.color = color;
-  state._dmgNums.push(d);
+  state.fx.dmgNums.push(d);
 }
 
 export function getDamageNums(state: GameState): readonly DamageNum[] {
-  return state._dmgNums;
+  return state.fx.dmgNums;
 }
 
 export function updateDamageNums(state: GameState, dt: number): void {
   // 收集 + 标记过期; 然后批量 splice + release
   // 两遍循环避免 for-of 迭代中 mutate 数组 (JS for-of 用 length 缓存会跳元素)
   const toRelease: DamageNum[] = [];
-  for (const d of state._dmgNums) {
+  for (const d of state.fx.dmgNums) {
     d.pos.y += d.vy * dt;
     d.life -= dt;
     if (d.life <= 0) toRelease.push(d);
   }
   for (const d of toRelease) {
-    const idx = state._dmgNums.indexOf(d);
-    if (idx >= 0) state._dmgNums.splice(idx, 1);
+    const idx = state.fx.dmgNums.indexOf(d);
+    if (idx >= 0) state.fx.dmgNums.splice(idx, 1);
     dmgNumPool.release(d);
   }
 }

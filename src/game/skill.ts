@@ -105,8 +105,8 @@ export function assignSkillPoint(state: GameState, slot: SkillSlot): string | nu
   sk.level++;
   state.player.skillPoints--;
   inf('skill', `${slot} ${sk.name} → Lv ${sk.level} (pts left ${state.player.skillPoints})`);
-  if (sk.level === 10 && !sk.rune && !state.rejectedRunes.includes(slot)) {
-    state.runeChoice = { slot, options: pickRuneOptions(slot) };
+  if (sk.level === 10 && !sk.rune && !state.equip.rejectedRunes.includes(slot)) {
+    state.equip.runeChoice = { slot, options: pickRuneOptions(slot) };
     inf('rune', `${slot} 达 10 级 → 触发符文变异三选一`);
   }
   return null;
@@ -114,12 +114,12 @@ export function assignSkillPoint(state: GameState, slot: SkillSlot): string | nu
 
 /** 三选一选择: 绑定符文; 返回成功与否 */
 export function chooseRune(state: GameState, idx: number): boolean {
-  const ch = state.runeChoice;
+  const ch = state.equip.runeChoice;
   if (!ch) return false;
   const rune = ch.options[idx];
   if (!rune) return false;
   registry[ch.slot].rune = rune;
-  state.runeChoice = null;
+  state.equip.runeChoice = null;
   inf('rune', `${ch.slot} 绑定符文: ${RUNE_DEFS[rune].name}`);
   // T1a: emit 事件
   bus.emit('rune.chosen', { rune, slot: ch.slot });
@@ -128,10 +128,10 @@ export function chooseRune(state: GameState, idx: number): boolean {
 
 /** 拒绝三选一: 该槽本局不再触发 */
 export function rejectRune(state: GameState): void {
-  if (!state.runeChoice) return;
-  state.rejectedRunes.push(state.runeChoice.slot);
-  const slot = state.runeChoice.slot;
-  state.runeChoice = null;
+  if (!state.equip.runeChoice) return;
+  state.equip.rejectedRunes.push(state.equip.runeChoice.slot);
+  const slot = state.equip.runeChoice.slot;
+  state.equip.runeChoice = null;
   inf('rune', `${slot} 拒绝变异 (本局不再触发)`);
 }
 
@@ -176,13 +176,14 @@ function castMelee(state: GameState, dir: { x: number; y: number }, slot: SkillS
     rune,
     mult,
   };
-  (state as GameState & { _swing?: MeleeSwing[] })._swing = (state as GameState & { _swing?: MeleeSwing[] })._swing ?? [];
-  (state as GameState & { _swing: MeleeSwing[] })._swing.push(swing);
+  (state as GameState & { fx?: { swings?: MeleeSwing[] } }).fx = (state as GameState & { fx?: { swings?: MeleeSwing[] } }).fx ?? { swings: [] } as { swings?: MeleeSwing[] };
+  state.fx.swings = state.fx.swings ?? [];
+  state.fx.swings.push(swing);
 
   // 击中火球 (在 AABB 内销毁)
-  const before = state.fireballs.length;
-  state.fireballs = state.fireballs.filter(f => !aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, swing.pos.x, swing.pos.y, swing.size.w, swing.size.h));
-  const after = state.fireballs.length;
+  const before = state.fx.fireballs.length;
+  state.fx.fireballs = state.fx.fireballs.filter(f => !aabbOverlap(f.pos.x, f.pos.y, f.size.w, f.size.h, swing.pos.x, swing.pos.y, swing.size.w, swing.size.h));
+  const after = state.fx.fireballs.length;
   if (before !== after) {
     inf('combat', `melee destroyed ${before - after} fireball(s)`);
   }
@@ -193,7 +194,7 @@ function castAoe(state: GameState, _dir: { x: number; y: number }, slot: SkillSl
   const px = state.player.pos.x + state.player.size.w / 2;
   const py = state.player.pos.y + state.player.size.h / 2;
   const dmg = Math.round(base * skillDamageScale(skillLevel(slot)));
-  for (const m of state.monsters) {
+  for (const m of state.fx.monsters) {
     const mx = m.pos.x + m.size.w / 2;
     const my = m.pos.y + m.size.h / 2;
     const dx = mx - px;
@@ -202,7 +203,7 @@ function castAoe(state: GameState, _dir: { x: number; y: number }, slot: SkillSl
       damageMonster(state, m, { base: dmg, type, knockback });
     }
   }
-  state.monsters = state.monsters.filter(m => m.hp > 0);
+  state.fx.monsters = state.fx.monsters.filter(m => m.hp > 0);
   // VFX (UX_REVIEW §8.3): 扩散环 + 粒子爆裂 (物理=旋风灰蓝 / 冰=霜环)
   const vis = aoeVisual(type);
   spawnRing(state, px, py, radius, 0.45, vis.sprite, vis.color);
@@ -215,8 +216,8 @@ function castChain(state: GameState, _dir: { x: number; y: number }, slot: Skill
   const py = state.player.pos.y + state.player.size.h / 2;
   const base = Math.round(60 * skillDamageScale(skillLevel(slot)));
   const pick = (exclude: unknown, fromX: number, fromY: number, range: number) => {
-    let best: { m: (typeof state.monsters)[number]; d: number } | null = null;
-    for (const m of state.monsters) {
+    let best: { m: (typeof state.fx.monsters)[number]; d: number } | null = null;
+    for (const m of state.fx.monsters) {
       if (m.hp <= 0 || m === exclude) continue;
       const mx = m.pos.x + m.size.w / 2;
       const my = m.pos.y + m.size.h / 2;
@@ -239,7 +240,7 @@ function castChain(state: GameState, _dir: { x: number; y: number }, slot: Skill
     pts.push({ x: tgt.pos.x + tgt.size.w / 2, y: tgt.pos.y + tgt.size.h / 2 });
     prev = tgt;
   }
-  state.monsters = state.monsters.filter(m => m.hp > 0);
+  state.fx.monsters = state.fx.monsters.filter(m => m.hp > 0);
   // VFX (UX_REVIEW §8.3): 每段闪电连线 + 命中点火花
   const lc = ELEMENT_FX.lightning;
   for (let i = 1; i < pts.length; i++) {
@@ -273,14 +274,14 @@ export const SKILL_SPECS: Record<SkillId, SkillSpec> = {
     const base = Math.round(ULTIMATE_DAMAGE * skillDamageScale(skillLevel(slot)) * focus);
     const px = s.player.pos.x + s.player.size.w / 2;
     const py = s.player.pos.y + s.player.size.h / 2;
-    for (const m of s.monsters) {
+    for (const m of s.fx.monsters) {
       const dx = m.pos.x + m.size.w / 2 - px;
       const dy = m.pos.y + m.size.h / 2 - py;
       if (dx * dx + dy * dy < 200 * 200) {
         damageMonster(s, m, { base, type: 'shadow' });
       }
     }
-    s.monsters = s.monsters.filter(m => m.hp > 0);
+    s.fx.monsters = s.fx.monsters.filter(m => m.hp > 0);
     // VFX (UX_REVIEW §8.3): 爆炸波 + 星屑
     spawnRing(s, px, py, 200, 0.6, 'circle_03', [0.7, 0.42, 1]);
     spawnBurst(s, px, py, 16, [0.7, 0.42, 1], 'star_03', 240, 9, 0.7);
@@ -299,11 +300,11 @@ export interface MeleeSwing {
 }
 
 export function updateSwings(state: GameState, dt: number): void {
-  state._swing = state._swing.filter(s => { s.life -= dt; return s.life > 0; });
+  state.fx.swings = state.fx.swings.filter(s => { s.life -= dt; return s.life > 0; });
 }
 
 export function getSwings(state: GameState): readonly MeleeSwing[] {
-  return state._swing;
+  return state.fx.swings;
 }
 
 // === 注册表 ===

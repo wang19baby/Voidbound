@@ -52,7 +52,7 @@ export function hardcoreWipe(state: GameState): void {
   state.player.level = 1;
   state.player.exp = 0;
   state.player.skillPoints = 0;
-  state.materials = emptyMaterials();  // M5 W4 C-401: 硬核清档含材料
+  state.equip.materials = emptyMaterials();  // M5 W4 C-401: 硬核清档含材料
   state.player.passives = {};
   recomputePassives(state);  // v9: 硬核清档含被动
   for (const slot of SKILL_SLOTS) {
@@ -60,7 +60,7 @@ export function hardcoreWipe(state: GameState): void {
     sk.level = 1;
     sk.rune = null;
   }
-  state.rejectedRunes.length = 0;
+  state.equip.rejectedRunes.length = 0;
   inf('game', 'HARDCORE: 永久死亡, 进度已清空');
 }
 
@@ -71,6 +71,6 @@ export function revivePlayer(state: GameState): void {
   state.reviveInvuln = 5;
   state.player.dodgeT = 0;
   state.player.dodgeCd = 0;
-  state.fireballs.length = 0;
+  state.fx.fireballs.length = 0;
   inf('gl', 'revived in place (5s invuln)');
 }

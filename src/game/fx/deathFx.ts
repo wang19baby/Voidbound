@@ -48,13 +48,13 @@ export function spawnDeathFx(state: GameState, x: number, y: number, count = 7):
     p.maxLife = 1.0;
     p.rot = Math.random() * Math.PI * 2;
     p.rotV = (Math.random() - 0.5) * 8;
-    state._deathFx.push(p);
+    state.fx.deathFx.push(p);
   }
 }
 
 export function updateDeathFx(state: GameState, dt: number): void {
   const toRelease: DeathFx[] = [];
-  for (const p of state._deathFx) {
+  for (const p of state.fx.deathFx) {
     p.pos.x += p.vel.x * dt;
     p.pos.y += p.vel.y * dt;
     p.vel.x *= 0.92;  // 阻力
@@ -64,14 +64,14 @@ export function updateDeathFx(state: GameState, dt: number): void {
     if (p.life <= 0) toRelease.push(p);
   }
   for (const p of toRelease) {
-    const idx = state._deathFx.indexOf(p);
-    if (idx >= 0) state._deathFx.splice(idx, 1);
+    const idx = state.fx.deathFx.indexOf(p);
+    if (idx >= 0) state.fx.deathFx.splice(idx, 1);
     deathFxPool.release(p);
   }
 }
 
 export function getDeathFx(state: GameState): readonly DeathFx[] {
-  return state._deathFx;
+  return state.fx.deathFx;
 }
 
 /** 测试用: 重置池 */

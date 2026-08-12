@@ -3,22 +3,20 @@
 
 import type { RenderResources } from '../render/resources';
 import { WORLD_W, WORLD_H, type Decor, spawnPointForMode } from './world';
-import { FIREBALL_DAMAGE, type Monster, type PoisonPool } from './monster';
+import { FIREBALL_DAMAGE, type Monster } from './monster';
 import type { CombatStats, DamageType } from './combat';
 import type { RuneId } from './rune';
-import type { SkillSlot, MeleeSwing } from './skill';
+import type { SkillSlot } from './skill';
 import type { Difficulty } from './difficulty';
 import type { Equipment, EquipType } from './equipment';
 import { CLASS_SPRITES, type ClassId } from './class';
 import type { ElementId } from './element';
 import type { MapMode } from './mapmode';
-import { spawnBurst, type Vfx } from './fx/vfx';
-import type { DamageNum } from './fx/damageNum';
-import type { DeathFx } from './fx/deathFx';
-import type { Toast } from './toast';
-import type { EnemyProjectile } from './monsters/proj';
+import { spawnBurst } from './fx/vfx';
 import type { CombatState } from './state/combat';
 import type { UiState } from './state/ui';
+import type { FxState } from './state/fx';
+import type { EquipState } from './state/equip';
 import { createEmptyCombatState } from './state/combat';
 import { createEmptyUiState } from './state/ui';
 
@@ -81,11 +79,6 @@ export interface Fireball {
   rune: RuneId;
   /** 伤害类型 (M5 C-101): 火球/暗影箭/圣光弹/毒镖等投射物共用) */
   dmgType: DamageType;
-}
-
-export interface RuneChoice {
-  slot: SkillSlot;
-  options: RuneId[];
 }
 
 /** 屏幕状态机 (OPT-010): 平铺旗标 → 单一 screen + 子状态 */
@@ -235,9 +228,6 @@ export interface GameState {
   camera: Camera;
   fireballs: Fireball[];
   fireballSize: number;
-  monsters: Monster[];
-  /** 技能/机制视觉特效 (UX_REVIEW §8.3): 扩散环/爆裂/闪电/辉光 */
-  vfx: Vfx[];
   /** 屏幕状态机 (OPT-010) */
   screen: Screen;
   /** 暂停来源 (dungeon/town, 恢复用) */
@@ -252,46 +242,23 @@ export interface GameState {
   mode: 'dungeon' | 'town';
   /** 进入城镇前的地下城坐标 (出发时还原) */
   townReturn: { x: number; y: number } | null;
-  /** 装备面板: 选中背包索引 / 当前页 (C-502 网格分页) */
-  equipSel: number;
-  equipPage: number;
-  /** 活跃的符文三选一 (10 级触发) */
-  runeChoice: RuneChoice | null;
-  /** 已拒绝变异的槽 (本局不再触发) */
-  rejectedRunes: SkillSlot[];
   /** 施法失败红闪 (OPT-007): 技能槽 + 倒计时秒 */
   castFailFlash: { slot: SkillSlot; t: number } | null;
-  /** 环境粒子 (OPT-027): 主题氛围微尘 */
-  envFx: Array<{ x: number; y: number; vx: number; vy: number; t: number; life: number }>;
-  /** 死亡触发毒池 (A-W3 death_trigger): 站内每秒伤害 (本次 A.1 收口, 类型安全) */
-  _pools: PoisonPool[];
-  /** 伤害数字 (本次 A.1 收口, 类型安全; 之前用 _dmgNums 字段逃逸) */
-  _dmgNums: DamageNum[];
-  /** 死亡粒子 (本次 A.1 收口, 类型安全) */
-  _deathFx: DeathFx[];
-  /** 挥击 (近战命中盒): 由 skill.updateSwings 写入 (本次 A.1 收口, 类型安全) */
-  _swing: MeleeSwing[];
-  /** 地面掉落: equipment.ts (本次 A.1 收口) */
-  _loot: import('./equipment').Equipment[];
-  /** 已拾取(装备中)列表: equipment.ts (本次 A.1 收口) */
-  _owned: import('./equipment').Equipment[];
-  /** 顶部 toast 列表: toast.ts (本次 A.1 收口) */
-  _toasts: Toast[];
-  /** 怪物远程投射物: monsters/proj.ts (本次 A.1 收口) */
-  _enemyProj: EnemyProjectile[];
   /** 已通关主题 (OPT-015, C1): 解锁难度与主题 */
   cleared: string[];
   /** 硬核二段确认 (OPT-006/015) */
   confirmHardcore: boolean;
   pendingDifficulty: Difficulty | null;
-  /** 材料 (M5 W4 C-401): 独立计数不占背包 (J3=a); 第二货币 */
-  materials: Partial<Record<import('./equipment').MaterialId, number>>;
   /** 城镇鼠标走向目标 (v3): 点击 NPC 自动走向, 到达后自动交互 (null=无) */
   townWalk: { kind: import('./town').NpcKind; x: number; y: number } | null;
   /** 战斗相关子状态 (PR #1 T4-a): 连击/震屏/停顿/击杀者/Boss 入场/升级闪光/积分/累计击杀 */
   combat: CombatState;
   /** UI 相关子状态 (PR #1 T4-b): 设置面板/收集覆盖层/键位编辑/死亡撤销/探索度/标题消息 */
   ui: UiState;
+  /** FX 子对象 (PR #2 T4-c): 火球/怪物/VFX/毒池/伤害数字/死亡粒子/挥击/掉落/背包/Toast/敌弹/环境粒子 */
+  fx: FxState;
+  /** 装备/符文子对象 (PR #2 T4-d): 选中索引/分页/符文三选一/拒绝变异的槽/材料 */
+  equip: EquipState;
 }
 
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
@@ -324,12 +291,12 @@ export function worldToScreen(state: GameState, worldPos: { x: number; y: number
 export function updateFireballs(state: GameState, dt: number): void {
   const toRelease: Fireball[] = [];
   let wallHits = 0;
-  for (const f of state.fireballs) {
+  for (const f of state.fx.fireballs) {
     // 追踪符文: 每帧朝最近怪物转向
     if (f.rune === 'homing') {
       let best: Monster | null = null;
       let bd = 520;
-      for (const m of state.monsters) {
+      for (const m of state.fx.monsters) {
         const d = Math.hypot(m.pos.x - f.pos.x, m.pos.y - f.pos.y);
         if (d < bd) { bd = d; best = m; }
       }
@@ -373,14 +340,14 @@ export function updateFireballs(state: GameState, dt: number): void {
   if (wallHits > 0) {
     void import('../util/log').then(({ inf }) => inf('combat', `fireball hit ${wallHits} wall(s)`));
   }
-  const beforeCount = state.fireballs.length;
+  const beforeCount = state.fx.fireballs.length;
   for (const f of toRelease) {
-    const idx = state.fireballs.indexOf(f);
-    if (idx >= 0) state.fireballs.splice(idx, 1);
+    const idx = state.fx.fireballs.indexOf(f);
+    if (idx >= 0) state.fx.fireballs.splice(idx, 1);
     fireballPool.release(f);
   }
-  if (state.fireballs.length !== beforeCount) {
-    void import('../util/log').then(({ inf }) => inf('skill', `fireballs remaining: ${state.fireballs.length}`));
+  if (state.fx.fireballs.length !== beforeCount) {
+    void import('../util/log').then(({ inf }) => inf('skill', `fireballs remaining: ${state.fx.fireballs.length}`));
   }
 }
 
@@ -408,7 +375,7 @@ export function spawnFireball(state: GameState, dir: { x: number; y: number }, s
   f.dmg = dmg;
   f.rune = rune;
   f.dmgType = dmgType;
-  state.fireballs.push(f);
+  state.fx.fireballs.push(f);
   void import('../util/log').then(({ dbg }) => dbg('skill', `spawn fireball dir=(${dx.toFixed(2)},${dy.toFixed(2)}) rune=${rune} dmg=${dmg} type=${dmgType}`));
 }
 

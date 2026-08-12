@@ -4,12 +4,13 @@
 // - 模块级 THEME_ENV_COLOR 表 (按主题定调色)
 // - spawnEnvFx: 按 dt 累积到 spawn budget; 主题越深 spawn 越密
 // - updateEnvFx: 推进位置 + 寿命; 过期即清
-// - envFx 数据存在 state.envFx (GameState 内嵌数组, 现有结构)
+// - envFx 数据存在 state.fx.envFx (GameState fx 子对象, PR #2 迁移)
 //
 // 由 envFxSystem (game/system/builtins.ts) 在主循环 update 内调用,
 // 替代原 main.ts 内散点调用. 函数体内容原样从 app/envFx.ts 搬移, 未修改.
 
 import type { GameState, Theme } from '../state';
+import type { EnvFxRecord } from '../state/fx';
 
 /** 主题环境色 */
 export const THEME_ENV_COLOR: Record<Theme, [number, number, number]> = {
@@ -36,7 +37,7 @@ export function spawnEnvFx(state: GameState, dt: number): void {
   while (budgetAccum >= 1) {
     budgetAccum -= 1;
     const col = THEME_ENV_COLOR[state.theme];
-    state.envFx.push({
+    const rec: EnvFxRecord = {
       x: state.player.pos.x + (Math.random() - 0.5) * 800,
       y: state.player.pos.y + (Math.random() - 0.5) * 600,
       vx: (Math.random() - 0.5) * 8,
@@ -44,13 +45,14 @@ export function spawnEnvFx(state: GameState, dt: number): void {
       t: 0,
       life: 4 + Math.random() * 3,
       color: col,
-    } as GameState['envFx'][number]);
+    };
+    state.fx.envFx.push(rec);
   }
 }
 
 /** 推进环境粒子 (位置 + 寿命) */
 export function updateEnvFx(state: GameState, dt: number): void {
-  const arr = state.envFx;
+  const arr = state.fx.envFx;
   let write = 0;
   for (let read = 0; read < arr.length; read++) {
     const p = arr[read];

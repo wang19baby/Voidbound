@@ -45,7 +45,7 @@ export function drawCombo(ctx2d: CanvasRenderingContext2D, state: GameState, vw:
 
 // 符文三选一 overlay (D-01)
 export function drawRuneChoice(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
-  const choice = state.runeChoice;
+  const choice = state.equip.runeChoice;
   if (!choice) return;
   const boxW = 260;
   const boxGap = 20;
@@ -204,13 +204,13 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   ctx2d.fillStyle = '#ffd';
   ctx2d.fillText('背包', EQ_LAYOUT.gridX, EQ_LAYOUT.gridY - 12);
   const pc = pageCount(owned.length);
-  const curPage = Math.min(pageOf(state.equipSel), pc - 1);
+  const curPage = Math.min(pageOf(state.equip.sel), pc - 1);
   const cells = cellRects();
   for (let i = 0; i < cells.length; i++) {
     const c2 = cells[i];
     const idx = cellIndex(c2.col, c2.row, curPage, owned.length);
     const eq = idx !== null ? owned[idx] : undefined;
-    const sel = idx === state.equipSel;
+    const sel = idx === state.equip.sel;
     const hv = inRect(mx, my, c2.x, c2.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize);
     ctx2d.fillStyle = eq ? `rgb(${RARITY_COLORS[eq.rarity].map(v => Math.round(v * 255 * 0.45)).join(',')})` : 'rgba(18,18,28,0.85)';
     ctx2d.fillRect(c2.x, c2.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize);
@@ -246,7 +246,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.textAlign = 'left';
   }
   // tooltip: 选中物品详情
-  const selEq = owned[state.equipSel];
+  const selEq = owned[state.equip.sel];
   if (selEq) {
     ctx2d.fillStyle = '#10141c';
     ctx2d.fillRect(EQ_LAYOUT.gridX, EQ_LAYOUT.tipY, 460, 46);

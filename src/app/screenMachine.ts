@@ -198,7 +198,7 @@ function handleKeybindEdit(state: GameState, e: KeyboardEvent): boolean {
 }
 
 function handleRuneChoice(state: GameState, e: KeyboardEvent): boolean {
-  if (!state.runeChoice) return false;
+  if (!state.equip.runeChoice) return false;
   if (e.key === '1' || e.key === '2' || e.key === '3') {
     chooseRune(state, Number(e.key) - 1);
     return true;
@@ -355,13 +355,13 @@ function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
     return true;
   }
   const total = getOwned(state).length;
-  if (k === 'arrowup') { state.equipSel = moveGridSel(state.equipSel, 'up', total); return true; }
-  if (k === 'arrowdown') { state.equipSel = moveGridSel(state.equipSel, 'down', total); return true; }
-  if (k === 'arrowleft') { state.equipSel = moveGridSel(state.equipSel, 'left', total); return true; }
-  if (k === 'arrowright') { state.equipSel = moveGridSel(state.equipSel, 'right', total); return true; }
-  if (k === 'pageup') { state.equipSel = pageStart(flipPage(pageOf(state.equipSel), -1, total), total); return true; }
-  if (k === 'pagedown') { state.equipSel = pageStart(flipPage(pageOf(state.equipSel), 1, total), total); return true; }
-  const selEq = getOwned(state)[state.equipSel];
+  if (k === 'arrowup') { state.equip.sel = moveGridSel(state.equip.sel, 'up', total); return true; }
+  if (k === 'arrowdown') { state.equip.sel = moveGridSel(state.equip.sel, 'down', total); return true; }
+  if (k === 'arrowleft') { state.equip.sel = moveGridSel(state.equip.sel, 'left', total); return true; }
+  if (k === 'arrowright') { state.equip.sel = moveGridSel(state.equip.sel, 'right', total); return true; }
+  if (k === 'pageup') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), -1, total), total); return true; }
+  if (k === 'pagedown') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), 1, total), total); return true; }
+  const selEq = getOwned(state)[state.equip.sel];
   if (k === 'a' || k === 'enter') {
     if (selEq && equipItem(state, selEq)) {
       const col = RARITY_COLORS[selEq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');

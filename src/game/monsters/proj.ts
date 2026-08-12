@@ -60,19 +60,19 @@ export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, 
   p.dmg = Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1));
   p.life = 2.0;
   p.fromId = m.id;
-  state._enemyProj.push(p);
+  state.fx.enemyProj.push(p);
   nextProjId++;
 }
 
 export function getEnemyProj(state: GameState): readonly EnemyProjectile[] {
-  return state._enemyProj;
+  return state.fx.enemyProj;
 }
 
 export function updateEnemyProj(state: GameState, dt: number): void {
   // 两遍循环: 第一遍标记过期/命中, 第二遍批量 splice + release
   const toRelease: EnemyProjectile[] = [];
   const impactPos: Array<{ x: number; y: number; color: [number, number, number] }> = [];
-  for (const p of state._enemyProj) {
+  for (const p of state.fx.enemyProj) {
     p.pos.x += p.vel.x * dt;
     p.pos.y += p.vel.y * dt;
     p.life -= dt;
@@ -114,8 +114,8 @@ export function updateEnemyProj(state: GameState, dt: number): void {
     spawnImpact(state, pos.x, pos.y, pos.color);
   }
   for (const p of toRelease) {
-    const idx = state._enemyProj.indexOf(p);
-    if (idx >= 0) state._enemyProj.splice(idx, 1);
+    const idx = state.fx.enemyProj.indexOf(p);
+    if (idx >= 0) state.fx.enemyProj.splice(idx, 1);
     enemyProjPool.release(p);
   }
 }

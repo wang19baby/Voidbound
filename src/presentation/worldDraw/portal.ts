@@ -28,7 +28,7 @@ export function drawPortalAndPools(ctx: DrawCtx): void {
   }
 
   // A-W3 毒池 (death_trigger): 半透明毒圈, 站内 DOT
-  const pools = state._pools;
+  const pools = state.fx.pools;
   for (const pk of pools) {
     const sp = worldToScreen(state, { x: pk.x, y: pk.y });
     if (sp.x > -pk.r && sp.x < vw + pk.r && sp.y > -pk.r && sp.y < vh + pk.r) {

@@ -22,7 +22,7 @@ export function spawnThemeMonster(state: GameState): Monster {
 /** 按当前主题池刷满一局地牢 (OPT-012): 清场 → RUN_POOL_SIZE 只小怪, 重置跑局计数
  *  A-W1 营地三型: 玩家周围生成 4 个营地 (光环/精英抱团/双核随机), 每营地聚簇 */
 export function spawnRunPool(state: GameState): void {
-  state.monsters.length = 0;
+  state.fx.monsters.length = 0;
   // Review (地图审查 P2): 营地/补散怪出生避墙需要当前局墙 — resetWorldForMode 刚清缓存, 先按出生点生成
   state.world.walls = getActiveWalls(state, 2);
   const pool = THEME_MONSTER_POOL[state.theme];
@@ -44,11 +44,11 @@ export function spawnRunPool(state: GameState): void {
 
   for (const c of centers) {
     const members = spawnCamp(state, c, pick);
-    for (const m of members) state.monsters.push(m);
+    for (const m of members) state.fx.monsters.push(m);
   }
   // 兜底: 营地成员可能因撞墙失败不足额 → 补散怪到 RUN_POOL_SIZE
-  while (state.monsters.length < RUN_POOL_SIZE) {
-    state.monsters.push(spawnMonster(state, pick()));
+  while (state.fx.monsters.length < RUN_POOL_SIZE) {
+    state.fx.monsters.push(spawnMonster(state, pick()));
   }
 
   state.run.total = RUN_POOL_SIZE;

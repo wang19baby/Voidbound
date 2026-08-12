@@ -55,7 +55,7 @@ export function drawParticles(ctx: DrawCtx): void {
   // 环境粒子 (OPT-027)
   const envUv = instUv('spark_03');
   const envColor = THEME_ENV_COLOR[state.theme];
-  for (const p of state.envFx) {
+  for (const p of state.fx.envFx) {
     const sp = worldToScreen(state, p);
     addInst(envUv, sp, 6, 6);
   }
@@ -72,7 +72,7 @@ export function drawParticles(ctx: DrawCtx): void {
 
   // 玩家火球: 颜色各异 (符文色 > 元素色), 逐发 flush
   const magicUv = instUv('magic_01');
-  for (const f of state.fireballs) {
+  for (const f of state.fx.fireballs) {
     const sp = worldToScreen(state, f.pos);
     const rc = f.rune && f.rune !== 'none' ? RUNE_DEFS[f.rune].color : hexToRgb01(DAMAGE_TYPE_COLORS[f.dmgType]);
     addInst(magicUv, sp, f.size.w, f.size.h);

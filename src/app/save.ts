@@ -66,7 +66,7 @@ export function buildSavePayload(state: GameState): SaveData {
     gold: state.player.gold,
     class: state.player.classId,
     town: state.townId,
-    materials: MATERIAL_IDS.filter(id => (state.materials[id] ?? 0) > 0).map(id => [id, state.materials[id] ?? 0]),
+    materials: MATERIAL_IDS.filter(id => (state.equip.materials[id] ?? 0) > 0).map(id => [id, state.equip.materials[id] ?? 0]),
     passives: PASSIVE_IDS.filter(id => (state.player.passives[id] ?? 0) > 0).map(id => [id, state.player.passives[id] ?? 0]),
     mode: state.run.mode ?? 'linear',
     scene: state.mode,
@@ -78,9 +78,9 @@ export function buildSavePayload(state: GameState): SaveData {
 
 /** 读档还原材料 (M5 W4 C-401) */
 export function restoreMaterialsApp(state: GameState, d: { materials?: Array<[string, number]> }): void {
-  state.materials = emptyMaterials();
+  state.equip.materials = emptyMaterials();
   for (const [id, n] of d.materials ?? []) {
-    if (MATERIAL_IDS.includes(id as MaterialId)) state.materials[id as MaterialId] = n;
+    if (MATERIAL_IDS.includes(id as MaterialId)) state.equip.materials[id as MaterialId] = n;
   }
 }
 

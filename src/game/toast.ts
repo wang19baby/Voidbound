@@ -22,8 +22,8 @@ const toastPool = new Pool<Toast>({
 
 export function pushToast(state: GameState, text: string, color: string): void {
   // 上限保留: 满了就淘汰最旧的 (FIFO)
-  while (state._toasts.length >= MAX_TOASTS) {
-    const oldest = state._toasts.shift();
+  while (state.fx.toasts.length >= MAX_TOASTS) {
+    const oldest = state.fx.toasts.shift();
     if (oldest) toastPool.release(oldest);
   }
   const t = toastPool.acquire();
@@ -31,22 +31,22 @@ export function pushToast(state: GameState, text: string, color: string): void {
   t.color = color;
   t.life = TOAST_LIFE;
   t.maxLife = TOAST_LIFE;
-  state._toasts.push(t);
+  state.fx.toasts.push(t);
 }
 
 export function getToasts(state: GameState): readonly Toast[] {
-  return state._toasts;
+  return state.fx.toasts;
 }
 
 export function updateToasts(state: GameState, dt: number): void {
   const toRelease: Toast[] = [];
-  for (const t of state._toasts) {
+  for (const t of state.fx.toasts) {
     t.life -= dt;
     if (t.life <= 0) toRelease.push(t);
   }
   for (const t of toRelease) {
-    const idx = state._toasts.indexOf(t);
-    if (idx >= 0) state._toasts.splice(idx, 1);
+    const idx = state.fx.toasts.indexOf(t);
+    if (idx >= 0) state.fx.toasts.splice(idx, 1);
     toastPool.release(t);
   }
 }

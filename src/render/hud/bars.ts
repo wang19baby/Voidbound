@@ -87,7 +87,7 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
     ctx2d.fillStyle = '#5a5a6a';
     ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
   }
-  for (const m of state.monsters) {
+  for (const m of state.fx.monsters) {
     ctx2d.fillStyle = MONSTER_DEFS[m.type].boss ? '#f80' : '#f55';
     ctx2d.fillRect(mx + m.pos.x * sx, my + m.pos.y * sy, 2, 2);
   }
@@ -113,7 +113,7 @@ export function drawLowHpVignette(ctx2d: CanvasRenderingContext2D, state: GameSt
 // 精英名牌
 export function drawEliteNames(ctx2d: CanvasRenderingContext2D, state: GameState): void {
   if (state.screen !== 'dungeon') return;
-  for (const m of state.monsters) {
+  for (const m of state.fx.monsters) {
     if (!m.elite) continue;
     const sp = worldToScreen(state, m.pos);
     ctx2d.fillStyle = '#ffd64a';
@@ -127,7 +127,7 @@ export function drawEliteNames(ctx2d: CanvasRenderingContext2D, state: GameState
 // Boss 顶栏血条
 export function drawBossHpBar(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number): void {
   if (state.screen !== 'dungeon') return;
-  const boss = state.monsters.find(m => MONSTER_DEFS[m.type].boss);
+  const boss = state.fx.monsters.find(m => MONSTER_DEFS[m.type].boss);
   if (!boss) return;
   const bw = 360;
   const bh = 14;
