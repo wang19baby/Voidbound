@@ -259,8 +259,8 @@ export function generateChunkDecor(cx: number, cy: number, theme: Theme, density
   const out: Decor[] = [];
   const ox = cx * CHUNK_SIZE;
   const oy = cy * CHUNK_SIZE;
-  // 装饰显示尺寸 (Review: 与 main.ts 渲染 64px 对齐, 原 32px 检查导致探进墙块 16px)
-  const size = 64;
+  // 装饰显示尺寸 (HD: 128px 1:1, 与墙块同规格; 旧 64px 是 Kenney 小图时代)
+  const size = 128;
   let guard = 0;
   while (out.length < cfg.count && guard++ < 64) {
     const x = ox + size / 2 + rand() * (CHUNK_SIZE - size);

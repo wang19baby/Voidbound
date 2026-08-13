@@ -57,12 +57,12 @@ export function drawFloor(ctx: DrawCtx): void {
     drawSprite(gl, quad, res, sp, w.size, 'world', wallName, runHue ? { hue: runHue } : undefined);
   }
 
-  // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞)
+  // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞) — 128px 1:1 (HD 烘焙同规格)
   for (const d of state.world.decor) {
     const sp = worldToScreen(state, d.pos);
-    if (sp.x + 64 < 0 || sp.x > vw) continue;
-    if (sp.y + 64 < 0 || sp.y > vh) continue;
+    if (sp.x + 128 < 0 || sp.x > vw) continue;
+    if (sp.y + 128 < 0 || sp.y > vh) continue;
     const dopt: { color?: [number, number, number]; hue?: number } = d.tint ? { color: d.tint, hue: runHue } : { hue: runHue };
-    drawSprite(gl, quad, res, sp, { w: 64, h: 64 }, 'world', d.sprite, dopt);
+    drawSprite(gl, quad, res, sp, { w: 128, h: 128 }, 'world', d.sprite, dopt);
   }
 }

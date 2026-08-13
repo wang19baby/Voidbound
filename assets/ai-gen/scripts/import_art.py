@@ -290,8 +290,8 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
-        # 瓦片尺寸: 墙 128 (128px 块) / 地板 32 (32px 格, 烘焙 384 整幅) / 障碍物 64 (游戏显示 64)
-        size = 128 if name.startswith("wall") else (32 if name.startswith("floor") else 64)
+        # 瓦片尺寸: 墙 128 (128px 块) / 地板 32 (32px 格, 烘焙 384 整幅) / 障碍物 128 (128px 块 1:1)
+        size = 128 if name.startswith(("wall", "decor")) else 32
         if name.startswith("decor"):
             # 障碍物 (用户要求: 原图整幅直接用, 不再切片/取部分):
             # 抠品红 → 弱 alpha 归零 → 内容方形化 (bbox_crop) → 烘焙 size
