@@ -8,21 +8,26 @@ export function emptyMaterials(): Record<MaterialId, number> {
   return { iron_shard: 0, arcane_core: 0, void_fragment: 0 };
 }
 
-export function materialCount(state: MaterialSrc, id: MaterialId): number {
-  return state.equip.materials?.[id] ?? 0;
+// PR-002 + PR-004 兼容: 接受 MaterialSrc (顶层 materials) 或 EquipState (state.equip.materials)
+export function materialCount(state: MaterialSrc | { equip?: { materials?: Partial<Record<MaterialId, number>> } } | Partial<Record<MaterialId, number>>, id: MaterialId): number {
+  const mats = (state as any).equip?.materials ?? ('materials' in state ? (state as MaterialSrc).materials : state as Partial<Record<MaterialId, number>>);
+  return mats?.[id] ?? 0;
 }
 
 /** 材料入库 (掉落/购买) */
-export function addMaterial(state: MaterialSrc, id: MaterialId, n: number): void {
-  const m = state.equip.materials;
-  m[id] = (m[id] ?? 0) + n;
+// PR-002 + PR-004 兼容: 接受 MaterialSrc (顶层 materials) 或 EquipState (state.equip.materials)
+export function addMaterial(state: MaterialSrc | { equip?: { materials?: Record<MaterialId, number> } }, id: MaterialId, n: number): void {
+  const mats = state.equip?.materials ?? (state as MaterialSrc).materials;
+  if (!mats) return;
+  mats[id] = (mats[id] ?? 0) + n;
 }
 
 /** 材料扣除 (消耗渠道); 不足返回 false 不扣 */
-export function spendMaterial(state: MaterialSrc, id: MaterialId, n: number): boolean {
-  const have = state.equip.materials?.[id] ?? 0;
+export function spendMaterial(state: MaterialSrc | { equip?: { materials?: Record<MaterialId, number> } }, id: MaterialId, n: number): boolean {
+  const mats = state.equip?.materials ?? (state as MaterialSrc).materials;
+  const have = mats?.[id] ?? 0;
   if (have < n) return false;
-  state.equip.materials[id] = have - n;
+  if (mats) mats[id] = have - n;
   return true;
 }
 
