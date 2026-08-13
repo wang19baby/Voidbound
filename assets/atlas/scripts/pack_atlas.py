@@ -113,7 +113,15 @@ def pack_sprites(sprites: list[dict], strategy: str = "horizontal") -> dict:
         cell_w = max(s["width"] for s in sprites)
         cell_h = max(s["height"] for s in sprites)
         total_w = cell_w * cols + PADDING * (cols + 1)
-        total_h = cell_h * rows + PADDING * (rows + 1)
+        # 按实际换行模拟真实行数 (宽度参差时实际行数 ≥ 估算值, 防垂直溢出)
+        sim_w = PADDING
+        sim_rows = 1
+        for s in sprites:
+            if sim_w > PADDING and sim_w + s["width"] + PADDING * 2 > total_w:
+                sim_rows += 1
+                sim_w = PADDING
+            sim_w += s["width"] + PADDING * 2
+        total_h = PADDING + (sim_rows - 1) * (cell_h + PADDING * 2) + cell_h + PADDING
 
     else:
         raise ValueError(f"未知策略: {strategy}")
@@ -126,8 +134,14 @@ def pack_sprites(sprites: list[dict], strategy: str = "horizontal") -> dict:
     layout = []
     cursor_x = PADDING
     cursor_y = PADDING
+    is_grid = strategy == "grid"
 
     for s in sprites:
+        # grid 模式: 一行放满 cell_w*cols 后换行 (原实现从不换行 →
+        # 超宽 sprite 被裁出图集, 但 meta 记录越界 x → 运行时 UV>1 采右边缘, 全部破图)
+        if is_grid and cursor_x > PADDING and cursor_x + s["width"] + PADDING * 2 > total_w:
+            cursor_x = PADDING
+            cursor_y += cell_h + PADDING * 2
         img = Image.open(s["path"]).convert("RGBA")
         atlas.paste(img, (cursor_x, cursor_y))
         layout.append({
@@ -280,6 +294,36 @@ impl {struct_name}Atlas {{
     print(f"  RUST: {output_path}")
 
 
+def validate_layout(atlas_name: str, result: dict) -> None:
+    """构建期自校验: sprite 坐标必须在图集内, uv≤1, 无重名 — 防坏数据进游戏
+
+    历史事故: grid 分支从不换行, 坐标越界但照写 .bin → 运行时 uv.x>1 → CLAMP 采右边缘
+    (ui/icons/monsters/particles 全炸)。任何越界直接报错退出, 不产出 .bin。
+    """
+    w, h = result["size"]
+    layout = result["layout"]
+    names = [s["name"] for s in layout]
+    dups = {n for n in names if names.count(n) > 1}
+    bad: list[str] = []
+    if dups:
+        bad.append(f"重复 sprite 名: {sorted(dups)}")
+    for s in layout:
+        if s["x"] < 0 or s["y"] < 0:
+            bad.append(f"{s['name']} 负坐标 ({s['x']},{s['y']})")
+        elif s["x"] + s["frame_width"] > w:
+            bad.append(f"{s['name']} x 超界 {s['x']}+{s['frame_width']}>{w}")
+        elif s["y"] + s["frame_height"] > h:
+            bad.append(f"{s['name']} y 超界 {s['y']}+{s['frame_height']}>{h}")
+        elif w > 0 and (s["x"] + s["frame_width"]) / w > 1.0001:
+            bad.append(f"{s['name']} uv.x 超界 {(s['x'] + s['frame_width']) / w:.4f}")
+    if bad:
+        print(f"✗ {atlas_name}: 布局校验失败 ({len(bad)} 项):")
+        for b in bad[:10]:
+            print(f"    - {b}")
+        raise SystemExit(f"布局校验失败: {atlas_name} — 未产出 .bin/.png/.json")
+    print(f"  ✓ 校验: {len(layout)} sprites 全部在界内, uv≤1, 无重名")
+
+
 def process_atlas(atlas_name: str, dry_run: bool = False, rust_bin: bool = False, rust_loader: bool = False) -> None:
     """处理一个图集"""
     input_subdir = INPUT_DIR / atlas_name
@@ -302,6 +346,9 @@ def process_atlas(atlas_name: str, dry_run: bool = False, rust_bin: bool = False
 
     result = pack_sprites(sprites, strategy="horizontal")
     print(f"  图集尺寸: {result['size'][0]}x{result['size'][1]}")
+
+    # 构建期自校验 (越界/重名 → 直接退出, 不产出坏 .bin)
+    validate_layout(atlas_name, result)
 
     if dry_run:
         print("  (干跑,不写文件)")

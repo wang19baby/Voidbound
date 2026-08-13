@@ -178,14 +178,23 @@ export function getChunkWalls(cx: number, cy: number, density: number = 0.18, mo
   if (!w) {
     w = generateChunkWalls(cx, cy, density, mode);
     chunkCache.set(k, w);
+    // 地图生成日志: 新 chunk 首次生成 (缓存未命中时) → 终端可见
+    void import('../util/jslog').then(({ jsLog }) =>
+      jsLog(`[map] gen walls chunk(${cx},${cy}) n=${w.length} mode=${mode} density=${density} cache=${chunkCache.size}`),
+    );
   }
   return w;
 }
 
 /** 按模式刷墙 (A-W2): 每局重置缓存 + 密度; 由 startRun 调用 */
 export function resetWorldForMode(mode: MapMode): void {
+  const prevW = chunkCache.size;
+  const prevD = decorCache.size;
   chunkCache.clear();
   decorCache.clear();
+  void import('../util/jslog').then(({ jsLog }) =>
+    jsLog(`[map] reset mode=${mode} cache ${prevW}walls/${prevD}decor cleared`),
+  );
 }
 
 /** 返回玩家附近 (radius chunks) 的所有墙 (含玩家当前 chunk) */
@@ -274,6 +283,9 @@ export function getChunkDecor(cx: number, cy: number, theme: Theme, density: num
   if (!d) {
     d = generateChunkDecor(cx, cy, theme, density, mode);
     decorCache.set(k, d);
+    void import('../util/jslog').then(({ jsLog }) =>
+      jsLog(`[map] gen decor chunk(${cx},${cy}) n=${d.length} theme=${theme} sprite=${THEME_DECOR[theme].sprite}`),
+    );
   }
   return d;
 }

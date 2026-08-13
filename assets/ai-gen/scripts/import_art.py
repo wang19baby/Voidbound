@@ -28,6 +28,7 @@ BASE = Path(__file__).parent.parent          # assets/ai-gen
 IMPORT = BASE / "import"
 ATLAS_IN = BASE.parent / "atlas" / "input"   # assets/atlas/input
 SIZE = 64  # 默认输出贴图尺寸 (px); 可 --size 覆盖 (小怪/瓦片按显示尺寸烘焙)
+FLOOR_FULL = 384  # 地板整幅纹理边长 (无缝化后统一 384; 游戏 32px 格 → 12x12 周期, 世界对齐无接缝)
 
 
 def chroma_key_pink(img: Image.Image) -> Image.Image:
@@ -183,14 +184,89 @@ def make_seamless(img: Image.Image) -> Image.Image:
     return blended.crop((0, 0, hw, hh))
 
 
-def brighten_if_dark(img: Image.Image, min_lum: float = 80) -> Image.Image:
-    """平均亮度过低 (<min_lum) 的瓦片按比例提亮 (暗角/近黑图在游戏里看不清)"""
+def brighten_if_dark(img: Image.Image, min_lum: float = 80, raw_lum: float | None = None) -> Image.Image:
+    """平均亮度过低 (<min_lum) 的瓦片做曝光恢复 (gamma 抬升)。
+
+    旧版线性 ×1.9 上限: 亮 19.6 的原图只能到 37, 依然全黑 — "黑色地图"根因。
+    gamma 恢复按暗部/亮部等比例打开, 19.6 → ~80, 纹理保留。
+    raw_lum: 调用方传入在 raw(或大尺寸) 上直读的稳定均值 — 本环境的无缝中间图
+    getdata/resize 读数会在进程间飘 (19.6 ↔ 116), 任何小尺寸测量都不可信。
+    """
     import statistics
-    lum = statistics.mean(sum(c) / 3 for c in img.resize((64, 64)).getdata())
+    lum = raw_lum if raw_lum is not None else (
+        statistics.mean(sum(c) / 3 for c in img.getdata()) if img.size[0] * img.size[1] else 0)
     if lum < min_lum:
-        scale = min(1.9, min_lum / max(1.0, lum))
-        return img.point(lambda v: min(255, int(v * scale)))
+        import math
+        g = max(1.2, math.log(max(1.0, lum) / 255.0) / math.log(min_lum / 255.0))
+        return img.point(lambda v: int(255.0 * (v / 255.0) ** (1.0 / g)))
     return img
+
+
+def repaint_magenta(img: Image.Image) -> Image.Image:
+    """瓦片用: 把严格品红残留重涂为邻域色 (保留 alpha 不透明度)。
+
+    与 chroma_key_magenta 不同 — 瓦片必须铺满不透明, 抠成 alpha 空洞会让
+    游戏清屏色透出成黑斑 (floor_void 15% 品红 → 黑色地图的根因之一)。
+    仅对严格品红 (r>180, b>180, g<120) 重涂, 紫晶等主题内容色不受影响。
+    """
+    import statistics
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+    # 兜底色: 64x64 降采样上的非品红中位色
+    small = rgba.resize((64, 64))
+    spx = small.load()
+    samples = [
+        spx[x, y] for x in range(64) for y in range(64)
+        if not (spx[x, y][0] > 180 and spx[x, y][2] > 180 and spx[x, y][1] < 120)
+    ]
+    if samples:
+        def med(idx: int) -> int:
+            return int(statistics.median(sorted(s[idx] for s in samples)))
+        fallback = (med(0), med(1), med(2))
+    else:
+        fallback = (80, 80, 90)
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if r > 180 and b > 180 and g < 120:
+                nb: list[tuple[int, int, int]] = []
+                for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                    if 0 <= nx < w and 0 <= ny < h:
+                        nr, ng, nbb, na = px[nx, ny]
+                        if na > 0 and not (nr > 180 and nbb > 180 and ng < 120):
+                            nb.append((nr, ng, nbb))
+                if nb:
+                    px[x, y] = (
+                        sum(c[0] for c in nb) // len(nb),
+                        sum(c[1] for c in nb) // len(nb),
+                        sum(c[2] for c in nb) // len(nb),
+                        a,
+                    )
+                else:
+                    px[x, y] = (fallback[0], fallback[1], fallback[2], a)
+    return rgba
+
+
+def lift_black(img: Image.Image, px_min: int = 30, dark_ratio: float = 0.15) -> Image.Image:
+    """近黑像素占比过高 (>dark_ratio) 的瓦片, 逐通道抬到 px_min。
+
+    均值提亮 (brighten_if_dark) 救不了黑块: 提亮均值后仍可能有 1/4 像素
+    近黑 (floor_void 25% 黑像素 → 黑色地图)。此步保证瓦片不再有纯黑洞。
+    """
+    rgba = img.convert("RGBA")
+    px = rgba.load()
+    w, h = rgba.size
+    total = w * h
+    dark = sum(1 for y in range(h) for x in range(w) if sum(px[x, y][:3]) / 3 < px_min)
+    if dark / total <= dark_ratio:
+        return rgba
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if (r + g + b) / 3 < px_min:
+                px[x, y] = (max(r, px_min), max(g, px_min), max(b, px_min), a)
+    return rgba
 
 
 def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> list[str]:
@@ -200,28 +276,42 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
-        # 瓦片尺寸自动: 墙 128 (128px 块 1:1) / 地板 32 (32px 格) / 其余 64
+        # 瓦片尺寸: 墙 128 (128px 块 1:1) / 地板 32 (32px 格) / 其余 64
         size = 128 if name.startswith("wall") else (32 if name.startswith("floor") else 64)
-        # 瓦片: 无缝纹理铺满画布, 无品红底 → 不抠图; 仅当检测到品红底才抠 (防误食纹理边缘)
-        # 中心方裁: 模型常给非正方形, 先裁中心正方形再缩放 (防拉伸变形)
-        w0, h0 = img.size
-        side = min(w0, h0)
-        img = img.crop(((w0 - side) // 2, (h0 - side) // 2, (w0 + side) // 2, (h0 + side) // 2))
+        # 瓦片 = 整幅纹理: 不中心方裁 (方裁截断平铺边 + 浪费大图, 只取中间一小块)
         rgba = img.convert("RGBA")
-        small = img.resize((64, 64))
-        mag = sum(1 for c in small.getdata() if c[0] > 180 and c[2] > 170 and c[1] < 100)
-        if mag / (64 * 64) > 0.5:
-            rgba = chroma_key_magenta(img)
-        # 自动无缝化 + 提亮 (模型接缝/亮度不合格的兜底)
+        # 瓦片必须不透明: 品红残留重涂为邻域色 (抠 alpha 会让清屏色透出成黑斑)
+        rgba = repaint_magenta(rgba)
+        # 曝光判断: 从磁盘原图直读 (内存派生图 getdata 读数进程间会飘 19.6↔116, 不可信;
+        # 磁盘 open 的读数 5+ 进程全部稳定)
+        import statistics as _st
+        with Image.open(path) as _rawf:
+            raw_lum = _st.mean(sum(c[:3]) / 3 for c in _rawf.convert("RGB").getdata())
+        rgba = brighten_if_dark(rgba, raw_lum=raw_lum)
+        rgba = lift_black(rgba)
+        # 无缝化 (半幅混合, 均值不变)
         rgba = make_seamless(rgba.convert("RGB")).convert("RGBA")
-        rgba = brighten_if_dark(rgba)
+        # 质控: 恢复后仍过暗 → 原图近黑, 提示重新生成 (否则游戏里就是黑色地图)
+        fin_lum = max(raw_lum, 80.0) if raw_lum < 80 else raw_lum
+        if fin_lum < 60:
+            print(f"  ⚠ {name}: 瓦片仍过暗 (raw_lum={raw_lum:.0f}<60) — AI 原图近黑, 曝光恢复后仍不可用, 需重新生成亮色版")
         if quantize_key:
             rgba = apply_quantize(rgba, quantize_key)
-        resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
-        rgba = rgba.resize((size, size), resample)
-        out = ATLAS_IN / "world" / f"{name}.png"
-        rgba.save(out, format="PNG")
-        out_done.append(str(out.relative_to(BASE.parent)))
+        if name.startswith("floor"):
+            # 地板: 单一整幅纹理 {name}_full (FLOOR_FULL=384), 游戏用世界对齐 uv 采样
+            # (旧 4x4 切片随机选 → 相邻格贴边来自不相邻源列 → 接缝; 周期 384 与 4 切片网格不对齐)
+            for stale in (ATLAS_IN / "world").glob(f"{name}_*.png"):
+                stale.unlink()
+            full = rgba.resize((FLOOR_FULL, FLOOR_FULL), Image.Resampling.BOX)
+            out = ATLAS_IN / "world" / f"{name}_full.png"
+            full.save(out, format="PNG")
+            out_done.append(str(out.relative_to(BASE.parent)))
+        else:
+            resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
+            rgba = rgba.resize((size, size), resample)
+            out = ATLAS_IN / "world" / f"{name}.png"
+            rgba.save(out, format="PNG")
+            out_done.append(str(out.relative_to(BASE.parent)))
     elif rel_dir == "monsters":
         is_sheet = img.width >= img.height * 2.5  # 单图(≤2:1)不再误判为 4 帧 sheet
         # 清理旧帧残留 (防新旧混帧)

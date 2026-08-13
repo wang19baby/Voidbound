@@ -8,6 +8,7 @@ import type { RenderResources } from './resources';
 import { spriteUv } from './resources';
 import type { QuadResources } from './gl/resources';
 import { setBlend, type BlendMode } from './gl/context';
+import { diag } from '../util/diag';
 
 export interface DrawOpts {
   flip?: { x: 1 | -1; y: 1 | -1 };
@@ -17,10 +18,15 @@ export interface DrawOpts {
   hue?: number;
   /** V0 画质: 'add' = additive 发光 (ONE, ONE), 默认 'alpha' 标准混合 */
   blend?: BlendMode;
+  /** 覆盖采样 UV [u, v, du, dv] — sprite 局部坐标 (0..1 相对内容区); drawSprite 内部转换到图集空间 (世界对齐无缝地板用; 缺省用 sprite 元数据) */
+  uv?: [number, number, number, number];
 }
 
 /** 上次混合模式缓存: 避免同模式重复切换 blendFunc */
 let lastBlend: BlendMode = 'alpha';
+
+/** 已打日志的 sprite (只打首次, 防每帧刷屏) */
+const diagLogged = new Set<string>();
 
 /** Review 修复: 外部 (instanced 渲染) 设置 blend 时同步缓存, 防 drawSprite 误跳 */
 export function setBlendTracked(gl: WebGL2RenderingContext, mode: BlendMode): void {
@@ -45,9 +51,29 @@ export function drawSprite(
   opts: DrawOpts = {},
 ): void {
   const bundle = res.atlases.get(atlasName);
-  if (!bundle) throw new Error(`atlas 缺失: ${atlasName}`);
+  if (!bundle) {
+    diag('sprite', `MISSING atlas ${atlasName} caller=${new Error().stack?.split('\n')[2]?.trim() ?? '?'}`);
+    throw new Error(`atlas 缺失: ${atlasName}`);
+  }
   const sprite = bundle.sprites.get(spriteName);
-  if (!sprite) throw new Error(`sprite 缺失: ${atlasName}/${spriteName}`);
+  if (!sprite) {
+    diag('sprite', `MISSING sprite ${atlasName}/${spriteName} caller=${new Error().stack?.split('\n')[2]?.trim() ?? '?'}`);
+    throw new Error(`sprite 缺失: ${atlasName}/${spriteName}`);
+  }
+
+  // 首次绘制事实日志: 哪个 sprite、图集 UV、绘制尺寸/位置 → 可核对"加载的瓦片"
+  const dkey = `${atlasName}/${spriteName}`;
+  // uv 覆盖是 sprite 局部坐标 [u,v,du,dv] (0..1 相对 sprite 内容区) → 转换到图集坐标
+  // (uUv 直通 shader, 必须 atlas-space; 旧实现直传局部值 → NEAREST 采到图集错误区域)
+  const fw = sprite.frame_width / bundle.atlas.width;
+  const fh = sprite.frame_height / bundle.atlas.height;
+  const [du0, dv0, duw, duh] = opts.uv
+    ? [sprite.x / bundle.atlas.width + opts.uv[0] * fw, sprite.y / bundle.atlas.height + opts.uv[1] * fh, opts.uv[2] * fw, opts.uv[3] * fh]
+    : spriteUv(sprite, bundle.atlas.width, bundle.atlas.height);
+  if (!diagLogged.has(dkey)) {
+    diagLogged.add(dkey);
+    diag('sprite', `draw ${dkey} uv=(${du0.toFixed(3)},${dv0.toFixed(3)},${duw.toFixed(3)},${duh.toFixed(3)}) ${size.w}x${size.h} pos=(${pos.x.toFixed(0)},${pos.y.toFixed(0)})${opts.uv ? ' uv-override' : ''}`);
+  }
 
   const flip = opts.flip ?? { x: 1, y: 1 };
   const rot = opts.rot ?? 0;
@@ -71,7 +97,7 @@ export function drawSprite(
   gl.uniform1f(q.uRot, rot);
   gl.uniform3f(q.uColor, color[0], color[1], color[2]);
   gl.uniform1f(q.uHue, hue);
-  const [u, v, du, dv] = spriteUv(sprite, bundle.atlas.width, bundle.atlas.height);
+  const [u, v, du, dv] = [du0, dv0, duw, duh];
   gl.uniform4f(q.uUv, u, v, du, dv);
   gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
   gl.bindVertexArray(null);
