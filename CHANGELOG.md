@@ -60,3 +60,25 @@
 - 25 个单元测试套件,ALL PASS
 - 新增 character.test.ts + inventory.test.ts
 - esbuild build ~400.7kb (无回归)
+
+### PR #7: main.ts 删 dead code (2026-08-13)
+
+从 main.ts 删除已搬到 screens/ 和 app/ 的死代码 (5 段 + 3 个委派 wrapper):
+- enterTown / interactTown / handleTownPanelKey (~200 行)
+- drawTownFrame / drawTownPanel (~225 行)
+- startRun / ensureDungeonRun / triggerBossIntro (~55 行)
+- drawCharacters / drawCollectionPanel (~195 行)
+- drawNewgame / drawCloseConfirm / drawTeleportTransition 委派 (~30 行)
+- formatTime (~6 行)
+
+main.ts: 1955 → 1289 (-666 行, -34.0%)
+
+### PR #8: main.ts 搬 app/ 模块 (2026-08-13)
+
+新建 src/app/frame.ts (330 行, drawFrame + drawFrameToScreen) +
+src/app/input.ts (17 行, mouseAimDirection).
+增强 app/lifecycle.ts (107 → 131 行, 加 confirmCloseSave/Cancel/autoPauseOnBlur) +
+app/audio.ts (30 → 41 行, 加 fadeBgm).
+
+main.ts: 1289 → **979 行** (**达成 ≤1000 行目标**, -24.0%)
+累计 main.ts 减重: 2647 → 979 行 (-1668 行, -63.0%)

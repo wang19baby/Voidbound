@@ -24,10 +24,41 @@ src/
 │   └─ hud/          # 10 个子模块
 │       └─ overlay/  # 5 个覆盖层子模块
 ├─ app/                # 应用层
-│   ├─ actions/ audio/ envFx/ run/ save/ lifecycle/ uiDispatch/ screenMachine/
+│   ├─ actions/ audio/ envFx/ frame/ input/ run/ save/ lifecycle/ uiDispatch/ screenMachine/
 ├─ screens/            # 屏幕渲染
-└─ main.ts             # 1955 行, 启动装配 + 主循环
+└─ main.ts             # 979 行 (≤1000), 启动装配 + 主循环
 ```
+
+## main.ts 减重里程碑
+
+main.ts 从 v0.1.0 初的 **2647 行** → 当前 **979 行** (-1668 行, **-63.0%**),达成 ≤1000 行目标。
+
+| PR | 任务 | main.ts 行数变化 |
+|---|---|---|
+| - | 起点 (Tier 1-5 完成) | 2647 |
+| - | Tier 1-5 累计 (事件总线 + System + DDD) | 1955 |
+| PR #7 | main.ts 删 dead code (5 段 + 3 个委派 wrapper) | 1955 → 1289 (-666, -34.0%) |
+| PR #8 | main.ts 搬 app/ 模块 (frame + input + lifecycle/audio 增强) | 1289 → **979** (-310, -24.0%) |
+
+### PR #7 — 删除死代码
+
+从 main.ts 删除已搬到 screens/ 和 app/ 的死代码:
+- enterTown / interactTown / handleTownPanelKey (~200 行)
+- drawTownFrame / drawTownPanel (~225 行)
+- startRun / ensureDungeonRun / triggerBossIntro (~55 行)
+- drawCharacters / drawCollectionPanel (~195 行)
+- drawNewgame / drawCloseConfirm / drawTeleportTransition 委派 wrapper (~30 行)
+- formatTime (~6 行)
+
+### PR #8 — 搬 app/ 模块
+
+新增模块:
+- **app/frame.ts** (330 行): drawFrame + drawFrameToScreen —— 边框绘制 + 屏幕输出
+- **app/input.ts** (17 行): mouseAimDirection —— 鼠标朝向计算
+
+增强现有模块:
+- **app/lifecycle.ts** (107 → 131 行): 新增 confirmCloseSave / Cancel / autoPauseOnBlur
+- **app/audio.ts** (30 → 41 行): 新增 fadeBgm
 
 ## 核心设计
 
@@ -88,6 +119,33 @@ interface GameState {
 - `ScreenKeyContext`: 21 个回调注入屏路由总线
 - `UiCtx`: 19 个回调注入鼠标分发
 - `TitleCtx` / `TownCtx`: 屏级局部 ctx
+
+## app/ 应用层模块
+
+### app/frame.ts (PR #8 新增)
+
+`drawFrame + drawFrameToScreen` —— 边框绘制与屏幕输出工具:
+- 提供统一的边框渲染接口,被 town/title/inventory 等多个屏幕复用
+- `drawFrame`: 绘制到内部缓冲区
+- `drawFrameToScreen`: 直接输出到屏幕(包含背景遮罩与重绘)
+
+### app/input.ts (PR #8 新增)
+
+`mouseAimDirection` —— 鼠标朝向计算:
+- 给定玩家位置 + 鼠标坐标,返回 8 方向 (上/下/左/右 + 4 对角) 单位向量
+- 被 fireball / attack / swing 等战斗系统共用,消除 main.ts 中的内联计算
+
+### app/lifecycle.ts (PR #8 增强)
+
+107 → 131 行:
+- 新增 `confirmCloseSave`: 退出前确认存档
+- 新增 `Cancel`: 关闭确认对话框
+- 新增 `autoPauseOnBlur`: 窗口失焦自动暂停
+
+### app/audio.ts (PR #8 增强)
+
+30 → 41 行:
+- 新增 `fadeBgm`: BGM 平滑淡入淡出
 
 ## DDD 聚合
 

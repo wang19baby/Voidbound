@@ -105,12 +105,14 @@ Voidbound/
 详见 [docs/architecture.md](docs/architecture.md)。
 
 简要:
-- main.ts 1955 行 (启动装配 + 主循环)
+- main.ts 979 行 (≤1000)
 - core/ 基础设施 + application/ 跨域服务
 - game/ DDD 聚合 (character/inventory) + 子模块 (fx/monsters/combat/system)
 - presentation/ 渲染层 + render/ WebGL/HUD (hud/overlay)
 - app/ 应用层 + screens/ 屏幕
 - 事件总线 (13 事件) + System 注册表 (4 内置) + FX facade
+
+> 累计减重 2647 → 979 行 (-63.0%),通过 PR-007/PR-008 拆 dead code + 搬 app/ 模块
 
 测试: `npm test` (25 个套件 ALL PASS)
 构建: `npm run build` (esbuild ~400.7kb)
