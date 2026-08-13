@@ -184,6 +184,59 @@ def make_seamless(img: Image.Image) -> Image.Image:
     return blended.crop((0, 0, hw, hh))
 
 
+def destripe_rows(img: Image.Image, window: int = 97, strength: float = 0.9, passes: int = 2) -> Image.Image:
+    """压低横向条纹 (32px 周期行结构): 逐行亮度均值与其移动平均趋势的差
+    = 周期分量, 按 strength 压低后整行乘性校正 (行内纹理/色调不变)。
+
+    来源: 对比度拉伸把 AI 原图的微弱行向结构放大成 32px 条带 (行差 7.41),
+    与 32px 格对齐 → 用户看到"一行一行假拼接"。窗口 97 (≈3 周期) 对
+    "平台型"条带 (组内平坦、组间跳变) 才有效; 33px 窗口只修边界。
+    """
+    out = img
+    for _ in range(passes):
+        out = _destripe_pass(out, window, strength)
+    return out
+
+
+def _destripe_pass(img: Image.Image, window: int, strength: float) -> Image.Image:
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    px = rgb.load()
+    row_lum = [sum(sum(px[x, y]) / 3 for x in range(w)) / w for y in range(h)]
+    half = window // 2
+    trend = []
+    for y in range(h):
+        lo, hi = max(0, y - half), min(h, y + half + 1)
+        trend.append(sum(row_lum[lo:hi]) / (hi - lo))
+    for y in range(h):
+        target = row_lum[y] - (row_lum[y] - trend[y]) * strength
+        k = target / max(1.0, row_lum[y])
+        if abs(k - 1.0) < 0.002:
+            continue
+        for x in range(w):
+            r, g, b = px[x, y]
+            px[x, y] = (min(255, int(r * k)), min(255, int(g * k)), min(255, int(b * k)))
+    return rgb
+
+
+def add_wall_border(img: Image.Image, bw: int = 6, dark: float = 0.45) -> Image.Image:
+    """墙块描边: 边缘 bw px 填内部平均色 × dark — 块状障碍感 (无框时
+    墙与地板同为绿色系难辨认, 用户反馈"障碍物用的是地面贴图")。"""
+    rgb = img.convert("RGB").copy()
+    w, h = rgb.size
+    px = rgb.load()
+    inner = [px[x, y] for x in range(bw, w - bw) for y in range(bw, h - bw)]
+    if not inner:
+        return rgb
+    m = [sum(p[i] for p in inner) / len(inner) for i in range(3)]
+    edge = tuple(int(v * dark) for v in m)
+    for x in range(w):
+        for y in range(h):
+            if x < bw or x >= w - bw or y < bw or y >= h - bw:
+                px[x, y] = edge
+    return rgb
+
+
 def square_crop_center(img: Image.Image) -> Image.Image:
     """原图中心方形截取 (非方形原图如 1408x768 → min 边 768x768 居中; 方形原图原样返回)。
 
@@ -359,12 +412,15 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
                 for stale in (ATLAS_IN / "world").glob(f"{name}_*.png"):
                     stale.unlink()
                 full = rgba.resize((FLOOR_FULL, FLOOR_FULL), Image.Resampling.BOX)
+                full = destripe_rows(full)  # 压低 32px 周期条带 (对比度拉伸放大的行结构)
                 out = ATLAS_IN / "world" / f"{name}_full.png"
                 full.save(out, format="PNG")
                 out_done.append(str(out.relative_to(BASE.parent)))
             else:
                 resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
                 rgba = rgba.resize((size, size), resample)
+                if name.startswith("wall"):
+                    rgba = add_wall_border(rgba)  # 描边: 块状障碍感, 与地面区分
                 out = ATLAS_IN / "world" / f"{name}.png"
                 rgba.save(out, format="PNG")
                 out_done.append(str(out.relative_to(BASE.parent)))

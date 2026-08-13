@@ -5,8 +5,8 @@ import { WORLD_W, WORLD_H, worldToScreen } from '../../game/state';
 import { ELEMENT_DEFS } from '../../game/element';
 import { drawSprite } from '../../render/draw';
 
-const FLOOR_TILE = 32;
-/** 地板整幅纹理边长 (import_art.py FLOOR_FULL=384); 32px 格 → 12x12 世界对齐周期, 无缝无接缝 */
+const FLOOR_TILE = 64;
+/** 地板整幅纹理边长 (import_art.py FLOOR_FULL=384); 64px 格 → 6x6 世界对齐周期, 无缝无接缝 (32px 格太矮 + 条带对齐格边界 → 假拼接) */
 const FLOOR_FULL = 384;
 /** 每主题首次绘制标记 (只打一次: 确认加载的瓦片组) */
 const loggedThemes = new Set<string>();
