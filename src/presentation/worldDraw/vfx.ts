@@ -3,7 +3,8 @@
 // UX_REVIEW §8.3: 扩散环/爆裂/闪电链/辉光 — additive, tint×fade 淡出
 
 import type { DrawCtx } from './types';
-import { worldToScreen, getVfx } from '../../game/state';
+import { worldToScreen } from '../../game/state';
+import { getVfx } from '../../game/fx/vfx';
 import { drawSprite } from '../../render/draw';
 
 /** VFX 4 种 kind (ring/glow/burst/bolt) 渲染 */

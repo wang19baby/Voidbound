@@ -1,62 +1,42 @@
-// app/audio.ts — BGM 淡入淡出 (T1b, 2026-08-12)
+// app/audio.ts — BGM 交叉淡化 (T1b + PR-008, 2026-08-13)
 //
-// 从 main.ts 拆出: 原 line 2364-2385 (fadeBgm 函数 + 模块级 bgmFadeTimer 状态)
+// PR-008: 把 main.ts 内 fadeBgm (原 line 1257-1279) 整体搬到本模块, 0 行为变更
 //
 // 设计:
-// - 模块级 bgmFadeTimer 状态: 当前渐变剩余秒数 (countdown to switch)
-// - 调度策略: vol=0 时延迟 0.5s 切到新曲, 给当前曲 0.5s 淡出
+// - 模块级 bgmFadeTimer: 当前 setInterval 句柄 (null 表示空闲)
+// - 调度策略: 1s 10 步线性淡出 → 切曲 → 1s 10 步线性淡入
+// - 同曲重复触发会清除上一轮 interval, 避免叠加抖动
 // - 不直接持有 audio 句柄: 通过 ipc/sfx 调 Rust 后端
-//
-// 不变量:
-// - fadeBgm 是异步启动 (调度器推进), 调用方无 await
-// - 同一曲连发 fadeBgm 会重置 timer (避免叠加抖动)
 
 import { setVolumeClient, playBgmClient } from '../ipc/sfx';
 
-let bgmFadeTimer = 0;        // 当前淡出剩余秒数
-let bgmPending: { name: string; vol: number } | null = null;
-let bgmCurrent = '';
+/** BGM 交叉淡化 (OPT-027): 1s 淡出 → 切曲 → 1s 淡入; 复用 setVolumeClient */
+let bgmFadeTimer: number | null = null;
 
-/** 主循环每帧调用: 推进 bgm 淡出状态 */
-export function tickBgm(dt: number): void {
-  if (bgmFadeTimer > 0) {
-    bgmFadeTimer -= dt;
-    const remain = Math.max(0, bgmFadeTimer);
-    const startVol = bgmPending?.vol ?? 0.7;
-    setVolumeClient(bgmCurrent, startVol * remain * 2);  // 线性淡出
-    if (bgmFadeTimer <= 0 && bgmPending) {
-      const p = bgmPending;
-      bgmPending = null;
-      bgmCurrent = p.name;
-      playBgmClient(p.name);
-      setVolumeClient(p.name, p.vol);
-    }
-  }
-}
-
-/** 切到新 BGM (淡出当前 → 淡入新); vol=0 直接切 */
+/** 切到新 BGM (交叉淡化); 同曲重复触发会重置 timer */
 export function fadeBgm(name: string, vol: number): void {
-  if (name === bgmCurrent && bgmFadeTimer <= 0) {
-    setVolumeClient(name, vol);
-    return;
-  }
-  if (vol <= 0) {
-    // 无淡出: 直接停当前
-    bgmFadeTimer = 0;
-    bgmPending = null;
-    setVolumeClient(bgmCurrent, 0);
-    bgmCurrent = name;
-    playBgmClient(name);
-    setVolumeClient(name, vol);
-    return;
-  }
-  bgmPending = { name, vol };
-  bgmFadeTimer = 0.5;  // 0.5s 淡出
+  if (bgmFadeTimer !== null) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; }
+  const STEPS = 10;
+  let i = 0;
+  bgmFadeTimer = window.setInterval(() => {
+    i++;
+    if (i <= STEPS) {
+      setVolumeClient(Math.max(0, vol * (1 - i / STEPS)));
+    } else {
+      clearInterval(bgmFadeTimer!);
+      bgmFadeTimer = null;
+      playBgmClient(name);
+      let j = 0;
+      const up = window.setInterval(() => {
+        j++;
+        setVolumeClient(Math.min(1, vol * (j / STEPS)));
+        if (j >= STEPS) clearInterval(up);
+      }, 100);
+    }
+  }, 100);
 }
 
 /** 测试/重启用: 重置模块级状态 */
 export function _resetAudio(): void {
-  bgmFadeTimer = 0;
-  bgmPending = null;
-  bgmCurrent = '';
+  if (bgmFadeTimer !== null) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; }
 }

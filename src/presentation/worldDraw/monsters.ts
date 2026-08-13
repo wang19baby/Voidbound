@@ -8,7 +8,8 @@ import { worldToScreen } from '../../game/state';
 import { MONSTER_DEFS, AURA_DEFS } from '../../game/monsters/defs';
 import { ELEMENT_DEFS } from '../../game/element';
 import { LEAP_WINDUP } from '../../game/moveai';
-import { resolveSprite, drawSprite } from '../../render/draw';
+import { resolveSprite } from '../../render/resources';
+import { drawSprite } from '../../render/draw';
 
 /** 怪物 + 全部机制可视化 (HP / 蓄力 / 领主 / 光环 / 元素 / 护盾 / 燃烧 / 荆棘 / 激光预警) */
 export function drawMonsters(ctx: DrawCtx): void {

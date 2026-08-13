@@ -45,7 +45,18 @@ import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPan
 import { drawCharacters, type CharactersCtx } from './screens/characters';
 import { drawCollectionPanel, type CollectionCtx } from './screens/collection';
 import { startRun, ensureDungeonRun, triggerBossIntro } from './app/run';
-import { formatTime } from './app/lifecycle';
+import {
+  formatTime,
+  confirmCloseSave,
+  confirmCloseCancel,
+  isCloseConfirmSaving,
+  setLifecycleState,
+  installAutoPauseListeners,
+  installCloseConfirmListeners,
+} from './app/lifecycle';
+import { fadeBgm } from './app/audio';
+import { drawFrame, type FrameCtx } from './app/frame';
+import { mouseAimDirection } from './app/input';
 import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp, continueLastSave, resumeFromSave, enterTargetCharacter, type SaveCtx } from './app/save';
 import { handleUiClick as handleUiClickDispatch, buildUiCtx, type UiCtx } from './app/uiDispatch';
 import { handleHudClick } from './app/actions/hud';
@@ -275,6 +286,18 @@ const charactersCtx: CharactersCtx = {
 const townCtx: TownCtx = {
   state, hudCtx, hudCanvas, gl, quad, res, mouse, canvas,
   requestDifficulty: (s, d) => requestDifficultyApp(s, d),
+};
+
+// PR-008: 帧绘制 ctx — 启动时一次性装配, drawFrame 调用处复用
+const frameCtx: FrameCtx = {
+  state, mouse, canvas, hudCanvas, hudCtx, gl, quad, res, particleBatch,
+  invoke: (cmd, args) => invoke(cmd, args as Record<string, unknown>),
+  setHudHover, hudDungeonHit, isCloseConfirmOpen,
+  confirmCloseSave, confirmCloseCancel,
+  handleHudClick, tryCastSlot, notifyCastFail,
+  handleUiClick: (ctx) => handleUiClickDispatch(buildUiCtx(ctx.state, ctx.mx, ctx.my, uiCallbacks)),
+  setMouseReticle, drawHud, drawHudOverlay, drawSettingsPanel,
+  mouseAimDirection, formatTime, DIFFICULTY_MODS,
 };
 
 /** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
@@ -523,13 +546,7 @@ if (e.key === 'o' || e.key === 'O') {
 // [OPT-015] T 键主题循环已移除 (调试功能不再暴露给玩家)
 });
 
-/** 鼠标位置 → 世界坐标方向 (Diablo 风格: 技能瞄准鼠标) */
-function mouseAimDirection(state: GameState, m: ReturnType<NonNullable<typeof mouse>['state']>): { x: number; y: number } {
-  const cx = state.viewport.w / 2;
-  const cy = state.viewport.h / 2;
-  return { x: m.pos.x - cx, y: m.pos.y - cy };
-}
-
+/** 鼠标位置 → 世界坐标方向 (Diablo 风格: 技能瞄准鼠标) — 已搬到 app/input.ts */
 window.addEventListener('resize', () => {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -554,44 +571,14 @@ canvas.addEventListener('wheel', (e) => {
   state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), e.deltaY > 0 ? 1 : -1, total), total);
 });
 
-// 失焦自动暂停 (OPT-001): 战斗/城镇/装备面板中切走 → 暂停; 回焦点需手动继续
-function autoPauseOnBlur(): void {
-  if (state.screen !== 'dungeon' && state.screen !== 'town' && state.screen !== 'equipment') return;
-  state.pauseFrom = state.screen === 'town' ? 'town' : 'dungeon';
-  setScreen(state, 'pause');
-  inf('gl', 'auto-paused (blur)');
-}
-window.addEventListener('blur', autoPauseOnBlur);
-document.addEventListener('visibilitychange', () => { if (document.hidden) autoPauseOnBlur(); });
+// 失焦自动暂停 (OPT-001): 委托给 app/lifecycle.ts installAutoPauseListeners
+// 关窗确认 (US-026): 委托给 app/lifecycle.ts installCloseConfirmListeners (含 confirmCloseSave/Cancel)
+// PR-008: 这些函数原在 main.ts 内 (原 line 558-597), 已搬到 app/lifecycle.ts
 
-// 关窗确认 (US-026): isCloseConfirmOpen() 移至 app/screenMachine.ts 模块状态
-let closeConfirmSaving = false;
-let closeEmit: ((event: string) => Promise<void>) | null = null;
-void import('@tauri-apps/api/event').then(({ listen, emit }) => {
-  closeEmit = emit;
-  void listen('close-requested', () => {
-    setCloseConfirmOpen(true);
-    closeConfirmSaving = false;
-    inf('ui', 'close-requested: 显示退出确认');
-  });
-});
-function confirmCloseSave(): void {
-  if (closeConfirmSaving) return;
-  closeConfirmSaving = true;
-  const done = () => {
-    if (closeEmit) void closeEmit('close-confirmed');
-    else {
-      // 事件模块未就绪的兜底: JS 直接销毁
-      void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().destroy());
-    }
-  };
-  // 标题页无游戏进度, 直接退出; 其余屏先持久化再退出
-  if (state.screen === 'title') { done(); return; }
-  void persistNowApp(state).finally(done);
-}
-function confirmCloseCancel(): void {
-  setCloseConfirmOpen(false);
-}
+// PR-008: 把 state 注入到 lifecycle 模块 (confirmCloseSave 等需要 state.screen + persistNowApp)
+setLifecycleState(state);
+installAutoPauseListeners();
+installCloseConfirmListeners();
 
 inf('loop', 'main loop start');
 // A.3: 安装战斗 FX 订阅者 (跨域渲染/日志副作用走事件)
@@ -659,7 +646,7 @@ function loop(now: number) {
     } else {
       loopImpl(now);
     }
-    if (isCloseConfirmOpen()) drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, closeConfirmSaving, mouse);
+    if (isCloseConfirmOpen()) drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, isCloseConfirmSaving(), mouse);
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -732,7 +719,7 @@ function loopImpl(now: number) {
 
   // 暂停/装备面板/结算屏: 跳过游戏逻辑, 只渲染 (遮罩/面板画在 drawFrameToScreen)
   if (state.screen === 'pause' || state.screen === 'equipment' || state.screen === 'death' || state.screen === 'victory') {
-    drawFrame();
+    drawFrame(frameCtx);
     mouse.reset();
     return; // 包装器统一 rAF
   }
@@ -792,7 +779,7 @@ function loopImpl(now: number) {
   // V0 命中停顿: 冻结世界模拟 (输入/怪物/弹幕/回血), 仍渲染 — 暴击时 ~0.1s 的打击感
   if (state.combat.hitStop > 0) {
     state.combat.hitStop = Math.max(0, state.combat.hitStop - dt);
-    drawFrame();
+    drawFrame(frameCtx);
     mouse.reset();
     return; // 包装器统一 rAF
   }
@@ -972,311 +959,14 @@ function loopImpl(now: number) {
     state.camera.x += (Math.random() - 0.5) * state.combat.cameraShake;
     state.camera.y += (Math.random() - 0.5) * state.combat.cameraShake;
   }
-  drawFrame();
+  drawFrame(frameCtx);
   state.camera.x = camX0;
   state.camera.y = camY0;
   if (state.combat.cameraShake > 0) state.combat.cameraShake = Math.max(0, state.combat.cameraShake - 30 * dt);
   mouse.reset();
 }
 
-
-
-/** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */
-function drawFrame() {
-  // 技能 CD 时间基准 (drawFrame 独立作用域, 不能引用 loopImpl 的 nowSec)
-  const nowSec = performance.now() / 1000;
-
-  // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
-  const aimDir = mouseAimDirection(state, mouse.state());
-  // 仅 dungeon 接受鼠标技能点击; 其余屏 LMB = UI 点击 (C-501)
-  if (state.screen === 'dungeon') {
-    if (state.tutorStep >= 0 && state.tutorStep < 3) {
-      // v4 引导期间: 点击仅跳过气泡, 不触发攻击/技能
-      if (mouse.wasClicked('LMB')) { state.tutorStep++; state.tutorT = 0; }
-      setHudHover(null);
-      canvas.style.cursor = 'default';
-    } else {
-    // 关窗确认优先: Y/N 按钮命中 (防止被攻击分支吞掉)
-    const cp = mouse.state().pos;
-    const yH = isCloseConfirmOpen() && inRect(cp.x, cp.y, state.viewport.w / 2 - 140, state.viewport.h / 2 + 40, 120, 40);
-    const nH = isCloseConfirmOpen() && inRect(cp.x, cp.y, state.viewport.w / 2 + 20, state.viewport.h / 2 + 40, 120, 40);
-    if (isCloseConfirmOpen() && mouse.wasClicked('LMB')) {
-      if (yH) confirmCloseSave();
-      else if (nH) confirmCloseCancel();
-    }
-    // HUD 按钮优先: 技能栏 4 槽 / 药水 HP·MP / 翻滚 (悬停高亮 + pointer 光标)
-    const hudKey = isCloseConfirmOpen() ? null : hudDungeonHit(mouse.state().pos.x, mouse.state().pos.y, state.viewport.w, state.viewport.h);
-    setHudHover(hudKey);
-    canvas.style.cursor = (yH || nH || hudKey) ? 'pointer' : 'default';
-    if (mouse.wasClicked('LMB')) {
-      if (hudKey) {
-        handleHudClick(state, hudKey, aimDir, nowSec);
-      } else if (tryCastSlot('LMB', state, aimDir, nowSec)) {
-        invoke('play_sfx', { name: 'swing' }).catch(() => {});
-      } else {
-        notifyCastFail(state, 'LMB');
-      }
-    }
-    if (mouse.wasClicked('RMB')) {
-      if (tryCastSlot('RMB', state, aimDir, nowSec)) {
-        invoke('play_sfx', { name: 'swing' }).catch(() => {});
-      } else {
-        notifyCastFail(state, 'RMB');
-      }
-    }
-    }
-  } else if (mouse.wasClicked('LMB')) {
-    handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
-  }
-  // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
-
-  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  drawFrameToScreen();
-  return;
-}
-
-/** 抽出单帧绘制逻辑 (含 pause 遮罩)
- *  P1 重构: 530 行帧绘制按图层拆到 presentation/worldDraw/*, 这里只剩 7 行调用
- *  层序 (从下到上): 地板/墙/装饰 → 门/毒池 → instanced 粒子 → 怪物 → VFX → 装备 → 玩家 → HUD */
-function drawFrameToScreen() {
-
-  // 设置 reticle 位置给 drawHud 用
-  setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
-
-  const ctx: DrawCtx = { state, gl, quad, res, particleBatch };
-  drawFloor(ctx);
-  drawPortalAndPools(ctx);
-  drawParticles(ctx);
-  drawMonsters(ctx);
-  drawVfx(ctx);
-  drawLoot(ctx);
-  drawPlayer(ctx, mouse.state().pos.x);
-
-  drawHud(gl, quad, state);
-  drawHudOverlay(hudCtx, state);
-
-  // 暂停遮罩 (Canvas2D 文字层; 装备面板时全屏面板代替)
-  if (state.screen === 'pause') {
-    hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.textAlign = 'center';
-    if (!state.ui.settingsOpen) {
-      hudCtx.fillStyle = '#fff';
-      hudCtx.font = 'bold 48px monospace';
-      hudCtx.textBaseline = 'middle';
-      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
-      hudCtx.font = '20px monospace';
-      hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · 4 城镇 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
-      hudCtx.fillStyle = '#777';
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText('Ctrl+1..6 分配技能点 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
-    } else {
-      // 设置面板 (C8: 与标题共用 drawSettingsPanel, 含滑条/键位自定义)
-      drawSettingsPanel(state, hudCtx, hudCanvas);
-    }
-    hudCtx.textAlign = 'left';
-  }
-
-  // 死亡结算屏 (OPT-011, B1): 结算信息 + 三选 (硬核二选)
-  if (state.screen === 'death' && state.deathSummary) {
-    const ds = state.deathSummary;
-    hudCtx.fillStyle = 'rgba(120, 0, 0, 0.7)';
-    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = 'bold 56px monospace';
-    hudCtx.fillText(ds.hardcore ? '永 久 死 亡' : 'YOU DIED', hudCanvas.width / 2, hudCanvas.height / 2 - 130);
-    hudCtx.font = '20px monospace';
-    hudCtx.fillStyle = '#ddd';
-    hudCtx.fillText(`等级 ${ds.level} · 总击杀 ${ds.kills} · 最高连击 ${ds.maxCombo}`, hudCanvas.width / 2, hudCanvas.height / 2 - 70);
-    hudCtx.fillText(`金币 ${ds.gold} · 击杀者: ${ds.killer ?? '未知'}`, hudCanvas.width / 2, hudCanvas.height / 2 - 40);
-    hudCtx.fillStyle = '#bbb';
-    hudCtx.font = '15px monospace';
-    if (ds.hardcore) {
-      hudCtx.fillText('硬核: 角色进度将清空 (装备/等级/技能/符文)', hudCanvas.width / 2, hudCanvas.height / 2);
-    } else {
-      hudCtx.fillText('回城: 损失 25% 金币 + 补满药水', hudCanvas.width / 2, hudCanvas.height / 2);
-      hudCtx.fillText('原地复活: 损失 10% 金币, 药水不补, 5 秒无敌', hudCanvas.width / 2, hudCanvas.height / 2 + 28);
-    }
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 18px monospace';
-    if (ds.hardcore) {
-      hudCtx.fillText('[1] 重开新局(清档)   [2] 主菜单', hudCanvas.width / 2, hudCanvas.height / 2 + 80);
-    } else {
-      hudCtx.fillText('[1] 回城   [2] 原地复活   [3] 重开', hudCanvas.width / 2, hudCanvas.height / 2 + 80);
-      // C (死亡撤销): 第 4 按钮 + 倒计时 (5s 窗口)
-      const ux = hudCanvas.width / 2, uy = hudCanvas.height / 2 + 120;
-      const uR: [number, number, number, number] = [ux - 150, uy, 300, 36];
-      const uHit = state.ui.deathUndo > 0 && inRect(mouse.state().pos.x, mouse.state().pos.y, ...uR);
-      hudCtx.fillStyle = state.ui.deathUndo > 0 ? (uHit ? 'rgba(140,255,140,0.18)' : 'rgba(40,70,40,0.7)') : 'rgba(30,30,34,0.5)';
-      hudCtx.fillRect(...uR);
-      hudCtx.strokeStyle = state.ui.deathUndo > 0 ? '#8f8' : '#444';
-      hudCtx.lineWidth = uHit ? 2 : 1;
-      hudCtx.strokeRect(...uR);
-      hudCtx.fillStyle = state.ui.deathUndo > 0 ? '#8f8' : '#8a8a96';
-      hudCtx.font = 'bold 15px monospace';
-      hudCtx.fillText(state.ui.deathUndo > 0 ? `[4] 撤销死亡 (${state.ui.deathUndo.toFixed(1)}s · 免费)` : '撤销窗口已过', ux, uy + 18);
-    }
-    hudCtx.textAlign = 'left';
-  }
-
-  // 通关结算屏 (OPT-012): 用时/击杀/得分 + 再来一局/回城
-  if (state.screen === 'victory') {
-    hudCtx.fillStyle = 'rgba(10, 20, 40, 0.82)';
-    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 52px monospace';
-    hudCtx.fillText('★ 通 关 ★', hudCanvas.width / 2, hudCanvas.height / 2 - 130);
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = '20px monospace';
-    hudCtx.fillText(`用时 ${formatTime(state.run.timeSec)} · 击杀 ${state.run.kills} · 难度 ${DIFFICULTY_MODS[state.difficulty].name}`, hudCanvas.width / 2, hudCanvas.height / 2 - 60);
-    hudCtx.fillText(`得分 ${state.combat.score} · 掉落入背包 ${state.run.collectedLoot} 件`, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
-    if (state.run.best[state.difficulty] !== undefined) {
-      hudCtx.fillStyle = '#aaa';
-      hudCtx.font = '15px monospace';
-      hudCtx.fillText(`最佳记录 ${formatTime(state.run.best[state.difficulty]!)}`, hudCanvas.width / 2, hudCanvas.height / 2);
-    }
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 18px monospace';
-    hudCtx.fillText('[1] 再来一局(同难度)   [2] 回城', hudCanvas.width / 2, hudCanvas.height / 2 + 70);
-    hudCtx.textAlign = 'left';
-  }
-
-  // A-W1 门结算面板 (portal): 回城/继续
-  if (state.screen === 'portal') {
-    hudCtx.fillStyle = 'rgba(8, 8, 24, 0.85)';
-    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = '#c9aaff';
-    hudCtx.font = 'bold 40px monospace';
-    hudCtx.fillText('传 送 门', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = '18px monospace';
-    hudCtx.fillText('Boss 已击败 — 本局可结算', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
-    hudCtx.fillStyle = '#bbb';
-    hudCtx.font = '14px monospace';
-    hudCtx.fillText('回城: 战利品/经验/材料保留 (无通关加成)', hudCanvas.width / 2, hudCanvas.height / 2);
-    hudCtx.fillText('继续: 留在本局, 门仍在 Boss 死亡位', hudCanvas.width / 2, hudCanvas.height / 2 + 26);
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 20px monospace';
-    const pmx = mouse.state().pos.x;
-    const pmy = mouse.state().pos.y;
-    const pw = hudCanvas.width / 2, phh = hudCanvas.height / 2;
-    if (inRect(pmx, pmy, pw - 210, phh + 58, 200, 44)) {
-      hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
-      hudCtx.fillRect(pw - 210, phh + 58, 200, 44);
-      hudCtx.fillStyle = '#ffd64a';
-    }
-    hudCtx.fillText('[1] 回城结算', pw - 110, phh + 80);
-    if (inRect(pmx, pmy, pw + 10, phh + 58, 200, 44)) {
-      hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
-      hudCtx.fillRect(pw + 10, phh + 58, 200, 44);
-      hudCtx.fillStyle = '#ffd64a';
-    }
-    hudCtx.fillText('[2] 继续战斗', pw + 110, phh + 80);
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'top';
-  }
-
-  // dungeon HUD: 门前提示 (V 交互); Boss 死后未交互 → 持续引导到门
-  if (state.screen === 'dungeon' && portalActive(state)) {
-    hudCtx.textAlign = 'center';
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 15px monospace';
-    if (nearPortal(state)) {
-      hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
-    } else if (state.run.portal) {
-      const dx = state.run.portal.x - (state.player.pos.x + state.player.size.w / 2);
-      const dy = state.run.portal.y - (state.player.pos.y + state.player.size.h / 2);
-      const dist = Math.hypot(dx, dy);
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
-      hudCtx.fillStyle = '#ccaaff';
-      hudCtx.fillText(`传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`, hudCanvas.width / 2, hudCanvas.height - 60);
-    }
-    hudCtx.textAlign = 'left';
-  }
-
-  // v4 首局引导: 3 步气泡 (底部中央; 按键/点击/4s 自动跳)
-  if (state.screen === 'dungeon' && state.tutorStep >= 0 && state.tutorStep < 3) {
-    const TUTOR_MSGS = [
-      'WASD 移动 — 向鼠标方向前进',
-      '鼠标左键 攻击 · 右键 重击 · 躲避弹幕用 Space 翻滚',
-      'Q / F / E / R 施放技能 — 直接点击下方技能栏、药水、翻滚也可以',
-    ];
-    const msg = TUTOR_MSGS[state.tutorStep];
-    const bw = 640, bh = 54, bx = hudCanvas.width / 2 - bw / 2, by = hudCanvas.height - 168;
-    hudCtx.fillStyle = 'rgba(10,10,20,0.9)';
-    hudCtx.fillRect(bx, by, bw, bh);
-    hudCtx.strokeStyle = '#66ccff';
-    hudCtx.lineWidth = 2;
-    hudCtx.strokeRect(bx, by, bw, bh);
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(`[${state.tutorStep + 1}/3] ${msg}`, hudCanvas.width / 2, by + 20);
-    hudCtx.fillStyle = '#9aa';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText('任意按键 / 点击跳过', hudCanvas.width / 2, by + 42);
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'top';
-  }
-
-  // B-V2 Boss 入场演出: 横幅 + 全屏泛光脉动 (2.8s 倒计时)
-  if (state.combat.bossIntroT > 0) {
-    const t = state.combat.bossIntroT;
-    const fadeIn = Math.min(1, (2.8 - t) / 0.4);
-    const pulse = 0.5 + 0.5 * Math.sin(t * 8);
-    // 边缘泛红脉动
-    hudCtx.fillStyle = `rgba(160, 20, 30, ${0.18 * pulse * fadeIn})`;
-    hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-    hudCtx.fillStyle = `rgba(160, 20, 30, ${0.3 * pulse * fadeIn})`;
-    hudCtx.fillRect(0, hudCanvas.height / 2 - 90, hudCanvas.width, 180);
-    // 横幅文字
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillStyle = `rgba(255, 90, 90, ${fadeIn})`;
-    hudCtx.font = 'bold 64px monospace';
-    hudCtx.fillText(state.combat.bossIntroTitle, hudCanvas.width / 2, hudCanvas.height / 2 - 30);
-    hudCtx.fillStyle = `rgba(255, 220, 150, ${fadeIn})`;
-    hudCtx.font = 'bold 24px monospace';
-    hudCtx.fillText(state.combat.bossIntroText, hudCanvas.width / 2, hudCanvas.height / 2 + 26);
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'top';
-  }
-
-  mouse.reset();
-}
-
-/** BGM 交叉淡化 (OPT-027): 1s 淡出 → 切曲 → 1s 淡入; 复用 setVolumeClient */
-let bgmFadeTimer: number | null = null;
-function fadeBgm(name: string, vol: number): void {
-  if (bgmFadeTimer !== null) { clearInterval(bgmFadeTimer); bgmFadeTimer = null; }
-  const STEPS = 10;
-  let i = 0;
-  bgmFadeTimer = window.setInterval(() => {
-    i++;
-    if (i <= STEPS) {
-      setVolumeClient(Math.max(0, vol * (1 - i / STEPS)));
-    } else {
-      clearInterval(bgmFadeTimer!);
-      bgmFadeTimer = null;
-      playBgmClient(name);
-      let j = 0;
-      const up = window.setInterval(() => {
-        j++;
-        setVolumeClient(Math.min(1, vol * (j / STEPS)));
-        if (j >= STEPS) clearInterval(up);
-      }, 100);
-    }
-  }, 100);
-}
+// drawFrame / drawFrameToScreen 已搬到 app/frame.ts (PR-008)
 
 
 /** 主题环境粒子色 (OPT-027) — 已搬到 game/fx/envFx.ts (T3a), 由 envFxSystem 调度 */

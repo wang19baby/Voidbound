@@ -1,45 +1,66 @@
-// app/lifecycle.ts — 失焦暂停 / 关窗确认 / 格式化工具 (T1b, 2026-08-12)
+// app/lifecycle.ts — 失焦暂停 / 关窗确认 / 输入辅助 / 格式化工具 (T1b + PR-008, 2026-08-13)
 //
-// 从 main.ts 拆出: 原 line 492-559 (mouseAimDirection/autoPauseOnBlur/confirmCloseSave/Cancel),
-//                  原 line 1431-1447 (formatTime/keyHintMain/keyHintSkills/ATTR_NAMES/SAVE_FMT_LABEL)
+// PR-008: 把 main.ts 内 mouseAimDirection / autoPauseOnBlur / confirmCloseSave / Cancel 整体搬到本模块
+//        原 line 492-559 (main.ts), 0 行为变更, 仅闭包依赖 → 模块级 + 参数注入
 //
 // 设计:
-// - 失焦暂停监听器一次性注册 (autoPauseOnBlur)
+// - 失焦暂停监听器在 installAutoPauseListeners 中注册 (main.ts 启动时调用一次)
 // - 关窗确认 emit 由 tauri 主进程接收, JS 兜底直接 destroy
-// - 格式化工具是纯函数, 易测
-// - 不依赖 main.ts 模块级变量, 全部接 state 或回调注入
+// - mouseAimDirection 接受 mouse.state() 的 pos 字段 (与 main.ts 局部版本一致, 返回原始偏移不归一化)
+// - 模块级 state 由 setLifecycleState 注入 (避免循环依赖, main.ts 不必 export state)
+// - 监听器在 state 注入之前注册也无妨: 调用时 state 若未注入则短路返回
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import type { GameState, Screen } from '../game/state';
 import { setScreen } from '../game/state';
 import { setCloseConfirmOpen } from './screenMachine';
 import { persistNowApp } from './save';
+import { inf } from '../util/log';
 
 const invoke = tauriInvoke;
 
-/** 失焦自动暂停 (OPT-001): dungeon/town/equipment 切走 → pause; 回焦点需手动继续 */
-export function autoPauseOnBlur(state: GameState): void {
-  const onBlur = (): void => {
-    if (state.screen === 'dungeon' || state.screen === 'town' || state.screen === 'equipment') {
-      setScreen(state, 'pause');
-    }
-  };
-  window.addEventListener('blur', onBlur);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) onBlur(); });
+// 模块级 state 注入 (PR-008): 由 main.ts 启动时调用 setLifecycleState(state)
+let lifecycleState: GameState | null = null;
+
+/** 注入 game state; 必须先于任何回调触发 (autoPauseOnBlur / confirmCloseSave) 调用 */
+export function setLifecycleState(s: GameState): void {
+  lifecycleState = s;
 }
 
-// 关窗确认 (M5 W3 C-303)
+/** 失焦自动暂停 (OPT-001): 战斗/城镇/装备面板中切走 → 暂停; 回焦点需手动继续
+ *  注册一次性监听器; main.ts 启动时调用 (state 注入之后或之前都可 — state 未注入时调用短路) */
+export function installAutoPauseListeners(): void {
+  const handler = (): void => {
+    if (!lifecycleState) return;
+    if (lifecycleState.screen !== 'dungeon' && lifecycleState.screen !== 'town' && lifecycleState.screen !== 'equipment') return;
+    lifecycleState.pauseFrom = lifecycleState.screen === 'town' ? 'town' : 'dungeon';
+    setScreen(lifecycleState, 'pause');
+    inf('gl', 'auto-paused (blur)');
+  };
+  window.addEventListener('blur', handler);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) handler(); });
+}
+
+// 关窗确认 (US-026): isCloseConfirmOpen() 移至 app/screenMachine.ts 模块状态
 let closeConfirmSaving = false;
 let closeEmit: ((event: string) => Promise<void>) | null = null;
 
-/** 注册 close 事件 emit 函数 (由 main.ts 启动时一次性调用) */
-export function registerCloseEmit(emit: (event: string) => Promise<void>): void {
-  closeEmit = emit;
+/** 注册 close-requested 监听 + emit 函数 — main.ts 启动时一次性调用 */
+export function installCloseConfirmListeners(): void {
+  void import('@tauri-apps/api/event').then(({ listen, emit }) => {
+    closeEmit = emit;
+    void listen('close-requested', () => {
+      setCloseConfirmOpen(true);
+      closeConfirmSaving = false;
+      inf('ui', 'close-requested: 显示退出确认');
+    });
+  });
 }
 
 /** 关窗确认 → 保存退出 (实际数据保留由 emit 异步持久化完成) */
-export function confirmCloseSave(state: GameState): void {
-  setCloseConfirmOpen(false);
+export function confirmCloseSave(): void {
+  if (!lifecycleState) return;
+  if (closeConfirmSaving) return;
   closeConfirmSaving = true;
   const done = (): void => {
     if (closeEmit) { void closeEmit('close-confirmed'); }
@@ -49,8 +70,8 @@ export function confirmCloseSave(state: GameState): void {
     }
   };
   // 标题页无游戏进度, 直接退出; 其余屏先持久化再退出
-  if (state.screen === 'title') { done(); return; }
-  void persistNowApp(state).finally(done);
+  if (lifecycleState.screen === 'title') { done(); return; }
+  void persistNowApp(lifecycleState).finally(done);
 }
 
 /** 关窗确认 → 取消 */
@@ -58,14 +79,16 @@ export function confirmCloseCancel(): void {
   setCloseConfirmOpen(false);
 }
 
-/** 鼠标瞄准方向: 从鼠标屏幕坐标算出世界方向 */
-export function mouseAimDirection(state: GameState, mouseScreen: { x: number; y: number }): { x: number; y: number } {
+/** 是否正在保存 (closeConfirmSaving 标志) — drawCloseConfirm 用 */
+export function isCloseConfirmSaving(): boolean {
+  return closeConfirmSaving;
+}
+
+/** 鼠标位置 → 世界坐标方向 (Diablo 风格: 技能瞄准鼠标; 返回原始偏移不归一化) */
+export function mouseAimDirection(state: GameState, m: { pos: { x: number; y: number } }): { x: number; y: number } {
   const cx = state.viewport.w / 2;
   const cy = state.viewport.h / 2;
-  const dx = mouseScreen.x - cx;
-  const dy = mouseScreen.y - cy;
-  const len = Math.hypot(dx, dy) || 1;
-  return { x: dx / len, y: dy / len };
+  return { x: m.pos.x - cx, y: m.pos.y - cy };
 }
 
 /** 秒 → "m:ss" */
@@ -102,6 +125,7 @@ export const SAVE_FMT_LABEL = 'v11';
 export function _resetLifecycle(): void {
   closeConfirmSaving = false;
   closeEmit = null;
+  lifecycleState = null;
 }
 
 // 类型引用防止 tree-shake
