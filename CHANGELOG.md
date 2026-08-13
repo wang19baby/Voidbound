@@ -82,3 +82,12 @@ app/audio.ts (30 → 41 行, 加 fadeBgm).
 
 main.ts: 1289 → **979 行** (**达成 ≤1000 行目标**, -24.0%)
 累计 main.ts 减重: 2647 → 979 行 (-1668 行, -63.0%)
+
+### PR #9: main.ts 减重完成 + 文档 polish (2026-08-13)
+
+- `docs/architecture.md` (119 → 177 行): 反映 PR-007/PR-008 main.ts 减重;
+  新增 app/frame.ts (330 行) + app/input.ts (17 行) 模块说明
+- `CHANGELOG.md` (61 → 83 行): 追加 PR-007/PR-008 commit 记录
+- `README.md`: 架构一节更新为 main.ts 979 行 (≤1000)
+
+累计 main.ts 减重: 2647 → 979 行 (-1668 行, -63.0%)
