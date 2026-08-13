@@ -41,6 +41,11 @@ import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, re
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
 import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
+import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPanel, type TownCtx } from './screens/town';
+import { drawCharacters, type CharactersCtx } from './screens/characters';
+import { drawCollectionPanel, type CollectionCtx } from './screens/collection';
+import { startRun, ensureDungeonRun, triggerBossIntro } from './app/run';
+import { formatTime } from './app/lifecycle';
 import { buildSavePayload as buildSavePayloadApp, restoreMaterialsApp, restorePassivesApp, persistNowApp, continueLastSave, resumeFromSave, enterTargetCharacter, type SaveCtx } from './app/save';
 import { handleUiClick as handleUiClickDispatch, buildUiCtx, type UiCtx } from './app/uiDispatch';
 import { handleHudClick } from './app/actions/hud';
@@ -258,6 +263,32 @@ const titleCtx: TitleCtx = {
   uiCursor: (c, m, rects) => uiCursor(c, m, rects),
 };
 
+// US-026 / PR-007: 城镇/角色/收集 屏 ctx — 启动时一次性装配, 主循环每帧复用
+const collectionCtx: CollectionCtx = {
+  state, hudCtx, hudCanvas, mouse, formatTime,
+};
+const charactersCtx: CharactersCtx = {
+  state, hudCtx, hudCanvas, mouse,
+  drawCollectionPanel: (ctx) => drawCollectionPanel(ctx),
+  uiCursor: (rects) => uiCursor(canvas, mouse, rects),
+};
+const townCtx: TownCtx = {
+  state, hudCtx, hudCanvas, gl, quad, res, mouse, canvas,
+  requestDifficulty: (s, d) => requestDifficultyApp(s, d),
+};
+
+/** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
+function drawNewgameInline(): void {
+  const rects: Array<[number, number, number, number]> = [];
+  const ngCtx: NewgameCtx = {
+    state, hudCtx, hudCanvas, mouse,
+    drawUiPortrait: (classId, x, y, w, h) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h); },
+    isNgNaming, getNgLaunchT, loadLastNg: () => loadLastNg(),
+    uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
+  };
+  drawNewgameScreen(ngCtx, rects);
+}
+
 // 初始化跑局状态 (OPT-012): 怪物在进入地牢时由 startRun/ensureDungeonRun 生成
   inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
 fadeBgm(`bgm_${state.theme}`, state.volume);
@@ -286,7 +317,11 @@ loadAccount().then(a => {
 
 // === US-026 screenKeyCtx: 屏路由集中器的依赖注入 (19 个 main.ts 副作用函数) ===
 // 函数声明被 JS hoisting, 此处引用安全
-const saveCtx: SaveCtx = { ensureDungeonRun, startRun };
+const saveCtx: SaveCtx = { ensureDungeonRun: (s) => ensureDungeonRun(s), startRun: (s, theme, difficulty, mode) => startRun(s, theme, difficulty, mode) };
+// PR-007: 城镇相关 5 个函数原搬 main.ts, 现委托给 screens/town.ts; 通过 townCtx 注入
+const enterTownWrap = (state: GameState, townId?: string): void => enterTown(townCtx, townId as TownId);
+const interactTownWrap = (state: GameState): void => interactTown(townCtx);
+const handleTownPanelKeyWrap = (state: GameState, e: KeyboardEvent, k: string): void => handleTownPanelKey(townCtx, e, k);
 // uiCallbacks: 鼠标 UI 点击分发回调 (US-031 内联, handleUiClick 包装层已删除)
 const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
   confirmCloseSave, confirmCloseCancel,
@@ -294,10 +329,11 @@ const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
   enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
   titleAct,
   handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
-  handleTownPanelKey,
+  handleTownPanelKey: (e, k) => handleTownPanelKeyWrap(state, e, k),
   startFromNewgame: () => startFromNewgame(state),
   startCreateNewgame: () => startCreateNewgame(state),
-  enterTown, startRun,
+  enterTown: () => enterTownWrap(state),
+  startRun: () => startRun(state, state.theme, state.difficulty, state.run.mode),
   hardcoreWipe: (s) => hardcoreWipeApp(s),
   revivePlayer: (s) => revivePlayerApp(s),
   leaveThroughPortal, setScreen, resumeScreen,
@@ -317,13 +353,13 @@ const screenKeyCtx: ScreenKeyContext = {
   enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
   persistNow: () => persistNowApp(state),
   fadeBgm,
-  startRun,
-  ensureDungeonRun,
-  enterTown,
+  startRun: (s, theme, difficulty, mode) => startRun(s, theme, difficulty, mode),
+  ensureDungeonRun: (s) => ensureDungeonRun(s),
+  enterTown: (s, townId) => enterTownWrap(s, townId),
   triggerBossIntro,
   formatTime,
-  interactTown,
-  handleTownPanelKey,
+  interactTown: (s) => interactTownWrap(s),
+  handleTownPanelKey: (s, e, k) => handleTownPanelKeyWrap(s, e, k),
   revivePlayer: (s) => revivePlayerApp(s),
   hardcoreWipe: (s) => hardcoreWipeApp(s),
 };
@@ -616,14 +652,14 @@ function loop(now: number) {
       } else {
         handleScreenClick();
       }
-      drawNewgame();
+      drawNewgameInline();
     } else if (state.screen === 'characters') {
       handleScreenClick();
-      drawCharacters();
+      drawCharacters(charactersCtx);
     } else {
       loopImpl(now);
     }
-    if (isCloseConfirmOpen()) drawCloseConfirm();
+    if (isCloseConfirmOpen()) drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, closeConfirmSaving, mouse);
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -706,13 +742,13 @@ function loopImpl(now: number) {
     // C-302 传送过场: 1s 倒计时 → 到达目标镇
     if (state.teleportTo) {
       state.teleportT -= dt;
-      drawTeleportTransition();
+      drawTeleportTransitionScreen(hudCtx, hudCanvas, state.teleportTo, state.teleportT);
       mouse.reset();
       if (state.teleportT <= 0) {
         const target = state.teleportTo;
         state.teleportTo = null;
         state.teleportT = 0;
-        enterTown(state, target);
+        enterTown(townCtx, target);
         pushToast(state, `到达 ${TOWN_DEFS[target].name}`, '#9cf');
         inf('ui', `传送完成 → ${TOWN_DEFS[target].name}`);
       }
@@ -729,7 +765,7 @@ function loopImpl(now: number) {
       const dist = Math.hypot(dx, dy);
       if (dist <= 80) {
         state.townWalk = null;
-        interactTown(state);
+        interactTown(townCtx);
       } else {
         const spd = state.player.speed * 1.1 * dt;
         state.player.pos.x = Math.max(0, Math.min(state.viewport.w - state.player.size.w, state.player.pos.x + (dx / dist) * spd));
@@ -748,7 +784,7 @@ function loopImpl(now: number) {
     // 城镇=屏幕坐标: clamp 到视口内
     state.player.pos.x = Math.max(0, Math.min(state.viewport.w - state.player.size.w, state.player.pos.x));
     state.player.pos.y = Math.max(0, Math.min(state.viewport.h - state.player.size.h, state.player.pos.y));
-    drawTownFrame();
+    drawTownFrame(townCtx);
     mouse.reset();
     return; // 包装器统一 rAF
   }
@@ -944,708 +980,6 @@ function loopImpl(now: number) {
 }
 
 
-/** 城镇: 进入 (C-301: 指定镇; 省略时用最近城镇; townReturn 保留地下城还原坐标) */
-function enterTown(state: GameState, townId?: TownId) {
-  const tid = townId && TOWN_DEFS[townId] ? townId : (TOWN_DEFS[state.townId] ? state.townId : 'greenwing');
-  state.townId = tid;
-  state.townWalk = null;  // v3 鼠标化: 进/换城镇清走向目标
-  if (!state.townReturn) state.townReturn = { x: state.player.pos.x, y: state.player.pos.y };
-  clearGroundLoot(state);  // M5 实测修复: 回城清理地上物品
-  state.mode = 'town';
-  setScreen(state, 'town');
-  state.townPanel = null;
-  state.townStock = null;
-  state.mysteryStock = null;
-  state.teleportTo = null;
-  state.teleportT = 0;
-  state.player.pos = { x: 560, y: 500 };
-}
-
-/** 城镇: E 交互 */
-function interactTown(state: GameState) {
-  const npc = nearestNpc(state, state.townId);
-  if (!npc) { wrn('ui', '没有可交互的 NPC (靠近一点)'); return; }
-  switch (npc.kind) {
-    case 'merchant':
-      state.townStock = genMerchantStock();
-      state.townPanel = 'merchant';
-      inf('ui', '商人: 1-5 购买, 6 卖出, Esc 离开');
-      break;
-    case 'smith':
-      state.townPanel = 'smith';
-      inf('ui', '重铸师: 1-9 选择装备重铸 (100金), Esc 离开');
-      break;
-    case 'warehouse':
-      state.townPanel = 'warehouse';
-      inf('ui', `仓库 (${state.warehouse.length}/${WAREHOUSE_CAP}): 1-9 取回, S 存入, Esc 离开`);
-      break;
-    case 'difficulty':
-      requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared));
-      inf('ui', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
-      break;
-    case 'mystery':
-      state.mysteryStock = genMysteryStock();
-      state.townPanel = 'mystery';
-      inf('ui', '神秘商人: 1-4 购买传奇 (500-2000金), Esc 离开');
-      break;
-    case 'trainer':
-      state.townPanel = 'trainer';
-      inf('ui', '训练师: 1-0 选择被动技能, Enter 升级 (1 技能点/级), Esc 离开');
-      break;
-    case 'teleport': {
-      const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
-      if (targets.length === 0) { pushToast(state, '暂无可传送的城镇', '#f88'); break; }
-      state.townPanel = 'teleport';
-      inf('ui', '传送师: 1-9 选择目标城镇, Esc 离开');
-      break;
-    }
-    case 'forge': {
-      state.townPanel = 'forge';
-      inf('ui', '符文锻造师: 1-6 选择已变异技能重铸符文 (5奥术+1虚空), Esc 离开');
-      break;
-    }
-    case 'exit': {
-      // 出发 = 新开一局: 打开远征选择屏 (主题/难度/地图模式), 不再续接旧局
-      state.townPanel = null;
-      state.ngFrom = 'town';
-      setNgLaunchT(-1);
-      setNgNaming(false);
-      state.ngSel = {
-        classIdx: CLASS_IDS.indexOf(state.player.classId),
-        diffIdx: DIFFICULTIES.indexOf(state.difficulty),
-        themeIdx: THEMES.indexOf(state.theme),
-        modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear'),
-      };
-      setScreen(state, 'newgame');
-      inf('ui', '出发 → 远征选择 (新开一局)');
-      break;
-    }
-  }
-}
-
-/** 城镇面板按键 (1-5 买 / 6 卖 / 1-9 卖选 / 1-9 重铸选 / B 返回 / Esc 关) */
-function handleTownPanelKey(state: GameState, e: KeyboardEvent, k: string) {
-  if (k === 'escape' || k === 'b') { state.townPanel = null; state.townStock = null; return; }
-  const n = parseInt(k, 10);
-  if (state.townPanel === 'merchant' && state.townStock) {
-    if (n >= 1 && n <= 5) {
-      const st = state.townStock[n - 1];
-      if (buyItem(state, st)) { playSfxClient('ui_click'); inf('ui', `购入 ${st.item.name}`); }
-      else wrn('ui', '金币不足或背包已满');
-      return;
-    }
-    if (n === 6) { state.townPanel = 'sell'; inf('ui', '卖出: 1-9 选择装备 (半价)'); return; }
-    if (k === '7' || k === '8') {
-      const kind = k === '7' ? 'hp' : 'mp';
-      if (buyPotion(state, kind)) { playSfxClient('ui_click'); inf('ui', `购入 ${kind === 'hp' ? 'HP' : 'MP'} 药水`); }
-      else wrn('ui', '药水购买失败 (金币不足或已满 3)');
-      return;
-    }
-    if (k === '9') {
-      // C-401 灵铁可购 (材料独立计数不占背包)
-      if (state.player.gold < IRON_SHARD_PRICE) { wrn('ui', `灵铁 ${IRON_SHARD_PRICE}金, 金币不足`); return; }
-      state.player.gold -= IRON_SHARD_PRICE;
-      addMaterial(state.equip, 'iron_shard', 1);
-      playSfxClient('ui_click');
-      inf('ui', '购入 灵铁碎片 ×1');
-      return;
-    }
-    return;
-  }
-  if (state.townPanel === 'sell') {
-    const price = sellItem(state, n - 1);
-    if (price > 0) inf('ui', `卖出 +${price}金`);
-    return;
-  }
-  if (state.townPanel === 'smith') {
-    const res = rerollOwned(state, n - 1);
-    if (res === 'gold') inf('ui', '重铸完成 (100金)');
-    else if (res === 'iron') inf('ui', '重铸完成 (灵铁)');
-    else wrn('ui', '重铸失败 (金币/灵铁不足或选择无效)');
-    return;
-  }
-  if (state.townPanel === 'warehouse' || state.townPanel === 'warehouseTake') {
-    if (k === 's') { state.townPanel = 'warehouseTake'; inf('ui', '存入: 1-9 选择背包装备, Esc 返回'); return; }
-    if (k === 'b') { state.townPanel = 'warehouse'; return; }
-    if (state.townPanel === 'warehouse' && n >= 1 && n <= 9) {
-      if (warehouseTake(state, n - 1)) { playSfxClient('ui_click'); state.whFlash = 0.3; inf('ui', '取回仓库装备'); }
-      else wrn('ui', '取回失败 (背包满或选择无效)');
-      return;
-    }
-    if (state.townPanel === 'warehouseTake' && n >= 1 && n <= 9) {
-      if (warehouseStore(state, n - 1)) { playSfxClient('ui_click'); state.whFlash = 0.3; inf('ui', '存入仓库'); }
-      else wrn('ui', '存入失败 (仓库满或选择无效)');
-      return;
-    }
-    return;
-  }
-  if (state.townPanel === 'mystery' && state.mysteryStock) {
-    if (n >= 1 && n <= 4) {
-      const st = state.mysteryStock[n - 1];
-      if (buyItem(state, st)) { playSfxClient('ui_click'); inf('ui', `购入传奇 ${st.item.name}`); }
-      else wrn('ui', '金币不足或背包已满');
-    }
-    return;
-  }
-  if (state.townPanel === 'teleport') {
-    const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
-    const t = targets[n - 1];
-    if (t && n >= 1 && n <= targets.length) {
-      // C-302: 1s 过场 (黑屏 + 文字) → 到达
-      state.teleportTo = t;
-      state.teleportT = 1.0;
-      state.townPanel = null;
-      inf('ui', `传送 → ${TOWN_DEFS[t].name} (1s 过场)`);
-    }
-    return;
-  }
-  if (state.townPanel === 'forge') {
-    // C-403: 选已变异技能槽 → 扣材料 → 触发符文三选一 (复用 runeChoice)
-    // C-403: 选已变异技能槽 → 扣材料 → 触发符文三选一 (复用 runeChoice)
-    const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
-    const slot = mutated[n - 1];
-    if (slot && n >= 1 && n <= mutated.length) {
-      if (materialCount(state.equip, 'arcane_core') < RUNE_FORGE_COST.arcane_core) {
-        pushToast(state, '奥术核心不足 (需要 5)', '#f66');
-        return;
-      }
-      if (materialCount(state.equip, 'void_fragment') < RUNE_FORGE_COST.void_fragment) {
-        pushToast(state, '虚空碎片不足 (需要 1)', '#f66');
-        return;
-      }
-      if (runeForgePay(state)) {
-        state.townPanel = null;
-        // 打开三选一 (Esc 拒绝 = 保留原符文; 材料已扣)
-        state.equip.runeChoice = { slot, options: pickRuneOptions(slot) };
-        pushToast(state, `符文锻造: ${slotDisplay(slot)} 重新变异`, '#c9aaff');
-        playSfxClient('ui_click');
-        inf('ui', `符文锻造 ${slot} → 三选一`);
-      } else {
-        pushToast(state, '材料不足', '#f66');
-      }
-    }
-    return;
-  }
-  if (state.townPanel === 'trainer') {
-    // 被动技能树: 1-9,0 选 / ↑↓ 移动 / Enter·空格 升级 (1 技能点/级)
-    if (k === 'arrowup' || k === 'w') { state.trainerSel = Math.max(0, state.trainerSel - 1); return; }
-    if (k === 'arrowdown' || k === 's') { state.trainerSel = Math.min(PASSIVE_IDS.length - 1, state.trainerSel + 1); return; }
-    if (n >= 1 && n <= 10) { state.trainerSel = n - 1; return; }
-    if (k === 'enter' || k === ' ') {
-      const id = PASSIVE_IDS[state.trainerSel];
-      if (!id) return;
-      const errMsg = assignPassivePoint(state, id);
-      if (errMsg) { pushToast(state, errMsg, '#f66'); wrn('ui', `trainer ${id}: ${errMsg}`); }
-      else { playSfxClient('ui_click'); inf('ui', `被动 ${PASSIVE_DEFS[id].name} → Lv ${passiveLevel(state, id)}`); }
-      return;
-    }
-    return;
-  }
-}
-
-/** C-302 传送过场绘制: 委托给 screens/teleport.ts (US-026 附带抽取) */
-function drawTeleportTransition() {
-  drawTeleportTransitionScreen(hudCtx, hudCanvas, state.teleportTo, state.teleportT);
-}
-
-/** 城镇绘制: 背景/NPC/玩家/提示/面板 */
-function drawTownFrame() {
-  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  const townColor = TOWN_DEFS[state.townId]?.color ?? TOWN_DEFS.greenwing.color;
-  const [cr, cg, cb] = townColor.split(',').map(s => parseFloat(s.trim()));
-  gl.clearColor(cr, cg, cb, 1);   // C-302 城镇底色按镇 (GL 层, 勿画进 canvas 否则盖住角色)
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  // 先画角色 (GL 层; 城镇=屏幕坐标, 直接按 pos 绘制)
-  const tSprite = pickPlayerSprite(state, mouse.state().pos.x);
-  drawSprite(gl, quad, res, state.player.pos, state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot });
-  hudCtx.textAlign = 'center';
-  hudCtx.fillStyle = '#9aa';
-  hudCtx.font = 'bold 26px monospace';
-  hudCtx.fillText(TOWN_DEFS[state.townId]?.name ?? '城镇', hudCanvas.width / 2, 26);
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText('WASD 移动 · 靠近 NPC 按 E 交互 · [1-5]买 [6]卖 [1-9]重铸/仓储 · Esc 暂停', hudCanvas.width / 2, 62);
-  // NPC (C-301: 按当前镇布局) — npcs 图集 sprite; 祭坛结构物用 ui 光环; 传送阵铺脚下
-  const npcs = townNpcs(state.townId);
-  const nearKind = nearestNpc(state, state.townId)?.kind ?? null;
-  for (const npc of npcs) {
-    const near = nearKind === npc.kind;
-    if (npc.kind === 'difficulty') {
-      // 挑战祭坛 (结构物): 脉冲光环
-      const pulse = 0.75 + 0.25 * Math.sin((performance.now() / 1000) * 3 + npc.pos.x * 0.01);
-      drawSprite(gl, quad, res, { x: npc.pos.x - 26 * pulse, y: npc.pos.y - 26 * pulse }, { w: 52 * pulse, h: 52 * pulse }, 'ui', 'slide_horizontal_color', { color: near ? [1, 0.85, 0.35] : [0.85, 0.4, 1], blend: 'add' });
-    } else if (npc.kind === 'exit') {
-      // 出城传送阵: 地面贴图铺脚下
-      drawSprite(gl, quad, res, { x: npc.pos.x - 44, y: npc.pos.y - 44 }, { w: 88, h: 88 }, 'npcs', 'portal_array');
-    } else {
-      // 角色 NPC: 脚下光环 (交互提示) + 站桩
-      drawSprite(gl, quad, res, { x: npc.pos.x - 16, y: npc.pos.y + 18 }, { w: 32, h: 6 }, 'ui', 'slide_horizontal_color', { color: near ? [0.5, 1, 0.8] : [0.35, 0.55, 0.6] });
-      drawSprite(gl, quad, res, { x: npc.pos.x - 28, y: npc.pos.y - 32 }, { w: 56, h: 56 }, 'npcs', npc.sprite);
-    }
-    hudCtx.fillStyle = '#fff';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(npc.name, npc.pos.x, npc.pos.y - 40);
-    hudCtx.fillStyle = '#8aa';
-    hudCtx.font = '11px monospace';
-    hudCtx.fillText(npc.hint, npc.pos.x, npc.pos.y + 48);
-  }
-  // 交互提示
-  const npc = nearestNpc(state, state.townId);
-  if (npc) {
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y + 14);
-  }
-  // HUD (金/技能点)
-  hudCtx.textAlign = 'left';
-  hudCtx.fillStyle = '#ffd64a';
-  hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`金: ${state.player.gold}`, 16, 26);
-  hudCtx.fillStyle = '#9cc';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}`, 16, 44);
-  // 面板
-  if (state.townPanel) {
-    drawTownPanel();
-    // v3 鼠标化: 行 hover 高亮 (与点击命中同几何: y0=104, 行高 24)
-    const pm = mouse.state().pos;
-    if (pm.x > 40 && (pm.y - 104) >= 0) {
-      const r = Math.floor((pm.y - 104) / 24);
-      if (r < 12) {
-        hudCtx.fillStyle = 'rgba(255,255,255,0.08)';
-        hudCtx.fillRect(40, 104 + r * 24, hudCanvas.width - 80, 24);
-      }
-    }
-  }
-  if (state.whFlash > 0) state.whFlash = Math.max(0, state.whFlash - 1 / 60);
-  // v3: NPC 圈 hover → pointer (走向/交互提示)
-  const tmx = mouse.state().pos;
-  const onNpc = townNpcs(state.townId).some(n => inRect(tmx.x, tmx.y, n.pos.x - 30, n.pos.y - 30, 60, 60));
-  canvas.style.cursor = onNpc ? 'pointer' : 'default';
-  mouse.reset();
-}
-
-/** 城镇面板内容 */
-function drawTownPanel() {
-  hudCtx.fillStyle = 'rgba(6,6,12,0.92)';
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.textAlign = 'left';
-  let y = 70;
-  hudCtx.fillStyle = '#ffd';
-  hudCtx.font = 'bold 20px monospace';
-  if (state.townPanel === 'merchant') {
-    hudCtx.fillText(`商人 (金:${state.player.gold})  [1-5] 购买  [6] 卖出  [7/8] 药水  [Esc] 离开`, 40, y); y += 34;
-    const st = state.townStock ?? [];
-    st.forEach((s, i) => {
-      const col = RARITY_COLORS[s.item.rarity];
-      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${i + 1}. ${s.item.name} (${s.price}金)`, 60, y); y += 24;
-      hudCtx.fillStyle = '#bbb';
-      hudCtx.fillText(`    ${s.item.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
-    });
-    // 药水 (OPT-028): 7=HP 8=MP
-    hudCtx.fillStyle = '#f88';
-    drawIcon(hudCtx, res, 'potion_hp', 34, y - 18, 20);
-    hudCtx.fillText(`7. HP 药水 (${POTION_PRICES.hp}金) ×${state.player.potions?.hp ?? 0}/3`, 60, y); y += 22;
-    hudCtx.fillStyle = '#88f';
-    drawIcon(hudCtx, res, 'potion_mp', 34, y - 18, 20);
-    hudCtx.fillText(`8. MP 药水 (${POTION_PRICES.mp}金) ×${state.player.potions?.mp ?? 0}/3`, 60, y); y += 22;
-    hudCtx.fillStyle = '#9cf';
-    drawIcon(hudCtx, res, 'mat_iron_shard', 34, y - 18, 20);
-    hudCtx.fillText(`9. 灵铁碎片 (${IRON_SHARD_PRICE}金) ×${materialCount(state.equip, 'iron_shard')}`, 60, y); y += 22;
-  } else if (state.townPanel === 'sell') {
-    hudCtx.fillText(`卖出 (金:${state.player.gold})  [1-9] 选择  [Esc] 返回`, 40, y); y += 34;
-    const owned = getOwned(state);
-    owned.forEach((eq, i) => {
-      if (i > 8) return;
-      const col = RARITY_COLORS[eq.rarity];
-      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${i + 1}. ${eq.name} (+${getItemSellPrice(eq.rarity, eq.affixes.length)}金)`, 60, y); y += 24;
-    });
-  } else if (state.townPanel === 'smith') {
-    drawIcon(hudCtx, res, 'mat_iron_shard', 14, y - 17, 20);
-    hudCtx.fillText(`重铸师 (金:${state.player.gold} · 灵铁:${materialCount(state.equip, 'iron_shard')})  [1-9] 选择  [Esc] 离开`, 40, y); y += 34;
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText('消耗: 100金 或 灵铁 (rare 10 / set 20 / unique 40)', 40, y); y += 24;
-    const owned = getOwned(state);
-    owned.forEach((eq, i) => {
-      if (i > 8) return;
-      const col = RARITY_COLORS[eq.rarity];
-      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${i + 1}. ${eq.name} — ${eq.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
-    });
-  } else if (state.townPanel === 'warehouse' || state.townPanel === 'warehouseTake') {
-    const taking = state.townPanel === 'warehouse';
-    hudCtx.fillStyle = '#9cf';
-    hudCtx.fillText(
-      taking
-        ? `仓库 (${state.warehouse.length}/${WAREHOUSE_CAP})  [1-9] 取回  [S] 存入  [Esc] 离开`
-        : `存入 (背包 ${getOwned(state).length}/20)  [1-9] 选择  [B] 返回仓库`,
-      40, y);
-    // C-503 动画: 存取成功后边框闪光
-    if (state.whFlash > 0) {
-      hudCtx.strokeStyle = `rgba(120, 255, 180, ${Math.min(1, state.whFlash * 3)})`;
-      hudCtx.lineWidth = 4;
-      hudCtx.strokeRect(4, 4, hudCanvas.width - 8, hudCanvas.height - 8);
-    }
-    y += 34;
-    const list = taking ? state.warehouse : getOwned(state);
-    list.forEach((eq, i) => {
-      if (i > 8) return;
-      const col = RARITY_COLORS[eq.rarity];
-      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${i + 1}. ${eq.name} — ${eq.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
-    });
-  } else if (state.townPanel === 'mystery') {
-    hudCtx.fillText(`神秘商人 (金:${state.player.gold})  [1-4] 购买  [Esc] 离开`, 40, y); y += 34;
-    const st = state.mysteryStock ?? [];
-    st.forEach((s, i) => {
-      const col = RARITY_COLORS[s.item.rarity];
-      hudCtx.fillStyle = `rgb(${col.map(c => Math.round(c * 255)).join(',')})`;
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${i + 1}. ${s.item.name} (${s.price}金)`, 60, y); y += 24;
-      hudCtx.fillStyle = '#bbb';
-      hudCtx.fillText(`    ${s.item.affixes.map(describeAffix).join(' · ')}`, 60, y); y += 24;
-    });
-  } else if (state.townPanel === 'teleport') {
-    hudCtx.fillText('传送师 — 选择目标城镇 [1-9]  [Esc] 离开', 40, y); y += 34;
-    const targets = unlockedTowns(state.cleared).filter(t => t !== state.townId);
-    targets.forEach((t, i) => {
-      hudCtx.fillStyle = '#cfe8ff';
-      hudCtx.font = 'bold 16px monospace';
-      hudCtx.fillText(`${i + 1}. ${TOWN_DEFS[t].name}`, 60, y); y += 26;
-      hudCtx.fillStyle = '#889';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText(`   ${TOWN_DEFS[t].requires.length === 0 ? '初始城镇' : `解锁: 通关 ${TOWN_DEFS[t].requires.join(' + ')}`}`, 60, y); y += 26;
-    });
-  } else if (state.townPanel === 'forge') {
-    hudCtx.fillText(`符文锻造师  消耗: 奥术核心×${RUNE_FORGE_COST.arcane_core} + 虚空碎片×${RUNE_FORGE_COST.void_fragment}`, 40, y); y += 34;
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    drawIcon(hudCtx, res, 'mat_arcane_core', 14, y - 17, 20);
-    hudCtx.fillText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `, 40, y);
-    const arcW = hudCtx.measureText(`持有: 奥术核心 ${materialCount(state.equip, 'arcane_core')} · `).width;
-    drawIcon(hudCtx, res, 'mat_void_fragment', 40 + arcW - 3, y - 17, 20);
-    hudCtx.fillText(`虚空碎片 ${materialCount(state.equip, 'void_fragment')}`, 40 + arcW + 19, y); y += 24;
-    const mutated = SKILL_SLOTS.filter(slot => skillRune(slot));
-    if (mutated.length === 0) {
-      hudCtx.fillStyle = '#f88';
-      hudCtx.font = 'bold 15px monospace';
-      hudCtx.fillText('先升级技能到 10 级获取符文变异', 40, y); y += 26;
-    } else {
-      mutated.forEach((slot, i) => {
-        const r = skillRune(slot);
-        hudCtx.fillStyle = '#c9aaff';
-        hudCtx.font = 'bold 15px monospace';
-        hudCtx.fillText(`${i + 1}. ${slotDisplay(slot)} — ${r ? RUNE_DEFS[r].name : ''}`, 60, y); y += 26;
-        hudCtx.fillStyle = '#8a8a96';
-        hudCtx.font = '12px monospace';
-        hudCtx.fillText(`   ${r ? RUNE_DEFS[r].desc : ''}`, 60, y); y += 26;
-      });
-    }
-  } else if (state.townPanel === 'trainer') {
-    hudCtx.fillText(`训练师 (技能点:${state.player.skillPoints})  [1-9,0] 选 · [Enter] 升级  [Esc] 离开`, 40, y); y += 34;
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText('被动技能树 — 10 槽同时生效, 每级 1 技能点 (最多 20 级)', 40, y); y += 24;
-    PASSIVE_IDS.forEach((id, i) => {
-      const def = PASSIVE_DEFS[id];
-      const lv = passiveLevel(state, id);
-      const sel = i === state.trainerSel;
-      hudCtx.fillStyle = sel ? '#ffd64a' : '#ccc';
-      hudCtx.font = 'bold 14px monospace';
-      hudCtx.fillText(`${i + 1}. ${def.name}  Lv ${lv}${lv >= def.maxLevel ? ' (满)' : ''}  ${sel ? '◀' : ''}`, 60, y); y += 22;
-      hudCtx.fillStyle = sel ? '#fda' : '#889';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText(`   ${def.desc} · ${def.perLv}`, 60, y); y += 22;
-    });
-  }
-  hudCtx.fillStyle = '#fff';
-}
-
-/** 开始一局地牢 (OPT-012 + A-W2): 设定主题/难度/模式 → 清场刷跑局池 → 进 dungeon */
-function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode?: MapMode): void {
-  state.theme = theme;
-  state.difficulty = difficulty;
-  state.run.mode = mode ?? state.run.mode ?? 'linear';
-  state.combat.score = 0;
-  state.ui.dying = false;
-  state.fx.fireballs.length = 0;
-  state.combat.combo = { count: 0, timer: 0 };
-  state.player.dodgeT = 0;
-  state.player.dodgeCd = 0;
-  state.player.potionCd = 0;
-  state.reviveInvuln = 0;
-  state.player.potions = { hp: 3, mp: 3 };
-  clearGroundLoot(state);  // M5 实测修复: 新局清理上一局地上物品
-  state.townReturn = null;  // 新开一局: 不再还原旧地牢坐标
-  // 传承符文 (D-01): 新局自动绑定已传承变异 (该槽无符文时)
-  for (const l of state.legacy) {
-    const sk = getSkill(l.slot);
-    if (sk && !sk.rune) sk.rune = l.rune;
-  }
-  fadeBgm(`bgm_${theme}`, state.volume);  // OPT-027: 换主题交叉淡化 (顺带修旧 bug: startRun 从未切 BGM)
-  resetWorldForMode(state.run.mode);
-  resetPlayer(state);
-  spawnRunPool(state);
-  setScreen(state, 'dungeon');
-  inf('world', `run started: ${theme}/${difficulty}`);
-}
-
-/** 读档/回城再进时: 场上无怪 → 补刷一池; 有怪 → 按现存怪重算跑局计数 (Boss 在场/击杀态) */
-function ensureDungeonRun(state: GameState): void {
-  state.run.theme = state.theme;
-  resetWorldForMode(state.run.mode ?? 'linear');
-  if (state.fx.monsters.length === 0) {
-    spawnRunPool(state);
-  } else {
-    state.run.total = state.fx.monsters.length;
-    state.run.alive = state.fx.monsters.filter(m => !MONSTER_DEFS[m.type].boss).length;
-    state.run.bossAlive = state.fx.monsters.some(m => MONSTER_DEFS[m.type].boss);
-    state.run.bossKilled = false;
-    state.run.victoryShown = false;
-    state.run.bossStage = 0;
-    state.run.t0 = performance.now();
-  }
-}
-
-/** B-V2 Boss 入场演出: 横幅倒计时 + 泛光种子; 全屏渲染层读取 */
-function triggerBossIntro(state: GameState, title: string, text: string): void {
-  state.combat.bossIntroT = 2.8;
-  state.combat.bossIntroTitle = title;
-  state.combat.bossIntroText = text;
-  state.combat.cameraShake = Math.min(20, (state.combat.cameraShake ?? 0) + 10);
-}
-
-/** 秒 → mm:ss */
-function formatTime(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-// ===== 标题屏打磨 (TS-001~009, 2026-08-12) =====
-//
-// US-024-c: drawTitle 函数整块搬到 screens/title.ts (TitleCtx 注入模式);
-//           启动时在 main.ts 装配一次 titleCtx, 主循环每帧复用。
-//           SAVE_FMT_LABEL 与 lifecycle.ts 同源 (v11), 仅 screens/title.ts 引用, 留在那里。
-//           0 行为变更, 所有 module-level 引用 (state/canvas/gl/quad/res/mouse) → TitleCtx 字段。
-
-/** 新局/远征/新建选择屏: 委托给 screens/newgame.ts (US-025) */
-function drawNewgame() {
-  const rects: Array<[number, number, number, number]> = [];
-  const ngCtx: NewgameCtx = {
-    state, hudCtx, hudCanvas, mouse,
-    drawUiPortrait: (classId, x, y, w, h) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h); },
-    isNgNaming, getNgLaunchT, loadLastNg: () => loadLastNg(),
-    uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
-  };
-  drawNewgameScreen(ngCtx, rects);
-}
-
-/** 关窗确认覆盖层: 委托给 screens/close.ts (US-026 附带抽取) */
-function drawCloseConfirm() {
-  drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, closeConfirmSaving, mouse);
-}
-
-/** 角色管理屏 (C-202): 列表(职业/等级/难度) + 新建(N) + 删除(D 二次确认) + Enter 切换 */
-function drawCharacters() {
-  hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.fillStyle = '#0b0b12';
-  hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#c9aaff';
-  hudCtx.font = 'bold 44px monospace';
-  hudCtx.fillText('角色管理', hudCanvas.width / 2, 64);
-  const cx = hudCanvas.width / 2;
-
-  // C (P1-4): 右上"收集进度"按钮 (删除确认之外均可点)
-  if (!state.charConfirmDel) {
-    const cbR: [number, number, number, number] = [hudCanvas.width - 150, 20, 130, 30];
-    const cbHit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cbR);
-    hudCtx.fillStyle = cbHit ? 'rgba(201,170,255,0.18)' : 'rgba(30,30,42,0.9)';
-    hudCtx.fillRect(...cbR);
-    hudCtx.strokeStyle = cbHit ? '#c9aaff' : '#4a4a5a';
-    hudCtx.lineWidth = cbHit ? 2 : 1;
-    hudCtx.strokeRect(...cbR);
-    hudCtx.fillStyle = '#c9aaff';
-    hudCtx.font = 'bold 13px monospace';
-    hudCtx.fillText('收集进度', hudCanvas.width - 85, 36);
-  }
-  // C (P1-4): 收集总览覆盖层
-  if (state.ui.collectOpen) {
-    drawCollectionPanel();
-    return;
-  }
-
-  if (state.charConfirmDel) {
-    const target = state.charList[state.charSel];
-    hudCtx.fillStyle = '#ff6a6a';
-    hudCtx.font = 'bold 22px monospace';
-    hudCtx.fillText(`删除角色 ${target ? target.id : ''}?`, cx, hudCanvas.height / 2 - 20);
-    hudCtx.fillStyle = '#f88';
-    hudCtx.font = '16px monospace';
-    hudCtx.fillText('[Y] 确认删除 (存档不可恢复) · [Esc] 取消', cx, hudCanvas.height / 2 + 20);
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'top';
-    return;
-  }
-
-  // v4 最近 3 角色快捷横排 (顶部卡片, 单击进入; 命中在 handleUiClick)
-  const recent3 = state.charList.slice(0, 3);
-  if (recent3.length > 0) {
-    const cy0 = 128;
-    hudCtx.textAlign = 'left';
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText('最近角色 (单击进入)', cx - 640, cy0 - 20);
-    hudCtx.textAlign = 'center';
-    const rm = mouse.state().pos;
-    recent3.forEach((c, i) => {
-      const cx2 = cx - 320 + i * 240;
-      const def = CLASS_DEFS[c.class as ClassId] ?? CLASS_DEFS.barbarian;
-      const isCur = c.id === state.currentChar;
-      const hit = inRect(rm.x, rm.y, cx2, cy0, 220, 86);
-      hudCtx.fillStyle = hit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.92)';
-      hudCtx.fillRect(cx2, cy0, 220, 86);
-      hudCtx.strokeStyle = hit ? '#66ccff' : isCur ? '#ffd64a' : '#3a3a48';
-      hudCtx.lineWidth = hit ? 2 : 1;
-      hudCtx.strokeRect(cx2, cy0, 220, 86);
-      hudCtx.fillStyle = def.color;
-      hudCtx.font = 'bold 18px monospace';
-      hudCtx.fillText(def.name, cx2 + 110, cy0 + 26);
-      hudCtx.fillStyle = hit ? '#fff' : '#bbb';
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${c.id} · Lv${c.level}`, cx2 + 110, cy0 + 50);
-      hudCtx.fillStyle = '#99a';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText(`${c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}${isCur ? ' · 当前' : ''}`, cx2 + 110, cy0 + 68);
-    });
-    uiCursor(canvas, mouse, recent3.map((_, i) => [cx - 320 + i * 240, cy0, 220, 86] as [number, number, number, number]));
-  }
-
-  // 列表
-  if (state.charList.length === 0) {
-    hudCtx.fillStyle = '#888';
-    hudCtx.font = '18px monospace';
-    hudCtx.fillText('暂无角色 · 按 [N] 新建', cx, hudCanvas.height / 2);
-  } else {
-    const rows = Math.min(state.charList.length, 8);
-    const y0 = hudCanvas.height / 2 - rows * 26;
-    state.charList.slice(0, rows).forEach((c, i) => {
-      const sel = i === state.charSel;
-      const def = CLASS_DEFS[c.class as ClassId] ?? CLASS_DEFS.barbarian;
-      const isCur = c.id === state.currentChar;
-      hudCtx.font = 'bold 18px monospace';
-      hudCtx.fillStyle = sel ? '#ffd64a' : '#bbb';
-      hudCtx.fillText(`${sel ? '▶ ' : '  '}${c.id}${isCur ? ' (当前)' : ''}`, cx - 200, y0 + i * 52);
-      hudCtx.font = '14px monospace';
-      hudCtx.fillStyle = sel ? '#fda' : '#889';
-      hudCtx.fillText(`${def.name} · Lv${c.level} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty} · ${c.theme}`, cx + 60, y0 + i * 52);
-    });
-  }
-  hudCtx.fillStyle = '#fff';
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText('[↑/↓] 选择 · [Enter] 进入/切换 · [N] 新建 · [D] 删除 · [Esc] 返回', cx, hudCanvas.height - 46);
-  if (state.ui.titleMsg) {
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = '14px monospace';
-    hudCtx.fillText(state.ui.titleMsg, cx, hudCanvas.height - 80);
-  }
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-}
-
-/** 新建角色入口在角色管理 [N] / 新建按钮 → 直接进新局选择屏 (命名框融入, drawNewgame) */
-
-
-/** 角色管理列表行命中 (新增按钮等, 见 handleUiClick) */
-
-/** C (P1-4): 收集总览覆盖层 (characters 屏, Esc/关闭按钮退出) */
-function drawCollectionPanel() {
-  const w = hudCanvas.width;
-  const h = hudCanvas.height;
-  hudCtx.fillStyle = 'rgba(4,4,10,0.93)';
-  hudCtx.fillRect(0, 0, w, h);
-  hudCtx.textAlign = 'center';
-  hudCtx.textBaseline = 'middle';
-  hudCtx.fillStyle = '#ffd64a';
-  hudCtx.font = 'bold 30px monospace';
-  hudCtx.fillText('收 集 进 度', w / 2, 62);
-  hudCtx.fillStyle = '#99a';
-  hudCtx.font = '13px monospace';
-  hudCtx.fillText(`角色 ${state.currentChar} · 账号共享 (仓库/传承/通关)`, w / 2, 92);
-
-  // 套装: 3 张卡 (角色背包+穿戴 + 账号仓库)
-  const allEq = [...getOwned(state), ...getEquippedValues(state), ...state.warehouse];
-  const setKeys = Object.keys(SET_BONUSES);
-  const setW = 200, setGap = 16;
-  const setX0 = w / 2 - (setKeys.length * (setW + setGap) - setGap) / 2;
-  setKeys.forEach((k, i) => {
-    const n = allEq.filter(eq => eq.setName === k).length;
-    const x = setX0 + i * (setW + setGap);
-    const y = 128;
-    hudCtx.fillStyle = n > 0 ? 'rgba(255,214,74,0.10)' : 'rgba(20,20,30,0.9)';
-    hudCtx.fillRect(x, y, setW, 62);
-    hudCtx.strokeStyle = n > 0 ? '#ffd64a' : '#3a3a48';
-    hudCtx.lineWidth = n > 0 ? 2 : 1;
-    hudCtx.strokeRect(x, y, setW, 62);
-    hudCtx.fillStyle = n > 0 ? '#ffd64a' : '#8a8a96';
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(SET_BONUSES[k].name, x + setW / 2, y + 21);
-    hudCtx.fillStyle = n > 0 ? '#eee' : '#8a8a96';
-    hudCtx.font = '13px monospace';
-    hudCtx.fillText(`拥有 ${n} 件`, x + setW / 2, y + 43);
-  });
-
-  let y = 240;
-  const row = (label: string, val: string, col = '#ddd') => {
-    hudCtx.textAlign = 'center';
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = 'bold 15px monospace';
-    hudCtx.fillText(label, w / 2 - 170, y);
-    hudCtx.textAlign = 'left';
-    hudCtx.fillStyle = col;
-    hudCtx.font = '14px monospace';
-    hudCtx.fillText(val, w / 2 + 40, y);
-    y += 32;
-  };
-  const skillBound = SKILL_SLOTS.filter(slot => !!getSkill(slot)).length;
-  row('技能池', `${skillBound}/${Object.keys(SKILL_SPECS).length} (当前职业绑定)`);
-  const runes = new Set<string>();
-  for (const slot of SKILL_SLOTS) {
-    const r = skillRune(slot);
-    if (r && r !== 'none') runes.add(r);
-  }
-  for (const l of state.legacy) runes.add(l.rune);
-  const runeTotal = Object.keys(RUNE_DEFS).filter(id => id !== 'none').length;
-  row('符文', `${runes.size}/${runeTotal} (已绑定 + 传承)`, runes.size > 0 ? '#c9aaff' : '#ddd');
-  row('已通关', state.cleared.length > 0 ? state.cleared.join(' · ') : '尚无', state.cleared.length > 0 ? '#8f8' : '#999');
-  const bestText = Object.entries(state.run.best)
-    .map(([d, ms]) => `${DIFFICULTY_MODS[d as Difficulty]?.name ?? d} ${formatTime(ms / 1000)}`)
-    .join(' · ');
-  row('最佳记录', bestText || '—');
-
-  // 关闭按钮
-  const cr: [number, number, number, number] = [w / 2 - 90, h - 84, 180, 40];
-  const hit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cr);
-  hudCtx.fillStyle = hit ? 'rgba(255,255,255,0.12)' : 'rgba(30,30,42,0.9)';
-  hudCtx.fillRect(...cr);
-  hudCtx.strokeStyle = '#66ccff';
-  hudCtx.lineWidth = hit ? 2 : 1;
-  hudCtx.strokeRect(...cr);
-  hudCtx.fillStyle = '#66ccff';
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText('[Esc] 关闭', w / 2, h - 64);
-  hudCtx.textAlign = 'left';
-  hudCtx.textBaseline = 'top';
-}
 
 /** 单帧绘制: 清屏 + 地面 + 墙 + 粒子 + 火球 + 怪物 + 玩家 + HUD */
 function drawFrame() {
