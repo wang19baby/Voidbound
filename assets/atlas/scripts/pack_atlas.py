@@ -365,6 +365,11 @@ def process_atlas(atlas_name: str, dry_run: bool = False, rust_bin: bool = False
     if rust_bin:
         bin_path = OUTPUT_DIR / f"{atlas_name}.bin"
         write_rust_bin(result, bin_path)
+        print(f"  BIN:  {bin_path}")
+    elif (OUTPUT_DIR / f"{atlas_name}.bin").exists():
+        # 游戏只读 .bin: PNG/JSON 已刷新但 bin 未动 → 运行时会加载旧图集 (历史事故:
+        # world.bin 停在旧 72 切片 → floor_*_full 缺失 → 黑地板)。必须显式 --rust-bin。
+        print(f"  ⚠ BIN:  {atlas_name}.bin 未刷新 (旧文件仍存在) — 游戏将加载旧图集! 请加 --rust-bin 重新打包")
 
     if rust_loader:
         loader_path = OUTPUT_DIR / f"{atlas_name}_loader.rs"
