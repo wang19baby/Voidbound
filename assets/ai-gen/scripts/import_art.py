@@ -184,6 +184,20 @@ def make_seamless(img: Image.Image) -> Image.Image:
     return blended.crop((0, 0, hw, hh))
 
 
+def square_crop_center(img: Image.Image) -> Image.Image:
+    """原图中心方形截取 (非方形原图如 1408x768 → min 边 768x768 居中; 方形原图原样返回)。
+
+    瓦片用: 整幅纹理没有品红 bbox 可依, 只能中心截方; 同时消除
+    非等比压缩 (1408x768 → 384x384 的 x/y 缩放比不同 = 变形)。
+    """
+    w, h = img.size
+    side = min(w, h)
+    if w == h:
+        return img
+    x0, y0 = (w - side) // 2, (h - side) // 2
+    return img.crop((x0, y0, x0 + side, y0 + side))
+
+
 def brighten_if_dark(img: Image.Image, min_lum: float = 80, raw_lum: float | None = None) -> Image.Image:
     """平均亮度过低 (<min_lum) 的瓦片做曝光恢复 (gamma 抬升)。
 
@@ -276,42 +290,58 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
     img.load()
     out_done: list[str] = []
     if rel_dir == "world":
-        # 瓦片尺寸: 墙 128 (128px 块 1:1) / 地板 32 (32px 格) / 其余 64
+        # 瓦片尺寸: 墙 128 (128px 块) / 地板 32 (32px 格, 烘焙 384 整幅) / 障碍物 64 (游戏显示 64)
         size = 128 if name.startswith("wall") else (32 if name.startswith("floor") else 64)
-        # 瓦片 = 整幅纹理: 不中心方裁 (方裁截断平铺边 + 浪费大图, 只取中间一小块)
-        rgba = img.convert("RGBA")
-        # 瓦片必须不透明: 品红残留重涂为邻域色 (抠 alpha 会让清屏色透出成黑斑)
-        rgba = repaint_magenta(rgba)
-        # 曝光判断: 从磁盘原图直读 (内存派生图 getdata 读数进程间会飘 19.6↔116, 不可信;
-        # 磁盘 open 的读数 5+ 进程全部稳定)
-        import statistics as _st
-        with Image.open(path) as _rawf:
-            raw_lum = _st.mean(sum(c[:3]) / 3 for c in _rawf.convert("RGB").getdata())
-        rgba = brighten_if_dark(rgba, raw_lum=raw_lum)
-        rgba = lift_black(rgba)
-        # 无缝化 (半幅混合, 均值不变)
-        rgba = make_seamless(rgba.convert("RGB")).convert("RGBA")
-        # 质控: 恢复后仍过暗 → 原图近黑, 提示重新生成 (否则游戏里就是黑色地图)
-        fin_lum = max(raw_lum, 80.0) if raw_lum < 80 else raw_lum
-        if fin_lum < 60:
-            print(f"  ⚠ {name}: 瓦片仍过暗 (raw_lum={raw_lum:.0f}<60) — AI 原图近黑, 曝光恢复后仍不可用, 需重新生成亮色版")
-        if quantize_key:
-            rgba = apply_quantize(rgba, quantize_key)
-        if name.startswith("floor"):
-            # 地板: 单一整幅纹理 {name}_full (FLOOR_FULL=384), 游戏用世界对齐 uv 采样
-            # (旧 4x4 切片随机选 → 相邻格贴边来自不相邻源列 → 接缝; 周期 384 与 4 切片网格不对齐)
-            for stale in (ATLAS_IN / "world").glob(f"{name}_*.png"):
-                stale.unlink()
-            full = rgba.resize((FLOOR_FULL, FLOOR_FULL), Image.Resampling.BOX)
-            out = ATLAS_IN / "world" / f"{name}_full.png"
-            full.save(out, format="PNG")
-            out_done.append(str(out.relative_to(BASE.parent)))
-        else:
-            resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
-            rgba = rgba.resize((size, size), resample)
+        if name.startswith("decor"):
+            # 障碍物 (用户要求: 原图整幅直接用, 不再切片/取部分):
+            # 抠品红 → 弱 alpha 归零 → 内容方形化 (bbox_crop) → 烘焙 size
+            # (旧实现走瓦片管线 repaint+无缝化 → 品红背景被填充成紫糊方块)
+            rgba = chroma_key_magenta(img)
+            a_hist = rgba.getchannel("A").histogram()
+            opaque = sum(a_hist[128:])
+            if opaque / (rgba.width * rgba.height) > 0.9:
+                rgba = chroma_key_pink(img)
+            a = rgba.getchannel("A").point(lambda v: 0 if v < 40 else v)
+            rgba.putalpha(a)
+            rgba = bbox_crop(rgba, size)
             out = ATLAS_IN / "world" / f"{name}.png"
             rgba.save(out, format="PNG")
             out_done.append(str(out.relative_to(BASE.parent)))
+        else:
+            # 瓦片管线 (地板/墙): 原图整幅必要时中心方截 (防非等比压缩变形)
+            rgba = square_crop_center(img.convert("RGBA"))
+            # 瓦片必须不透明: 品红残留重涂为邻域色 (抠 alpha 会让清屏色透出成黑斑)
+            rgba = repaint_magenta(rgba)
+            # 曝光判断: 从磁盘原图直读 (内存派生图 getdata 读数进程间会飘 19.6↔116, 不可信;
+            # 磁盘 open 的读数 5+ 进程全部稳定)
+            import statistics as _st
+            with Image.open(path) as _rawf:
+                raw_lum = _st.mean(sum(c[:3]) / 3 for c in _rawf.convert("RGB").getdata())
+            rgba = brighten_if_dark(rgba, raw_lum=raw_lum)
+            rgba = lift_black(rgba)
+            # 无缝化 (半幅混合, 均值不变)
+            rgba = make_seamless(rgba.convert("RGB")).convert("RGBA")
+            # 质控: 恢复后仍过暗 → 原图近黑, 提示重新生成 (否则游戏里就是黑色地图)
+            fin_lum = max(raw_lum, 80.0) if raw_lum < 80 else raw_lum
+            if fin_lum < 60:
+                print(f"  ⚠ {name}: 瓦片仍过暗 (raw_lum={raw_lum:.0f}<60) — AI 原图近黑, 曝光恢复后仍不可用, 需重新生成亮色版")
+            if quantize_key:
+                rgba = apply_quantize(rgba, quantize_key)
+            if name.startswith("floor"):
+                # 地板: 单一整幅纹理 {name}_full (FLOOR_FULL=384), 游戏用世界对齐 uv 采样
+                # (旧 4x4 切片随机选 → 相邻格贴边来自不相邻源列 → 接缝; 周期 384 与 4 切片网格不对齐)
+                for stale in (ATLAS_IN / "world").glob(f"{name}_*.png"):
+                    stale.unlink()
+                full = rgba.resize((FLOOR_FULL, FLOOR_FULL), Image.Resampling.BOX)
+                out = ATLAS_IN / "world" / f"{name}_full.png"
+                full.save(out, format="PNG")
+                out_done.append(str(out.relative_to(BASE.parent)))
+            else:
+                resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
+                rgba = rgba.resize((size, size), resample)
+                out = ATLAS_IN / "world" / f"{name}.png"
+                rgba.save(out, format="PNG")
+                out_done.append(str(out.relative_to(BASE.parent)))
     elif rel_dir == "monsters":
         is_sheet = img.width >= img.height * 2.5  # 单图(≤2:1)不再误判为 4 帧 sheet
         # 清理旧帧残留 (防新旧混帧)
