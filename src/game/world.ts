@@ -242,10 +242,10 @@ export interface Decor {
 
 /** 主题 → 装饰配置 (world 图集 decor_* HD; 旧 grass/wall_alt 已移除) */
 export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: [number, number, number] }> = {
-  forest: { sprite: 'decor_forest', count: 6 }, // HD 草丛
-  desert: { sprite: 'decor_desert', count: 6 }, // HD 石块
-  ruin:   { sprite: 'decor_ruin', count: 5 }, // HD 冰石
-  void:   { sprite: 'decor_void', count: 4 }, // HD 虚空水晶
+  forest: { sprite: 'decor_forest', count: 12 }, // HD 草丛 (6→12: 出生视野内须可见, 否则"空地图")
+  desert: { sprite: 'decor_desert', count: 12 }, // HD 石块
+  ruin:   { sprite: 'decor_ruin', count: 10 }, // HD 冰石
+  void:   { sprite: 'decor_void', count: 8 }, // HD 虚空水晶
 };
 
 const decorCache = new Map<string, Decor[]>();
