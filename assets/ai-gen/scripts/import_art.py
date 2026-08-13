@@ -198,22 +198,48 @@ def square_crop_center(img: Image.Image) -> Image.Image:
     return img.crop((x0, y0, x0 + side, y0 + side))
 
 
-def brighten_if_dark(img: Image.Image, min_lum: float = 80, raw_lum: float | None = None) -> Image.Image:
-    """平均亮度过低 (<min_lum) 的瓦片做曝光恢复 (gamma 抬升)。
+def brighten_if_dark(img: Image.Image, min_lum: float = 110, raw_lum: float | None = None) -> Image.Image:
+    """平均亮度过低 (<min_lum) 的瓦片做曝光恢复: 对比度拉伸 + gamma 抬升。
 
-    旧版线性 ×1.9 上限: 亮 19.6 的原图只能到 37, 依然全黑 — "黑色地图"根因。
-    gamma 恢复按暗部/亮部等比例打开, 19.6 → ~80, 纹理保留。
-    raw_lum: 调用方传入在 raw(或大尺寸) 上直读的稳定均值 — 本环境的无缝中间图
-    getdata/resize 读数会在进程间飘 (19.6 ↔ 116), 任何小尺寸测量都不可信。
+    旧版纯 gamma (目标 80): 深色 AI 原图 (floor_forest raw 17/255) 抬到 ~70
+    仍是深绿泥, 用户多次反馈"和以前一样"。本版:
+      1. 2%/98% 百分位对比度拉伸 (逐通道) — 打开暗部纹理细节
+      2. gamma 抬到 min_lum (110) — 画面明显变亮, 可感知的差异
+    亮图 (desert 227) 直接返回。raw_lum: 调用方传入在 raw(或大尺寸) 上直读的
+    稳定均值 — 本环境的无缝中间图 getdata/resize 读数会在进程间飘 (19.6 ↔ 116),
+    任何小尺寸测量都不可信。
     """
     import statistics
     lum = raw_lum if raw_lum is not None else (
         statistics.mean(sum(c) / 3 for c in img.getdata()) if img.size[0] * img.size[1] else 0)
-    if lum < min_lum:
-        import math
-        g = max(1.2, math.log(max(1.0, lum) / 255.0) / math.log(min_lum / 255.0))
-        return img.point(lambda v: int(255.0 * (v / 255.0) ** (1.0 / g)))
-    return img
+    if lum >= min_lum:
+        return img
+    rgb = img.convert("RGB")
+    # 1) 对比度拉伸: 2%/98% 百分位 → [0,255] (逐通道, 保留色彩倾向)
+    lo = [0, 0, 0]
+    hi = [255, 255, 255]
+    if rgb.width * rgb.height >= 4096:
+        small = list(rgb.resize((256, 256)).getdata())
+        n = len(small)
+        for c in range(3):
+            vals = sorted(p[c] for p in small)
+            lo[c] = vals[int(n * 0.02)]
+            hi[c] = vals[int(n * 0.98)]
+    # 2) gamma 抬升到 min_lum
+    import math
+    g = max(1.15, math.log(max(1.0, lum) / 255.0) / math.log(min_lum / 255.0))
+    luts = []
+    for c in range(3):
+        span = hi[c] - lo[c]
+        luts.append([
+            int(255.0 * (min(255, max(0, int((v - lo[c]) * 255.0 / span if span >= 24 else v))) / 255.0) ** (1.0 / g))
+            for v in range(256)
+        ])
+    if img.mode == "RGBA":
+        r, g, b, a = img.split()
+        return Image.merge("RGBA", (r.point(luts[0]), g.point(luts[1]), b.point(luts[2]), a))
+    r, g, b = rgb.split()
+    return Image.merge("RGB", (r.point(luts[0]), g.point(luts[1]), b.point(luts[2])))
 
 
 def repaint_magenta(img: Image.Image) -> Image.Image:
