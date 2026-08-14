@@ -375,13 +375,6 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   const menuRects: Array<[number, number, number, number]> = [];
   const hasSave = state.charList.length > 0;
   ctx.syncTitleFocus(hasSave);
-  // 最近存档排序: 按 last_played 降序取前 5, 排除当前角色 (继续游戏已显示) (0/缺失排最后)
-  const recentCards = hasSave
-    ? state.charList
-        .filter(c => c.id !== state.currentChar)
-        .sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0))
-        .slice(0, 5)
-    : [];
   // 立绘职业: 当前角色优先, 无存档用默认 (TS-001)
   const curChar = hasSave ? (state.charList.find(c => c.id === state.currentChar) ?? state.charList[0]) : null;
   const portraitClass: ClassId = (curChar?.class as ClassId) ?? (state.player.classId as ClassId) ?? 'barbarian';
@@ -401,7 +394,7 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   const itemW = 320, itemH = 38;
 
   // ---- GL 层 (TS-001 立绘 + 脚下光环; TS-004 菜单 GL 图标): 先清空, 2D 层对应区域挖孔 ----
-  const px = 24, py = h - 206, pw = 180, ph = 180;  // 左下角 (右下被最近存档卡片占用)
+  const px = 24, py = h - 206, pw = 180, ph = 180;  // 左下角
   const iconSprites: Array<{ x: number; y: number; atlas: string; name: string }> = [];
   for (const it of menuItems) {
     if (it.icon === 'sword') iconSprites.push({ x: w / 2 - itemW / 2 + 14, y: it.y - itemH / 2 + 9, atlas: 'icons', name: 'skill_melee' });
@@ -425,31 +418,6 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   // TS-005: 标题外发光 + 副标字距 + 玩家向文案
   drawTitleWordmark(hudCtx, hudCanvas);
 
-  // 右侧最近存档卡片区 — TS-003: 加场景图标 (当前角色用内存 scene, 其余用存档摘要)
-  // 调整: 避开继续游戏按钮 (400-880, 307-353), cardX=900 cardY0=400, 与按钮完全错开 20px
-  const cardX = w - 380, cardW = 300, cardY0 = 400, cardH = 42, cardGap = 6;
-  recentCards.forEach((c, i) => {
-    const cy = cardY0 + i * (cardH + cardGap);
-    const hit = inRect(mx, my, cardX, cy, cardW, cardH);
-    const down = hit && lmb;
-    hudCtx.fillStyle = down ? 'rgba(102,204,255,0.30)' : hit ? 'rgba(102,204,255,0.13)' : '#14141f';
-    hudCtx.fillRect(cardX, cy, cardW, cardH);
-    hudCtx.strokeStyle = hit ? '#66ccff' : '#2a2a3a';
-    hudCtx.lineWidth = hit ? 2 : 1;
-    hudCtx.strokeRect(cardX, cy, cardW, cardH);
-    const rep = CLASS_DEFS[(c.class as ClassId) ?? 'barbarian'];
-    hudCtx.textAlign = 'left';
-    hudCtx.textBaseline = 'middle';
-    drawSceneIcon(hudCtx, cardX + 22, cy + 14, c.id === state.currentChar ? state.mode : (c.scene ?? 'dungeon'));
-    hudCtx.fillStyle = rep?.color ?? '#eee';
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.fillText(`${rep?.name ?? c.class} ${c.id}`, cardX + 38, cy + 14);
-    hudCtx.fillStyle = hit ? '#fff' : '#caa';
-    hudCtx.font = '13px monospace';
-    hudCtx.textAlign = 'right';
-    hudCtx.fillText(`Lv${c.level} · ${THEME_NAMES[c.theme] ?? c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}`, cardX + cardW - 14, cy + 14);
-    menuRects.push([cardX, cy, cardW, cardH]);
-  });
   // 金色大按钮"继续游戏" — TS-003: + 相对时间 / 场景图标 / 跑局进度条 (剩余怪)
   if (hasSave) {
     // 继续游戏按钮显示的是当前角色 (state.currentChar), 不用 recentCards[0] (右侧列表已排除当前)

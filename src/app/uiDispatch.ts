@@ -81,13 +81,6 @@ export function handleUiClick(ctx: UiCtx): boolean {
       const hasSave = state.charList.length > 0;
       // TS-009: 设置齿轮入口 (与 drawTitle 同步: 右下 36×36)
       if (inRect(mx, my, w - 50, h - 50, 36, 36)) { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
-      // TS-003: 右侧最近存档卡片 (与 drawTitle 同步: w-380, 400, 300×42)
-      const cards = hasSave
-        ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
-        : [];
-      for (let i = 0; i < cards.length; i++) {
-        if (inRect(mx, my, w - 380, 400 + i * 48, 300, 42)) { ctx.enterTargetCharacter(state, cards[i]); return true; }
-      }
       const menuY0 = h / 2 - 30;
       // 继续游戏大按钮 (480×56, 与 drawTitle 一致: contY = menuY0 - 45)
       if (hasSave && inRect(mx, my, cx - 240, menuY0 - 45, 480, 56)) {
@@ -203,22 +196,15 @@ export function handleUiClick(ctx: UiCtx): boolean {
         return true;
       }
       if (state.ngFrom === 'create' && isNgNaming() && !inRect(mx, my, w / 2 - 180, 148, 360, 40)) setNgNaming(false);
-      // 上次配置复用
-      if (inRect(mx, my, w - 460, 20, 220, 40)) {
-        const last = ctx.loadLastNg();
-        if (last) { state.ngSel = last; setNgNaming(false); pushToast(state, '已复用上次配置', '#9cf'); }
-        else pushToast(state, '暂无上次配置', '#886');
-        return true;
-      }
       // 职业列
       if (state.ngFrom !== 'town') {
         for (let i = 0; i < CLASS_IDS.length; i++) {
           if (inRect(mx, my, w / 2 + NG_LAYOUT.classX, cy + i * 60 - 27, NG_LAYOUT.classW, 54)) { state.ngSel.classIdx = i; playSfxClient('ui_click'); return true; }
         }
       }
-      // 难度
+      // 难度横排 (与 newgame 屏同步: 120px 卡距, diffY = h/2 + 70, 卡高 44)
       for (let i = 0; i < DIFFICULTIES.length; i++) {
-        if (inRect(mx, my, w / 2 + NG_LAYOUT.diffX, cy + i * 48 - 22, NG_LAYOUT.diffW, 44)) {
+        if (inRect(mx, my, (w - DIFFICULTIES.length * 120) / 2 + i * 120, h / 2 + 70, 120, 44)) {
           const d = DIFFICULTIES[i];
           if (unlockedDifficulty(state.cleared, d)) { state.ngSel.diffIdx = i; playSfxClient('ui_click'); }
           else pushToast(state, `${DIFFICULTY_MODS[d].name} 未解锁 (通关前置)`, '#f66');
@@ -230,9 +216,9 @@ export function handleUiClick(ctx: UiCtx): boolean {
         ctx.startFromNewgame();
         return true;
       }
-      // 返回按钮 (右上角, 与 newgame 屏一致)
-      if (inRect(mx, my, w - 220, 20, 200, 40)) {
-        ctx.setScreen(state, state.ngFrom === 'town' ? 'town' : 'title');
+      // 左上角"返回主菜单(Esc)"按钮 (与 newgame 屏同步: 16, 16, 160, 32)
+      if (inRect(mx, my, 16, 16, 160, 32)) {
+        ctx.setScreen(state, 'title');
         state.ui.titleMsg = '';
         setNgNaming(false);
         return true;
@@ -281,9 +267,9 @@ export function handleUiClick(ctx: UiCtx): boolean {
     }
     case 'characters': {
       const cx = w / 2;
-      // C (P1-4): 收集总览关闭
+      // C (P1-4): 收集总览 — 左上角"返回角色管理(Esc)"按钮 (与 collection 屏同步: 16, 16, 180, 32)
       if (state.ui.collectOpen) {
-        if (inRect(mx, my, w / 2 - 90, h - 84, 180, 40)) { state.ui.collectOpen = false; return true; }
+        if (inRect(mx, my, 16, 16, 180, 32)) { state.ui.collectOpen = false; return true; }
         return true;
       }
       if (inRect(mx, my, w - 150, 20, 130, 30)) { state.ui.collectOpen = !state.ui.collectOpen; return true; }
@@ -304,19 +290,6 @@ export function handleUiClick(ctx: UiCtx): boolean {
         if (inRect(mx, my, 20, 20, 200, 40)) { state.charConfirmDel = false; return true; }
         return true;
       }
-      // v4 最近 3 角色快捷横排
-      const recent3 = state.charList.slice(0, 3);
-      if (recent3.length > 0) {
-        const cy0 = 128;
-        for (let i = 0; i < recent3.length; i++) {
-          const c = recent3[i];
-          if (inRect(mx, my, cx - 320 + i * 240, cy0, 220, 86)) {
-            state.charSel = state.charList.findIndex(c2 => c2.id === c.id);
-            ctx.enterTargetCharacter(state, c);
-            return true;
-          }
-        }
-      }
       const rows = Math.min(state.charList.length, 8);
       const y0 = h / 2 - rows * 26;
       for (let i = 0; i < rows; i++) {
@@ -331,7 +304,8 @@ export function handleUiClick(ctx: UiCtx): boolean {
         if (state.charList.length > 0) state.charConfirmDel = true;
         return true;
       }
-      if (inRect(mx, my, 20, 20, 200, 40)) { ctx.setScreen(state, 'title'); return true; }
+      // 左上角"返回主菜单(Esc)"按钮 (与 characters 屏同步: 16, 16, 160, 32)
+      if (inRect(mx, my, 16, 16, 160, 32)) { ctx.setScreen(state, 'title'); return true; }
       return true;
     }
     case 'portal': {

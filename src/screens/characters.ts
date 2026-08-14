@@ -39,7 +39,7 @@ export interface CharactersCtx {
 /** 角色管理屏 (C-202): 列表(职业/等级/难度) + 删除(D 二次确认) + Enter 切换
  *  (MM-UG1-b: 新建入口移除, 统一走首页"新游戏"菜单) */
 export function drawCharacters(ctx: CharactersCtx): void {
-  const { state, hudCtx, hudCanvas, mouse, drawCollectionPanel, uiCursor } = ctx;
+  const { state, hudCtx, hudCanvas, mouse, drawCollectionPanel } = ctx;
   hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   hudCtx.fillStyle = '#0b0b12';
   hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
@@ -82,38 +82,18 @@ export function drawCharacters(ctx: CharactersCtx): void {
     return;
   }
 
-  // v4 最近 3 角色快捷横排 (顶部卡片, 单击进入; 命中在 handleUiClick)
-  const recent3 = state.charList.slice(0, 3);
-  if (recent3.length > 0) {
-    const cy0 = 128;
-    hudCtx.textAlign = 'left';
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText('最近角色 (单击进入)', cx - 640, cy0 - 20);
-    hudCtx.textAlign = 'center';
-    const rm = mouse.state().pos;
-    recent3.forEach((c, i) => {
-      const cx2 = cx - 320 + i * 240;
-      const def = CLASS_DEFS[c.class as ClassId] ?? CLASS_DEFS.barbarian;
-      const isCur = c.id === state.currentChar;
-      const hit = inRect(rm.x, rm.y, cx2, cy0, 220, 86);
-      hudCtx.fillStyle = hit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.92)';
-      hudCtx.fillRect(cx2, cy0, 220, 86);
-      hudCtx.strokeStyle = hit ? '#66ccff' : isCur ? '#ffd64a' : '#3a3a48';
-      hudCtx.lineWidth = hit ? 2 : 1;
-      hudCtx.strokeRect(cx2, cy0, 220, 86);
-      hudCtx.fillStyle = def.color;
-      hudCtx.font = 'bold 18px monospace';
-      hudCtx.fillText(def.name, cx2 + 110, cy0 + 26);
-      hudCtx.fillStyle = hit ? '#fff' : '#bbb';
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText(`${c.id} · Lv${c.level}`, cx2 + 110, cy0 + 50);
-      hudCtx.fillStyle = '#99a';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText(`${c.theme} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty}${isCur ? ' · 当前' : ''}`, cx2 + 110, cy0 + 68);
-    });
-    uiCursor(recent3.map((_, i) => [cx - 320 + i * 240, cy0, 220, 86] as [number, number, number, number]));
-  }
+  // 左上角"返回主菜单(Esc)"按钮 (与城镇/新局屏同款)
+  const mp = mouse.state().pos;
+  const backMenuR: [number, number, number, number] = [16, 16, 160, 32];
+  const mHit = inRect(mp.x, mp.y, ...backMenuR);
+  hudCtx.fillStyle = mHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
+  hudCtx.fillRect(...backMenuR);
+  hudCtx.strokeStyle = mHit ? '#ffd64a' : '#3a3a48';
+  hudCtx.lineWidth = mHit ? 2 : 1;
+  hudCtx.strokeRect(...backMenuR);
+  hudCtx.fillStyle = mHit ? '#fff' : '#9aa';
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.fillText('返回主菜单(Esc)', 96, 32);
 
   // 列表
   if (state.charList.length === 0) {
@@ -137,7 +117,7 @@ export function drawCharacters(ctx: CharactersCtx): void {
   }
   hudCtx.fillStyle = '#fff';
   hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText('[↑/↓] 选择 · [Enter] 进入/切换 · [D] 删除 · [Esc] 返回', cx, hudCanvas.height - 46);
+  hudCtx.fillText(' 进入 [Enter]/切换 [↑/↓] · 删除 [D] · 返回 [Esc]', cx, hudCanvas.height - 46);
   if (state.ui.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '14px monospace';

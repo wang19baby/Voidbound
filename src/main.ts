@@ -40,7 +40,7 @@ import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
 import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor, drawTitleScreen, type TitleCtx } from './screens/title';
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
-import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
+import { NG_LAYOUT, NG_ROW_CLASS, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
 import { drawExpedition as drawExpeditionScreen, type ExpeditionCtx } from './screens/expedition';
 import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPanel, type TownCtx } from './screens/town';
 import { drawCharacters, type CharactersCtx } from './screens/characters';
@@ -310,7 +310,7 @@ function drawNewgameInline(): void {
   const ngCtx: NewgameCtx = {
     state, hudCtx, hudCanvas, mouse,
     drawUiPortrait: (classId, x, y, w, h, noClear) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h, noClear); },
-    isNgNaming, getNgLaunchT, loadLastNg: () => loadLastNg(),
+    isNgNaming, getNgLaunchT,
     uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
   };
   drawNewgameScreen(ngCtx, rects);
@@ -691,8 +691,8 @@ function loop(now: number) {
       // 注: 设置面板非 modal, 面板外点击不关闭 (与 closeConfirm 不同); 只有左上角"返回主菜单"按钮/键位条目/键盘 Esc 关闭
       if (mouse.wasClicked('LMB')) {
         const mx2 = mouse.state().pos.x, my2 = mouse.state().pos.y;
-        // 左上角 "返回主菜单(Esc)" 按钮 (20, 20, 200, 40)
-        if (inRect(mx2, my2, 20, 20, 200, 40)) {
+        // 左上角 "返回主菜单(Esc)" 按钮 (16, 16, 160, 32, 与城镇/新局/角色屏同款)
+        if (inRect(mx2, my2, 16, 16, 160, 32)) {
           state.ui.settingsOpen = false;
         } else {
           handleSettingsClick(state, hudCanvas, mx2, my2);  // 键位条目点击
@@ -700,18 +700,18 @@ function loop(now: number) {
       }
       // 左上角 "返回主菜单(Esc)" 按钮 (画在设置面板之上)
       {
-        const backR: [number, number, number, number] = [20, 20, 200, 40];
+        const backR: [number, number, number, number] = [16, 16, 160, 32];
         const backHit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...backR);
-        hudCtx.fillStyle = backHit ? 'rgba(102,204,255,0.18)' : 'rgba(20,20,28,0.85)';
+        hudCtx.fillStyle = backHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
         hudCtx.fillRect(...backR);
-        hudCtx.strokeStyle = backHit ? '#66ccff' : '#3a3a48';
+        hudCtx.strokeStyle = backHit ? '#ffd64a' : '#3a3a48';
         hudCtx.lineWidth = backHit ? 2 : 1;
         hudCtx.strokeRect(...backR);
-        hudCtx.fillStyle = backHit ? '#fff' : '#9cf';
-        hudCtx.font = 'bold 14px monospace';
+        hudCtx.fillStyle = backHit ? '#fff' : '#9aa';
+        hudCtx.font = 'bold 13px monospace';
         hudCtx.textAlign = 'center';
         hudCtx.textBaseline = 'middle';
-        hudCtx.fillText('返回主菜单(Esc)', 120, 40);
+        hudCtx.fillText('返回主菜单(Esc)', 96, 32);
       }
       mouse.reset();
       requestAnimationFrame(loop);

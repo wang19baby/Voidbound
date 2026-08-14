@@ -53,6 +53,19 @@ export function drawCollectionPanel(ctx: CollectionCtx): void {
   hudCtx.font = '13px monospace';
   hudCtx.fillText(`角色 ${state.currentChar} · 账号共享 (仓库/传承/通关)`, w / 2, 92);
 
+  // 左上角"返回角色管理(Esc)"按钮
+  const mp = mouse.state().pos;
+  const backR: [number, number, number, number] = [16, 16, 180, 32];
+  const backHit = inRect(mp.x, mp.y, ...backR);
+  hudCtx.fillStyle = backHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
+  hudCtx.fillRect(...backR);
+  hudCtx.strokeStyle = backHit ? '#ffd64a' : '#3a3a48';
+  hudCtx.lineWidth = backHit ? 2 : 1;
+  hudCtx.strokeRect(...backR);
+  hudCtx.fillStyle = backHit ? '#fff' : '#9aa';
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.fillText('返回角色管理(Esc)', 106, 32);
+
   // 套装: 3 张卡 (角色背包+穿戴 + 账号仓库)
   const allEq = [...getOwned(state), ...getEquippedValues(state), ...state.warehouse];
   const setKeys = Object.keys(SET_BONUSES);
@@ -104,17 +117,6 @@ export function drawCollectionPanel(ctx: CollectionCtx): void {
     .join(' · ');
   row('最佳记录', bestText || '—');
 
-  // 关闭按钮 (UI-FIX5: 从 h-84 上移到 y=460, 减少底部空白)
-  const cr: [number, number, number, number] = [w / 2 - 90, 460, 180, 40];
-  const hit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cr);
-  hudCtx.fillStyle = hit ? 'rgba(255,255,255,0.12)' : 'rgba(30,30,42,0.9)';
-  hudCtx.fillRect(...cr);
-  hudCtx.strokeStyle = '#66ccff';
-  hudCtx.lineWidth = hit ? 2 : 1;
-  hudCtx.strokeRect(...cr);
-  hudCtx.fillStyle = '#66ccff';
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText('[Esc] 关闭', w / 2, h - 64);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
 }

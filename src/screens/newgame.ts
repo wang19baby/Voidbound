@@ -32,16 +32,14 @@ export const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '
 export const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
 
 /** 新局屏布局 (绘制与鼠标命中共用): x 相对 w/2, y 相对 cy=h/2-110
- *  MM-UG1: 主题/模式/start 相关字段移到 expedition.ts; 本屏只保留 class/diff 两列 */
+ *  MM-UG1: 主题/模式/start 相关字段移到 expedition.ts; 难度改为下半部横排 (常量在本函数内) */
 export const NG_LAYOUT = {
   cy: -110,
   classX: -600, classW: 300, classH: 54,   // 左列职业卡 (多人行副标)
-  diffX: -230, diffW: 280, diffH: 44,      // 中列难度卡 (解锁提示行)
   startX: -200, startY: -92, startW: 400, startH: 48,
 };
 
 export const NG_ROW_CLASS = 60;   // 职业行距
-export const NG_ROW_DIFF = 48;    // 难度行距
 export const NG_LAUNCH_MS = 700;  // 启动过场时长
 
 /** 主题色块 (远征屏复用) */
@@ -61,14 +59,13 @@ export interface NewgameCtx {
   drawUiPortrait: (classId: ClassId, x: number, y: number, w: number, h: number) => void;
   isNgNaming: () => boolean;
   getNgLaunchT: () => number;
-  loadLastNg: () => { classIdx: number; diffIdx: number; themeIdx: number; modeIdx: number } | null;
   uiCursor: (rects: Array<[number, number, number, number]>) => void;
 }
 
 /** 新局屏 (MM-UG1): 角色名 + 职业 + 难度; 主题/模式移到远征屏
  *  创建模式 (ngFrom='create') 显示命名框; 否则复用当前角色名 */
 export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, number, number]>): void {
-  const { state, hudCtx, hudCanvas, mouse, drawUiPortrait, isNgNaming, getNgLaunchT, loadLastNg, uiCursor } = ctx;
+  const { state, hudCtx, hudCanvas, mouse, drawUiPortrait, isNgNaming, getNgLaunchT, uiCursor } = ctx;
   const w = hudCanvas.width;
   const h = hudCanvas.height;
   const creating = state.ngFrom === 'create';
@@ -126,25 +123,6 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
     rects.push([nx, ny, nw, nh]);
   }
 
-  // 上次配置复用 (右上) — 仅显示上次职业+难度
-  const last = loadLastNg();
-  const lx = w - 460, ly = 20, lw = 220, lh = 40;
-  const lHit = hover(lx, ly, lw, lh);
-  hudCtx.fillStyle = lHit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.9)';
-  hudCtx.fillRect(lx, ly, lw, lh);
-  hudCtx.strokeStyle = lHit ? '#66ccff' : '#3a3a48';
-  hudCtx.lineWidth = lHit ? 2 : 1;
-  hudCtx.strokeRect(lx, ly, lw, lh);
-  hudCtx.fillStyle = lHit ? '#fff' : '#9aa';
-  hudCtx.font = 'bold 13px monospace';
-  if (last) {
-    const lc = CLASS_DEFS[CLASS_IDS[Math.min(Math.max(0, last.classIdx), CLASS_IDS.length - 1)]];
-    hudCtx.fillText(`上次: ${lc.name} · ${DIFFICULTY_MODS[DIFFICULTIES[Math.min(Math.max(0, last.diffIdx), DIFFICULTIES.length - 1)]].name}`, lx + lw / 2, ly + lh / 2);
-  } else {
-    hudCtx.fillText('上次配置: 暂无', lx + lw / 2, ly + lh / 2);
-  }
-  rects.push([lx, ly, lw, lh]);
-
   // 左列: 职业
   const cx = w / 2 + NG_LAYOUT.classX;
   hudCtx.font = 'bold 15px monospace';
@@ -172,37 +150,39 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
     rects.push([cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH]);
   });
 
-  // 中列: 难度 (Z/X)
-  const dx = w / 2 + NG_LAYOUT.diffX;
-  hudCtx.font = 'bold 15px monospace';
+  // 难度横排 (下半部): 与远征屏同款 120px 卡间距, 居中跨 w/2±300 (避开左列职业)
+  const diffSpacing = 120, diffCardH = 44;
+  const diffY = h / 2 + 70;
+  const diffX0 = (w - DIFFICULTIES.length * diffSpacing) / 2;
   hudCtx.fillStyle = '#ffb0a0';
-  hudCtx.fillText('难度 [Z/X]', dx + 140, cy - 40);
+  hudCtx.font = 'bold 15px monospace';
+  hudCtx.fillText('难度 [Z/X]', w / 2, diffY - 18);
   DIFFICULTIES.forEach((d, i) => {
     const sel = state.ngSel.diffIdx === i;
     const locked = !unlockedDifficulty(state.cleared, d);
     const mod = DIFFICULTY_MODS[d];
-    const ry = cy + i * NG_ROW_DIFF - NG_LAYOUT.diffH / 2;
+    const dx2 = diffX0 + i * diffSpacing;
     if (sel) {
       hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
-    } else if (hover(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH)) {
+      hudCtx.fillRect(dx2, diffY, diffSpacing, diffCardH);
+    } else if (hover(dx2, diffY, diffSpacing, diffCardH) && !locked) {
       hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
+      hudCtx.fillRect(dx2, diffY, diffSpacing, diffCardH);
     }
-    hudCtx.font = 'bold 18px monospace';
+    hudCtx.font = 'bold 16px monospace';
     hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#4a4a55' : '#99a';
-    hudCtx.fillText(`${sel ? '▶ ' : '  '}${mod.name}${sel ? ' ◀' : ''}`, dx + 140, cy + i * NG_ROW_DIFF);
-    hudCtx.font = '12px monospace';
-    if (locked) {
-      const gate = DIFFICULTY_GATES[d];
-      hudCtx.fillStyle = '#887';
-      hudCtx.fillText(gate ? `未解锁 · 通关 ${THEME_NAMES[gate] ?? gate} 后开放` : '未解锁', dx + 140, cy + i * NG_ROW_DIFF + 18);
-    } else {
-      hudCtx.fillStyle = sel ? '#caa' : '#8a8a96';
-      hudCtx.fillText(`HP×${mod.hpMult} 掉落×${mod.dropMult}${d === 'hardcore' ? ' 永久死亡' : ''}`, dx + 140, cy + i * NG_ROW_DIFF + 18);
-    }
-    rects.push([dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH]);
+    hudCtx.fillText(mod.name, dx2 + diffSpacing / 2, diffY + diffCardH / 2);
+    if (!locked) rects.push([dx2, diffY, diffSpacing, diffCardH]);
   });
+  // 当前难度详情 (行下方)
+  const curD = DIFFICULTIES[state.ngSel.diffIdx];
+  const curLocked = !unlockedDifficulty(state.cleared, curD);
+  const curMod = DIFFICULTY_MODS[curD];
+  hudCtx.fillStyle = '#889';
+  hudCtx.font = '12px monospace';
+  hudCtx.fillText(curLocked
+    ? (DIFFICULTY_GATES[curD] ? `未解锁 · 通关 ${THEME_NAMES[DIFFICULTY_GATES[curD]] ?? DIFFICULTY_GATES[curD]} 后开放` : '未解锁')
+    : `HP×${curMod.hpMult} 掉落×${curMod.dropMult}${curD === 'hardcore' ? ' 永久死亡' : ''}`, w / 2, diffY + diffCardH + 18);
 
   // 组合摘要条 (start 上方): 职业 + 难度
   const bx = w / 2 + NG_LAYOUT.startX;
@@ -239,17 +219,18 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   hudCtx.fillStyle = '#889';
   hudCtx.font = '13px monospace';
   hudCtx.fillText('[1-6] 职业 · [Z/X] 难度 · [Enter] 出发 · [Esc] 返回', w / 2, h - 36);
-  const backR: [number, number, number, number] = [w - 220, 20, 200, 40];
-  const bHit = hover(...backR);
-  hudCtx.fillStyle = bHit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.9)';
-  hudCtx.fillRect(...backR);
-  hudCtx.strokeStyle = bHit ? '#66ccff' : '#3a3a48';
-  hudCtx.lineWidth = bHit ? 2 : 1;
-  hudCtx.strokeRect(...backR);
-  hudCtx.fillStyle = bHit ? '#fff' : '#9aa';
-  hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`← 返回${creating ? '角色管理' : '标题'}`, w - 120, 40);
-  rects.push(backR);
+  // 左上角"返回主菜单(Esc)"按钮 (与城镇屏同款)
+  const backMenuR: [number, number, number, number] = [16, 16, 160, 32];
+  const mHit = hover(...backMenuR);
+  hudCtx.fillStyle = mHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
+  hudCtx.fillRect(...backMenuR);
+  hudCtx.strokeStyle = mHit ? '#ffd64a' : '#3a3a48';
+  hudCtx.lineWidth = mHit ? 2 : 1;
+  hudCtx.strokeRect(...backMenuR);
+  hudCtx.fillStyle = mHit ? '#fff' : '#9aa';
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.fillText('返回主菜单(Esc)', 96, 32);
+  rects.push(backMenuR);
 
   // 出发过场遮罩 (0.7s: 正在生成地牢…)
   if (getNgLaunchT() > 0) {
