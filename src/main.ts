@@ -41,6 +41,7 @@ import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, re
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
 import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
+import { drawExpedition as drawExpeditionScreen, type ExpeditionCtx } from './screens/expedition';
 import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPanel, type TownCtx } from './screens/town';
 import { drawCharacters, type CharactersCtx } from './screens/characters';
 import { drawCollectionPanel, type CollectionCtx } from './screens/collection';
@@ -315,6 +316,28 @@ function drawNewgameInline(): void {
   drawNewgameScreen(ngCtx, rects);
 }
 
+/** 远征屏: 委托给 screens/expedition.ts (MM-UG1) */
+function drawExpeditionInline(): void {
+  const rects: Array<[number, number, number, number]> = [];
+  const exCtx: ExpeditionCtx = {
+    state, hudCtx, hudCanvas, mouse,
+    startExpeditionRun: () => startExpeditionRun(),
+    getNgLaunchT,
+    uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
+  };
+  drawExpeditionScreen(exCtx, rects);
+}
+
+/** 远征屏出发 (MM-UG1): bindClass + 0.7s 地牢生成过场 → doLaunchRun 真正开跑 */
+function startExpeditionRun(): void {
+  const { classId } = ngResolve(state.ngSel);
+  bindClass(state, classId);
+  setNgLaunchT(NG_LAUNCH_MS);
+  playSfxClient('ui_click');
+  const { difficulty, theme, mode } = ngResolve(state.ngSel);
+  inf('ui', `远征出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
+}
+
 // 初始化跑局状态 (OPT-012): 怪物在进入地牢时由 startRun/ensureDungeonRun 生成
   inf('world', `world size ${WORLD_W}x${WORLD_H} (16x viewport), chunked procedural, theme=${state.theme}`);
 fadeBgm(`bgm_${state.theme}`, state.volume);
@@ -358,6 +381,7 @@ const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
   handleTownPanelKey: (e, k) => handleTownPanelKeyWrap(state, e, k),
   startFromNewgame: () => startFromNewgame(state, (s) => enterTownWrap(s)),
   startCreateNewgame: () => startCreateNewgame(state),
+  startExpeditionRun: () => startExpeditionRun(),
   enterTown: () => enterTownWrap(state),
   startRun: () => startRun(state, state.theme, state.difficulty, state.run.mode),
   hardcoreWipe: (s) => hardcoreWipeApp(s),
@@ -376,6 +400,7 @@ const screenKeyCtx: ScreenKeyContext = {
   startNewgameFromTitle: () => startNewgameFromTitle(state),
   startFromNewgame: () => startFromNewgame(state),
   doLaunchRun: () => doLaunchRun(state, startRun),
+  startExpeditionRun: () => startExpeditionRun(),
   enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
   persistNow: () => persistNowApp(state),
   fadeBgm,
@@ -706,14 +731,18 @@ function loop(now: number) {
       handleScreenClick();
       drawTitleScreen(titleCtx);
     } else if (state.screen === 'newgame') {
-      // 出发过场倒计时: 期间冻结选择交互, 结束后开跑
+      // MM-UG1: startFromNewgame 改为统一进城镇, 不再有地牢生成过场
+      handleScreenClick();
+      drawNewgameInline();
+    } else if (state.screen === 'expedition') {
+      // 远征屏: 出发过场倒计时, 结束后 doLaunchRun 真正开跑
       if (getNgLaunchT() > 0) {
         setNgLaunchT(getNgLaunchT() - 16.67);
         if (getNgLaunchT() <= 0) doLaunchRun(state, startRun);
       } else {
         handleScreenClick();
       }
-      drawNewgameInline();
+      drawExpeditionInline();
     } else if (state.screen === 'characters') {
       handleScreenClick();
       drawCharacters(charactersCtx);

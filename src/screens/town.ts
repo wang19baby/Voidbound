@@ -9,8 +9,8 @@
 // - canvas.style.cursor 也在 main.ts (canvas 引用), 由 ctx 注入
 // - drawTownPanel 调用 drawTownFrame 的子面板, 这里抽成参数回调 (避免自引用)
 //
-// 依赖: game/town + game/equipment + game/skill + game/passive + app/screenMachine (setNgLaunchT/setNgNaming)
-//       + game/state (setScreen) + game/equipment (clearGroundLoot/addMaterial) + util/log + ipc/sfx + render/*
+// 依赖: game/town + game/equipment + game/skill + game/passive + game/state (setScreen)
+//       + game/equipment (clearGroundLoot/addMaterial) + util/log + ipc/sfx + render/*
 //       + game/toast (pushToast)
 
 import type { GameState } from '../game/state';
@@ -32,7 +32,6 @@ import { drawIcon } from '../render/hud';
 import { pushToast } from '../game/toast';
 import { playSfxClient } from '../ipc/sfx';
 import { inf, wrn } from '../util/log';
-import { setNgLaunchT, setNgNaming } from '../app/screenMachine';
 import { SKILL_SLOTS, skillRune, slotDisplay, pickRuneOptions } from '../game/skill';
 import { RUNE_DEFS } from '../game/rune';
 import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint } from '../game/passive';
@@ -131,19 +130,17 @@ export function interactTown(ctx: TownCtx): void {
       break;
     }
     case 'exit': {
-      // 出发 = 新开一局: 打开远征选择屏 (主题/难度/地图模式), 不再续接旧局
+      // MM-UG1: 城镇传送门 → 新独立 expedition 屏 (主题+模式+难度); 角色身份复用
       state.townPanel = null;
       state.ngFrom = 'town';
-      setNgLaunchT(-1);
-      setNgNaming(false);
       state.ngSel = {
         classIdx: CLASS_IDS.indexOf(state.player.classId),
         diffIdx: DIFFICULTIES.indexOf(state.difficulty),
         themeIdx: THEMES.indexOf(state.theme),
         modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear'),
       };
-      setScreen(state, 'newgame');
-      inf('ui', '出发 → 远征选择 (新开一局)');
+      setScreen(state, 'expedition');
+      inf('ui', '出发 → 远征屏 (主题/模式/难度配置)');
       break;
     }
   }

@@ -35,11 +35,12 @@
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { chooseRune, rejectRune } from '../game/skill';
-import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficultyGated, type Difficulty } from '../game/difficulty';
+import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficultyGated, unlockedDifficulty, type Difficulty } from '../game/difficulty';
 import { setScreen, resumeScreen, type GameState, THEMES } from '../game/state';
 import { pushToast } from '../game/toast';
 import { MAP_MODES } from '../game/mapmode';
 import { CLASS_IDS } from '../game/class';
+import { themeUnlocked } from '../game/newgame';
 import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, normKey } from '../game/keybind';
 import { playSfxClient, setVolumeClient } from '../ipc/sfx';
 import { moveGridSel, flipPage, pageStart, pageOf } from '../game/uigrid';
@@ -89,6 +90,8 @@ export interface ScreenKeyContext {
   startNewgameFromTitle(): void;
   startFromNewgame(): void;
   doLaunchRun(): void;
+  // 远征屏 (MM-UG1): bindClass + setNgLaunchT(NG_LAUNCH_MS) + 过场结束 doLaunchRun
+  startExpeditionRun(): void;
   // 角色切换
   enterTargetCharacter(target: CharacterSummary): void;
   // 存档 / 音频
@@ -352,6 +355,48 @@ function handleNewgameKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
   return true;
 }
 
+/** 远征屏 (MM-UG1): 城镇传送门交互后, 主题+模式+难度 配置 + 出发进地牢 */
+function handleExpeditionKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
+  if (ngLaunchT > 0) return true;
+  const k = e.key.toLowerCase();
+  // 主题 ←/→ / A/D (跳过锁定主题)
+  if (k === 'arrowleft' || k === 'a') {
+    let idx = state.ngSel.themeIdx;
+    for (let step = 0; step < THEMES.length; step++) {
+      idx = (idx - 1 + THEMES.length) % THEMES.length;
+      if (themeUnlocked(state.cleared, THEMES[idx])) { state.ngSel.themeIdx = idx; playSfxClient('ui_click'); break; }
+    }
+    return true;
+  }
+  if (k === 'arrowright' || k === 'd') {
+    let idx = state.ngSel.themeIdx;
+    for (let step = 0; step < THEMES.length; step++) {
+      idx = (idx + 1) % THEMES.length;
+      if (themeUnlocked(state.cleared, THEMES[idx])) { state.ngSel.themeIdx = idx; playSfxClient('ui_click'); break; }
+    }
+    return true;
+  }
+  // 难度 Z/X (跳过锁定)
+  if (k === 'z' || k === 'x') {
+    const dir = k === 'z' ? -1 : 1;
+    let idx = state.ngSel.diffIdx;
+    for (let step = 0; step < DIFFICULTIES.length; step++) {
+      idx = (idx + dir + DIFFICULTIES.length) % DIFFICULTIES.length;
+      if (unlockedDifficulty(state.cleared, DIFFICULTIES[idx])) { state.ngSel.diffIdx = idx; playSfxClient('ui_click'); break; }
+    }
+    return true;
+  }
+  // 模式 M (线性循环)
+  if (k === 'm') {
+    state.ngSel.modeIdx = (state.ngSel.modeIdx + 1) % MAP_MODES.length;
+    playSfxClient('ui_click');
+    return true;
+  }
+  if (k === 'enter') { ctx.startExpeditionRun(); return true; }
+  if (k === 'escape') { setScreen(state, 'town'); state.ui.titleMsg = ''; return true; }
+  return true;
+}
+
 function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
   const k = e.key.toLowerCase();
   if (keyMatch(e, loadKeybinds().equip) || e.key === 'Escape') {
@@ -553,6 +598,7 @@ export function handleScreenKey(state: GameState, e: KeyboardEvent, ctx: ScreenK
     case 'title': return handleTitleKey(state, e, ctx);
     case 'characters': return handleCharactersKey(state, e, ctx);
     case 'newgame': return handleNewgameKey(state, e, ctx);
+    case 'expedition': return handleExpeditionKey(state, e, ctx);
     case 'equipment': return handleEquipmentKey(state, e);
     case 'death': return handleDeathKey(state, e, ctx);
     case 'victory': return handleVictoryKey(state, e, ctx);

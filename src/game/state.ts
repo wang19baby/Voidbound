@@ -83,7 +83,8 @@ export interface Fireball {
 
 /** 屏幕状态机 (OPT-010): 平铺旗标 → 单一 screen + 子状态 */
 export type Screen =
-  | 'title' | 'newgame'          // 外层
+  | 'title' | 'newgame'          // 外层: newgame = 角色名+职业+难度 (创建模式步骤 1/2 也在内)
+  | 'expedition'                 // 城镇传送门后: 主题+模式+难度 (MM-UG1 拆分自 newgame)
   | 'characters'                 // 角色管理 (C-202): 列表/新建/删除/切换
   | 'dungeon'                    // 战斗
   | 'town'                       // 城镇 (子面板: townPanel)

@@ -318,32 +318,28 @@
 - main.ts 行数历程: 4289 → 4062 → 3939 → 3579 → 3536 → 3257 (-1032 行, -24%)
 
 
-## Session: 2026-08-13 (Ralph 优化: 非战斗界面布局修复)
+## Session: 2026-08-14 (Ralph MM-UG1: 新游戏流程拆分)
 
-### 发现的 6 个 UI 布局问题
-- UI-FIX1 characters 列表行 (rows≥6) 与最近卡片重叠
-- UI-FIX2 characters 底部说明与新建/删除按钮重叠
-- UI-FIX3 town NPC 交互提示与脚底光环重叠
-- UI-FIX4 equipment 抗性行溢出右边界 120 px
-- UI-FIX5 collection 收集面板内容稀疏 (300 px 空白)
-- UI-FIX6 frame.ts pause 屏提示与按钮重叠
+### 已完成 (MM-UG1 passes: true)
+- src/game/state.ts: Screen 联合类型加 'expedition'
+- src/screens/expedition.ts 新建: 远征屏 (主题/模式/难度 三横排 + 出发按钮 + 返回城镇 + 0.7s 过场遮罩 + 角色身份只读显示)
+- src/screens/newgame.ts: 瘦身 — 删主题/模式横排 + 死代码 NG_LAYOUT 字段 (rightX/rightW/themeGap/modeGap/themeY/themeW/themeH); startFromNewgame 统一进城镇 (MM-UG1: 删 else 直接进地牢分支); 出发按钮文案 "出发(Enter)"; 底部键位提示精简
+- src/app/screenMachine.ts: 新增 handleExpeditionKey (←→/AD 切主题带锁定跳过, Z/X 切难度带锁定, M 切模式, Enter 出发, Esc 回城); ScreenKeyContext 加 startExpeditionRun 回调; handleScreenKey switch 加 'expedition' 分支
+- src/app/uiDispatch.ts: 删 newgame case 主题/模式命中块 (themeUnlocked 改只在 expedition 用); 新增 case 'expedition' (三横排点击 + 出发 + 返回); UiCtx 加 startExpeditionRun
+- src/screens/town.ts: interactTown case 'exit' 改跳 expedition 屏 + ngFrom='town'; 清掉 setNgLaunchT(-1)/setNgNaming(false) 调用 (远征屏不需要); 删未用的 setNgLaunchT/setNgNaming import
+- src/main.ts: 新增 drawExpeditionInline + startExpeditionRun 函数 (bindClass + setNgLaunchT(NG_LAUNCH_MS) + 0.7s 过场); main loop 加 'expedition' 分支; newgame 分支去掉过场倒计时 (统一进城镇不再有过场); ScreenKeyContext/UiCtx 注入 startExpeditionRun
 
-### 实施顺序
-按 P0/P1 优先级: UI-FIX1 → UI-FIX2 → UI-FIX3 → UI-FIX6 → UI-FIX4 → UI-FIX5
+### 流程变更
+- 旧: 首页新游戏 → newgame 屏 (5 维全选) → 直开地牢过场 → 地牢
+- 新: 首页新游戏 → newgame 屏 (角色名+职业+难度) → 城镇 → 传送门 → expedition 屏 (主题+模式+难度) → 地牢过场 → 地牢
+- 创建模式同样进城镇 (不再跳过)
 
-### Iteration log
+### 验证
+- npm run build 通过 (431.6kb)
+- npm test (newgame/screen/run/class) ALL PASS
+- worktree 缺 util/jslog.ts + util/diag.ts (主仓库 untracked) — 复制过来才能 build, 未提交
+- pre-existing 测试失败: equipment.test.ts/town.test.ts 引用 state.fx.owned 但测试 fixture 用 _owned — 与本次改动无关
 
-### MM-FIX 轮 (2026-08-13 Ralph): 地图/怪物架构偏差修复 6/6 ✅
-- **MM-FIX1 门机制**: run.portal 单值 → portals 数组 (挑战 5 门); killMonster 门生成条件 def.boss||bossLike; portalActive 去掉 bossKilled 门槛 (击杀≥1可撤退); leaveThroughPortal 全部门标记
-- **MM-FIX4 领主数值**: LORD_HP_MULT 5→6 (×精英基准, 实际 2.2×6=13.2× 白怪); 伤害 ×ELITE_DMG_MULT×LORD_DMG_MULT (2.25×)
-- **MM-FIX2 四角领主**: spawnCamp 新 lord 型 (1 领主+3 精英护卫); spawnRunPool gauntlet 模式分派世界四角 (PAD 600); spawnMonster forceLord + 领主 bossSkill 三选一 (summon/ring/charge 实例级挂载); 技能触发条件含 m.bossSkill
-- **MM-FIX6 死代码**: MODE_BOSS_KILLS 删除 (Boss 触发已 runPhase/alive 驱动)
-- **MM-FIX3 线性主轴**: generateChunkWalls mode 参数生效 — linear 雕刻 row5 主轴 (跨 chunk 对齐左→右) + 2-3 垂直分支通道 (喉点) + 末端 2×2 房间; gauntlet/extract 保持开放场地
-- **MM-FIX5 密度梯度**: 距出生基准 (linear 左/extract 中/gauntlet 左上) Chebyshev 距离每 chunk +15% 密度, 封顶 0.5; 4 直邻互斥 (对角允许, 上限 18 格, 梯度可表达); 近开远密验证 linear 5.3→8.3, extract 中心 7→角落 15
-- 验证: npm test 1156 断言全绿 (新增 6), build 通过
-
-### MM-FIX 轮 2 (2026-08-13 Ralph): Boss 锚定 + 分支内容 2/2 ✅
-- **MM-FIX7 Boss 按模式锚定**: main.ts non-extract Boss spawn 传 at — linear 主轴右端 (WORLD_W-320, WORLD_H/2) / gauntlet 世界中央 / extract 最终 Boss 中央竞技场 (EXTRACT_SPAWN). spawnMonster at 锚点远离玩家时合并锚点 chunk 墙进校验列表 (checkWalls) — 修 Boss 卡远处墙 (200 次 0 撞墙). frame.ts HUD: bossAlive && !bossKilled 时橙色方向指引 (>320px 显示)
-- **MM-FIX8 linear 分支内容**: world.ts 分支雕刻改独立种子 branchRand (主 rand 被墙簇循环消费不可重放) + 导出 linearBranchRooms(cx,cy) 世界坐标 (确定性, 242/242 空区). spawnRunPool linear: 出生 chunk 起 3 chunk 分支房间 → 前 2 放 camp (aura/swarm) + 1 撒宝藏 (dropLoot×3) + 补 1 玩家周围 duo camp
-- 教训: 生成器内 RNG 消费顺序耦合 = 无法独立重放子布局 → 子布局必须独立种子
-- 验证: npm test 1163 断言全绿 (新增 5), build 通过
+### 教训
+- worktree 不继承主仓库 untracked 文件, build 前需核对 util/* 等可能被 .gitignore 漏掉的依赖
+- 拆分屏前先把 NG_LAYOUT 里"留作扩展"的死代码删干净, 否则会跟着拆分带到新屏 — 这次只清理了 newgame.ts 一处, expedition.ts 复用 cy 部分 OK
