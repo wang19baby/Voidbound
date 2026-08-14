@@ -119,9 +119,9 @@ eq('MP 药水 30 金', POTION_PRICES.mp, 30);
   check('空进度商业城锁定', !unlockedTown([], 'harbor'));
   check('通关森林 → 商业城解锁', unlockedTown(['forest'], 'harbor'));
   check('仅森林圣城仍锁', !unlockedTown(['forest'], 'sanctum'));
-  check('通关沙漠+废墟 → 圣城解锁', unlockedTown(['desert', 'ruin'], 'sanctum'));
+  check('通关沙漠+废墟+冰霜 → 圣城解锁', unlockedTown(['desert', 'ruin', 'ice'], 'sanctum'));
   check('unlockedTowns 空进度仅新手镇', JSON.stringify(unlockedTowns([])) === JSON.stringify(['greenwing']));
-  check('unlockedTowns 全通 = 3 镇', unlockedTowns(['forest', 'desert', 'ruin']).length === 3);
+  check('unlockedTowns 全通 = 3 镇', unlockedTowns(['forest', 'desert', 'ruin', 'void', 'ice']).length === 3);
 }
 function TOWN_IDS_ok(): boolean {
   const ids = ['greenwing', 'harbor', 'sanctum'];

@@ -57,7 +57,7 @@ export const TOWN_DEFS: Record<TownId, TownDef> = {
     ],
   },
   sanctum: {
-    id: 'sanctum', name: '圣所·阿卡拉', requires: ['desert', 'ruin'],
+    id: 'sanctum', name: '圣所·阿卡拉', requires: ['desert', 'ruin', 'ice'],
     color: '0.16, 0.13, 0.08',
     npcs: [
       { kind: 'merchant',   name: '商人',       pos: { x: 160, y: 400 }, hint: '买装备 / 卖装备 / 药水', sprite: 'merchant_stand' },
@@ -193,7 +193,7 @@ export function buyPotion(state: PotionBuySrc, kind: 'hp' | 'mp'): boolean {
 }
 
 /** 城镇面板状态 (存 GameState 内部) */
-export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | 'forge' | 'trainer' | null;
+export type TownPanel = 'merchant' | 'smith' | 'warehouse' | 'warehouseTake' | 'mystery' | 'teleport' | 'forge' | 'trainer' | 'altar' | null;
 
 /** 仓库容量 (C-503, 拍板 J5=b): 账号层共享 20 格 */
 export const WAREHOUSE_CAP = 20;

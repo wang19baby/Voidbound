@@ -60,6 +60,7 @@ export function inRect(mx: number, my: number, x: number, y: number, w: number, 
 // === 装备面板几何 (draw 与 hit-test 共用) ===
 export const EQ_LAYOUT = {
   titleY: 40,
+  titleX: 130, // 避开左上关闭按钮 (btnClose 20..116)
   // 左: 4 槽位
   slotX: 40,
   slotY: 84,
@@ -105,4 +106,51 @@ export function cellRects(): Array<{ x: number; y: number; col: number; row: num
     }
   }
   return out;
+}
+
+// === 角色信息面板几何 (C 角色屏, draw 与 hit-test 共用) ===
+// 列位与 EQ_LAYOUT 对齐: 左 40 / 中 300 / 右 vw-360
+export const CHAR_LAYOUT = {
+  titleY: 40,
+  titleX: 130, // 避开左上关闭按钮 (btnClose 20..116)
+  // 左: 基础属性 (职业/难度/等级/经验/技能点/金币/HP/MP)
+  attrX: 40,
+  attrY: 134,
+  attrRowH: 22,
+  // 中: 主动技能 6 槽 (槽名 + 等级/符文)
+  skillX: 300,
+  skillY: 134,
+  skillRowH: 40,
+  // 右: 被动技能 10 槽 (名称+Lv / 描述, 双行)
+  passiveY: 134,
+  passiveRowH: 48,
+  btnClose: { x: 20, y: 20, w: 96, h: 34 },
+};
+
+/** 右列 x (与装备面板右列 rx = vw-360 对齐) */
+export function charRightX(vw: number): number {
+  return vw - 360;
+}
+
+/** 主动技能槽命中几何: 返回 6 个 {x,y,w,h} */
+export function charSkillRects(vw: number): Array<{ x: number; y: number; w: number; h: number }> {
+  const w = Math.max(180, Math.min(300, charRightX(vw) - CHAR_LAYOUT.skillX - 20));
+  return Array.from({ length: 6 }, (_, i) => ({
+    x: CHAR_LAYOUT.skillX,
+    y: CHAR_LAYOUT.skillY + i * CHAR_LAYOUT.skillRowH,
+    w,
+    h: CHAR_LAYOUT.skillRowH - 6,
+  }));
+}
+
+/** 被动槽命中几何: 返回 10 个 {x,y,w,h} (w = 右列到画布右缘) */
+export function charPassiveRects(vw: number): Array<{ x: number; y: number; w: number; h: number }> {
+  const x = charRightX(vw);
+  const w = Math.max(200, vw - x - 24);
+  return Array.from({ length: 10 }, (_, i) => ({
+    x,
+    y: CHAR_LAYOUT.passiveY + i * CHAR_LAYOUT.passiveRowH,
+    w,
+    h: CHAR_LAYOUT.passiveRowH - 6,
+  }));
 }

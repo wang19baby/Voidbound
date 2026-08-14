@@ -151,34 +151,33 @@ export function drawExpedition(ctx: ExpeditionCtx, rects: Array<[number, number,
   hudCtx.textAlign = 'center';
   hudCtx.fillText('主题 [←/→]', w / 2, themeY - 16);
 
-  // ===== 模式横排 (cy+220) =====
+  // ===== 模式横排 (cy+220): 普通 / 高级 / 挑战 (肉鸽/生存走挑战祭坛) =====
+  const MAIN_MODES = ['linear', 'gauntlet', 'extract'] as const;
   const modeY = cy + EX_LAYOUT.modeY;
-  const modeX0 = (w - MAP_MODES.length * EX_LAYOUT.modeSpacing) / 2;
-  MAP_MODES.forEach((md, i) => {
-    const sel = state.ngSel.modeIdx === i;
-    const mx2 = modeX0 + i * EX_LAYOUT.modeSpacing;
-    if (sel) {
-      hudCtx.fillStyle = 'rgba(255,214,74,0.18)';
-      hudCtx.fillRect(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH);
-    } else if (hover(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH)) {
-      hudCtx.fillStyle = 'rgba(102,204,255,0.10)';
-      hudCtx.fillRect(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH);
-    }
-    hudCtx.fillStyle = sel ? '#ffd64a' : (hover(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH) ? '#fff' : '#9aa');
-    hudCtx.font = 'bold 16px monospace';
-    hudCtx.textAlign = 'center';
-    hudCtx.textBaseline = 'middle';
-    hudCtx.fillText(MAP_MODE_NAMES[md], mx2 + EX_LAYOUT.modeSpacing / 2, modeY + EX_LAYOUT.cardH / 2);
-    rects.push([mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH]);
-  });
+  const modeX0 = (w - MAIN_MODES.length * EX_LAYOUT.modeSpacing) / 2;
+
   hudCtx.fillStyle = '#666';
   hudCtx.font = '11px monospace';
   hudCtx.textAlign = 'center';
-  hudCtx.fillText('模式 [M]', w / 2, modeY - 16);
+  hudCtx.fillText('模式  (肉鸽/生存: 城镇挑战祭坛)', w / 2, modeY - 16);
+
+  MAIN_MODES.forEach((md, i) => {
+    const idx = MAP_MODES.indexOf(md);
+    const sel = state.ngSel.modeIdx === idx;
+    const mx2 = modeX0 + i * EX_LAYOUT.modeSpacing;
+    if (sel) { hudCtx.fillStyle = 'rgba(255,214,74,0.18)'; hudCtx.fillRect(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH); }
+    else if (hover(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH)) { hudCtx.fillStyle = 'rgba(102,204,255,0.10)'; hudCtx.fillRect(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH); }
+    hudCtx.fillStyle = sel ? '#ffd64a' : (hover(mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH) ? '#fff' : '#9aa');
+    hudCtx.font = 'bold 16px monospace';
+    hudCtx.textAlign = 'center'; hudCtx.textBaseline = 'middle';
+    hudCtx.fillText(MAP_MODE_NAMES[md], mx2 + EX_LAYOUT.modeSpacing / 2, modeY + EX_LAYOUT.cardH / 2);
+    rects.push([mx2, modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH]);
+  });
 
   // 模式描述
   hudCtx.fillStyle = '#889';
   hudCtx.font = '12px monospace';
+  hudCtx.textAlign = 'center';
   hudCtx.fillText(MAP_MODE_DESC[selMode], w / 2, modeY + 50);
 
   // ===== 出发按钮 (h-130) =====
@@ -201,7 +200,7 @@ export function drawExpedition(ctx: ExpeditionCtx, rects: Array<[number, number,
   // ===== 底部键位提示 =====
   hudCtx.fillStyle = '#889';
   hudCtx.font = '13px monospace';
-  hudCtx.fillText('[←/→] 主题 · [Z/X] 难度 · [M] 模式 · [Enter] 出发 · [Esc] 回城', w / 2, h - 36);
+  hudCtx.fillText('[←/→] 主题 · [Z/X] 难度 · [M] 模式 · [Enter] 出发 · [Esc] 回城', w / 2, h - 20);
 
   // ===== 左上角返回按钮 =====
   const backR = EX_LAYOUT.backR;

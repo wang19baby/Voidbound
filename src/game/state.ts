@@ -66,6 +66,8 @@ export interface Player {
   speedMult: number;
   /** A-W3 诅咒 (curse 机制): >0 = 减速 + 禁翻滚短窗 (翻滚/时间清除) */
   curseT: number;
+  /** 冰冻 (freeze 机制): ice_overlord freeze_ring 命中 → 减速 40% + 禁翻滚, 持续 FREEZE_DURATION */
+  freezeT: number;
   /** 累计游玩时长秒 (v12): 每帧 loopImpl 累加, 存档持久化 */
   playTime: number;
 }
@@ -91,13 +93,14 @@ export type Screen =
   | 'dungeon'                    // 战斗
   | 'town'                       // 城镇 (子面板: townPanel)
   | 'equipment'                  // Tab 装备面板 (覆盖在 dungeon 上)
+  | 'character'                  // C 角色信息面板 (属性/技能点分配, 覆盖在 dungeon/town 上)
   | 'pause'                      // Esc 菜单 (覆盖 dungeon/town 上; settingsOpen 为子状态)
   | 'portal'                     // A-W1 门结算: Boss 死亡位门前 [回城/继续] 面板
   | 'death' | 'victory';         // 结算 (OPT-011/012 接入)
 
 /** 关窗确认是否需要保存: 仅实际游戏中 (有进度) 的屏; 新游戏/首页/角色管理/远征配置等无进度不保存 */
 export function isInGameScreen(s: Screen): boolean {
-  return s === 'dungeon' || s === 'town' || s === 'equipment' || s === 'pause' || s === 'portal' || s === 'death' || s === 'victory';
+  return s === 'dungeon' || s === 'town' || s === 'equipment' || s === 'character' || s === 'pause' || s === 'portal' || s === 'death' || s === 'victory';
 }
 
 /** 状态机最小接口 (setScreen 只依赖这些字段; GameState 结构满足) */
@@ -132,12 +135,19 @@ export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
     case 'dungeon':
       if (k === 'escape') return 'pause';
       if (k === 'tab') return 'equipment';
+      if (k === 'c') return 'character';
       return null;
     case 'town':
       // Esc 现弹"返回主菜单?"确认框 (不直接切屏), 故无迁移
+      if (k === 'tab') return 'equipment';
+      if (k === 'c') return 'character';
       return null;
     case 'equipment':
       if (k === 'escape' || k === 'tab') return 'dungeon';
+      if (k === 'c') return 'character';
+      return null;
+    case 'character':
+      if (k === 'escape' || k === 'tab' || k === 'c') return 'dungeon';
       return null;
     case 'pause':
       // 3 城镇 (先弹"放弃游戏?"确认, 最终目的地 town); 4 已移除; 主菜单已从暂停菜单移除
@@ -205,6 +215,8 @@ export interface RunState {
   seed: number;
   /** A-W5 肉鸽: 局内临时练级前的持久快照 (level/exp/skillPoints/attr/技能等级); 回城还原 */
   rogueSnapshot: RogueSnapshot | null;
+  /** Survival 波次模式: 当前波次 (0 = 未开始) */
+  wave: number;
 }
 
 /** A-W5 肉鸽局内等级快照: 从持久角色拍下, 局内练级只改临时值 */
@@ -237,6 +249,7 @@ export function emptyRun(theme: Theme): RunState {
     bossStage: 0,
     seed: 0,
     rogueSnapshot: null,
+    wave: 0,
   };
 }
 
@@ -284,9 +297,11 @@ export interface GameState {
   fx: FxState;
   /** 装备/符文子对象 (PR #2 T4-d): 选中索引/分页/符文三选一/拒绝变异的槽/材料 */
   equip: EquipState;
+  /** 角色信息面板被动选中索引 (C 键) */
+  characterSel: number;
 }
 
-export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
+export const THEMES = ['forest', 'desert', 'ruin', 'void', 'ice'] as const;
 export type Theme = (typeof THEMES)[number];
 
 /** 重置 player 状态到本局模式出生点 (A-W2: 线性左 / 高级角落 / 挑战中央; A-W5 肉鸽=线性) */

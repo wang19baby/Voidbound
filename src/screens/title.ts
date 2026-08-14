@@ -234,7 +234,7 @@ export function settingsKeyRects(hudCanvas: HTMLCanvasElement): Array<{ key: str
   const kb = loadKeybinds();
   const y0 = hudCanvas.height / 2 - 130;
   const rows: Array<Array<{ key: string; label: string; value: string }>> = [
-    [{ key: 'dodge', label: '翻滚', value: keyLabel(kb.dodge) }, { key: 'interact', label: '交互', value: keyLabel(kb.interact) }, { key: 'equip', label: '装备', value: keyLabel(kb.equip) }],
+    [{ key: 'dodge', label: '翻滚', value: keyLabel(kb.dodge) }, { key: 'interact', label: '交互', value: keyLabel(kb.interact) }, { key: 'equip', label: '装备', value: keyLabel(kb.equip) }, { key: 'info', label: '角色', value: keyLabel(kb.info) }],
     [{ key: 'potionHp', label: '药水HP', value: keyLabel(kb.potionHp) }, { key: 'potionMp', label: '药水MP', value: keyLabel(kb.potionMp) }],
     [{ key: 'skills.Q', label: '技能1', value: keyLabel(kb.skills.Q) }, { key: 'skills.W', label: '技能2', value: keyLabel(kb.skills.W) }, { key: 'skills.E', label: '技能3', value: keyLabel(kb.skills.E) }, { key: 'skills.R', label: '技能4', value: keyLabel(kb.skills.R) }],
   ];
@@ -311,7 +311,7 @@ export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingConte
 
   hudCtx.fillStyle = '#999';
   hudCtx.font = '13px monospace';
-  hudCtx.fillText('高级: Ctrl+1..6 技能点 · P 存档 · O 读档 · L 日志级别', w / 2, y0 + 326);
+  hudCtx.fillText('高级: P 存档 · O 读档 · L 日志级别', w / 2, y0 + 326);
   hudCtx.fillStyle = '#b99';
   hudCtx.font = '13px monospace';
   hudCtx.fillText(`技能: ${keyHintSkills()} (键位可改)`, w / 2, y0 + 350);

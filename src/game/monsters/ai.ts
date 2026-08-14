@@ -14,7 +14,7 @@ import type { Monster, MonsterType } from './types';
 import type { AuraType } from './defs';
 import { AURA_RADIUS, MONSTER_DEFS, levelMonsterScale, rollElite, LORD_SIZE_SCALE, LORD_HP_MULT, ELITE_HP_MULT, ENHANCED_HP_MULT, LORD_DMG_MULT, ELITE_DMG_MULT, ENHANCED_DMG_MULT, LORD_CHANCE, ENHANCED_CHANCE } from './defs';
 import { ELEMENT_DEFS, randomElement, type ElementId } from '../element';
-import { rollMech, SHIELD_UP_T, SHIELD_DOWN_T, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, CURSE_DURATION, SPIRAL_BULLETS, SPIRAL_TURNS, SPIRAL_CD, LASER_WINDUP, LASER_CD, LASER_DMG_MULT, LASER_WIDTH, NOVA_BULLETS, NOVA_CD, SUMMON_ELITES_CD, SUMMON_ELITES_COUNT, ENRAGE_SPEED_MULT, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_RADIUS, DEATH_POOL_DPS, DEATH_POOL_T, rollBossSkill3 } from '../mech';
+import { rollMech, SHIELD_UP_T, SHIELD_DOWN_T, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, CURSE_DURATION, FREEZE_DURATION, SPIRAL_BULLETS, SPIRAL_TURNS, SPIRAL_CD, LASER_WINDUP, LASER_CD, LASER_DMG_MULT, LASER_WIDTH, NOVA_BULLETS, NOVA_CD, SUMMON_ELITES_CD, SUMMON_ELITES_COUNT, ENRAGE_SPEED_MULT, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_RADIUS, DEATH_POOL_DPS, DEATH_POOL_T, rollBossSkill3 } from '../mech';
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT } from '../moveai';
 import { DIFFICULTY_MODS } from '../difficulty';
 import { AURA_TYPES, THEME_MONSTER_POOL } from './defs';
@@ -76,12 +76,17 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   );
   const center = at ?? { x: state.player.pos.x, y: state.player.pos.y };
   const ringR = at ? 80 : 600;
-  // 校验墙列表: 玩家附近墙 + at 锚点所在 chunk 墙 (锚点可能远离玩家, 否则远处落点无法验墙)
+  // 校验墙列表: 玩家附近墙 + at 锚点周围 3×3 chunk 墙 (锚点可能远离玩家, 远处落点须验周围墙)
   const checkWalls = [...state.world.walls];
   if (at) {
     const cc = worldToChunk(center.x, center.y);
     const d = densityForMode(state.run.mode ?? 'linear');
-    checkWalls.push(...getChunkWalls(cc.cx, cc.cy, d, state.run.mode ?? 'linear'));
+    const mode = state.run.mode ?? 'linear';
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        checkWalls.push(...getChunkWalls(cc.cx + dx, cc.cy + dy, d, mode));
+      }
+    }
   }
   // 半径 600-1200 px (或营地聚簇 80px), 超出 aggroRange, 不立刻追杀
   for (let i = 0; i < 30; i++) {
@@ -464,6 +469,12 @@ export function updateMonsters(state: GameState, dt: number): void {
             for (let k = 0; k < 10; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 10);
             spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 80, 0.5, 'circle_02', [1, 0.55, 0.3]);
             m.aiCd = 6.0;
+            return true;
+          } else if (activeSkill === 'freeze_ring') {
+            for (let k = 0; k < 8; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 8, 'ice');
+            spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 100, 0.5, 'circle_02', [0.45, 0.85, 1]);
+            state.player.freezeT = Math.max(state.player.freezeT ?? 0, FREEZE_DURATION);
+            m.aiCd = 7.0;
             return true;
           }
           return false;

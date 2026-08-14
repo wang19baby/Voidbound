@@ -9,7 +9,7 @@ import { isHardcore } from '../difficulty';
 import { pushToast } from '../toast';
 import { playSfxClient } from '../../ipc/sfx';
 import { classAttrWeight } from '../class';
-import { CURSE_SLOW_MULT } from '../mech';
+import { CURSE_SLOW_MULT, FREEZE_SLOW_MULT } from '../mech';
 import { spawnGlow, spawnBurst } from '../fx/vfx';
 import { MAX_HP, MAX_MP, POTION_HP_HEAL, POTION_MP_HEAL, DODGE_DURATION, DODGE_CD, DODGE_SPEED_MULT, EXP_PER_LEVEL_ATTR } from './base';
 
@@ -76,7 +76,7 @@ export function updatePlayer(
   dt: number,
 ): void {
   const p = state.player;
-  const spd = p.speed * (p.speedMult ?? 1) * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1) * (p.curseT > 0 ? CURSE_SLOW_MULT : 1);
+  const spd = p.speed * (p.speedMult ?? 1) * (p.dodgeT > 0 ? DODGE_SPEED_MULT : 1) * (p.curseT > 0 ? CURSE_SLOW_MULT : 1) * (p.freezeT > 0 ? FREEZE_SLOW_MULT : 1);
   const nx = p.pos.x + dir.x * spd * dt;
   const ny = p.pos.y + dir.y * spd * dt;
   const maxX = Math.max(0, state.world.w - p.size.w);

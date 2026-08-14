@@ -49,6 +49,7 @@ import { getOwned, equipItem, unequipSlot, RARITY_COLORS, EQUIP_NAMES } from '..
 import { TOWN_DEFS, type TownId } from '../game/town';
 import { setLogLevel, inf, wrn } from '../util/log';
 import { usePotion, startDodge } from '../game/player';
+import { assignPassivePoint, PASSIVE_IDS, PASSIVE_DEFS } from '../game/passive';
 import { deathGoldPenalty } from '../game/deathSettle';
 import { leaveThroughPortal } from '../game/portal';
 
@@ -406,8 +407,13 @@ function handleExpeditionKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyC
 function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
   const k = e.key.toLowerCase();
   if (keyMatch(e, loadKeybinds().equip) || e.key === 'Escape') {
-    setScreen(state, 'dungeon');
+    setScreen(state, state.mode === 'town' ? 'town' : 'dungeon');
     inf('ui', 'equipment panel closed');
+    return true;
+  }
+  if (keyMatch(e, loadKeybinds().info)) {
+    setScreen(state, 'character');
+    inf('ui', 'equipment → character panel');
     return true;
   }
   const total = getOwned(state).length;
@@ -431,6 +437,41 @@ function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
   if (k === 'u') {
     const slot = selEq ? selEq.type : undefined;
     if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
+    return true;
+  }
+  return true;
+}
+
+/** 角色信息面板 (C 键): 关闭/切装备 + 被动技能加点 (1-9,0 选 / Enter 升级); 主动技能加点走鼠标点击 */
+function handleCharacterKey(state: GameState, e: KeyboardEvent): boolean {
+  const k = e.key.toLowerCase();
+  if (e.key === 'Escape' || keyMatch(e, loadKeybinds().info)) {
+    setScreen(state, state.mode === 'town' ? 'town' : 'dungeon');
+    inf('ui', 'character panel closed');
+    return true;
+  }
+  if (keyMatch(e, loadKeybinds().equip)) {
+    setScreen(state, 'equipment');
+    inf('ui', 'character → equipment panel');
+    return true;
+  }
+  // 被动: 方向键 / w·s 移动选中
+  if (k === 'arrowup' || k === 'w') { state.characterSel = Math.max(0, state.characterSel - 1); return true; }
+  if (k === 'arrowdown' || k === 's') { state.characterSel = Math.min(PASSIVE_IDS.length - 1, state.characterSel + 1); return true; }
+  // 被动: 1-9,0 直接选中
+  const n = k === '0' ? 10 : k >= '1' && k <= '9' ? Number(k) : 0;
+  if (n >= 1 && n <= 10) { state.characterSel = n - 1; return true; }
+  // 被动: Enter / 空格 升级选中
+  if (k === 'enter' || k === ' ') {
+    const id = PASSIVE_IDS[state.characterSel];
+    if (!id) return true;
+    const errMsg = assignPassivePoint(state, id);
+    if (errMsg) {
+      pushToast(state, errMsg === 'no skill points' ? '技能点不足' : errMsg, '#ff5555');
+    } else {
+      pushToast(state, `${PASSIVE_DEFS[id].name} Lv+1`, '#9cf');
+      playSfxClient('ui_click');
+    }
     return true;
   }
   return true;
@@ -591,6 +632,8 @@ function handleTownKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext
   // 修复: Esc 键 → 返回主菜单确认框 (保存后回标题; 面板打开时 Esc 由 handleTownPanelKey 关闭面板)
   if (k === 'escape') { triggerReturnConfirm(); return true; }
   if (keyMatch(e, loadKeybinds().interact)) { ctx.interactTown(state); return true; }
+  if (keyMatch(e, loadKeybinds().equip)) { setScreen(state, 'equipment'); inf('ui', 'town → equipment panel'); return true; }
+  if (keyMatch(e, loadKeybinds().info)) { setScreen(state, 'character'); inf('ui', 'town → character panel'); return true; }
   if (k === '1' || k === '2' || k === '3' || k === '4') return true;
   return true;
 }
@@ -612,6 +655,7 @@ export function handleScreenKey(state: GameState, e: KeyboardEvent, ctx: ScreenK
     case 'newgame': return handleNewgameKey(state, e, ctx);
     case 'expedition': return handleExpeditionKey(state, e, ctx);
     case 'equipment': return handleEquipmentKey(state, e);
+    case 'character': return handleCharacterKey(state, e);
     case 'death': return handleDeathKey(state, e, ctx);
     case 'victory': return handleVictoryKey(state, e, ctx);
     case 'pause': return handlePauseKey(state, e, ctx);
@@ -622,6 +666,16 @@ export function handleScreenKey(state: GameState, e: KeyboardEvent, ctx: ScreenK
         state.pauseFrom = 'dungeon';
         setScreen(state, 'pause');
         inf('gl', 'paused');
+        return true;
+      }
+      if (keyMatch(e, loadKeybinds().equip)) {
+        setScreen(state, 'equipment');
+        inf('ui', 'dungeon → equipment panel');
+        return true;
+      }
+      if (keyMatch(e, loadKeybinds().info)) {
+        setScreen(state, 'character');
+        inf('ui', 'dungeon → character panel');
         return true;
       }
       return false;

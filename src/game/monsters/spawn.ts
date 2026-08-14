@@ -8,7 +8,7 @@
 import type { GameState } from '../state';
 import type { Monster, MonsterType } from './types';
 import { THEME_MONSTER_POOL, RUN_POOL_SIZE, AURA_TYPES } from './defs';
-import { getActiveWalls, linearBranchRooms, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN } from '../world';
+import { getActiveWalls, linearBranchRooms, linearBranchRoomsAll, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN } from '../world';
 import { randomElement } from '../element';
 import { inf } from '../../util/log';
 import { spawnMonster } from '../monster';
@@ -43,21 +43,25 @@ function campAnchors(state: GameState, mode: MapMode, rand: () => number): Array
       { x: EXTRACT_SPAWN.x, y: EXTRACT_SPAWN.y - R, type: CAMP_TYPES[0] },
     ];
   }
-  // linear / rogue: 主轴分支房间全图散布 (种子打乱取 3 营地 + 2 宝藏)
-  const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
-  const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
-  const rooms: Array<{ x: number; y: number }> = [];
-  for (let cx = 0; cx <= maxCx; cx++) {
-    for (const room of linearBranchRooms(cx, refY)) rooms.push({ x: room.x, y: room.y });
+  // linear / rogue: 分区域强制锚点 (前/中/后三段，每段至少1个营地，宝藏强制放最远段)
+  const ZONE_COUNT = 3;
+  const zones: Array<Array<{ x: number; y: number }>> = Array.from({ length: ZONE_COUNT }, () => []);
+  const rooms = linearBranchRoomsAll();
+  for (const room of rooms) {
+    const zone = Math.min(ZONE_COUNT - 1, Math.floor(room.x / (WORLD_W / ZONE_COUNT)));
+    zones[zone].push(room);
   }
-  // 种子打乱 (Fisher-Yates) → 取前 5: 前 3 营地 (光环/抱团/双核 轮转) + 2 宝藏
-  for (let i = rooms.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [rooms[i], rooms[j]] = [rooms[j], rooms[i]];
-  }
+  // 每 zone 取 1 个营地锚点（轮转类型），最远 zone 取 2 个宝藏
   const anchors: Array<{ x: number; y: number; type: CampType | 'treasure' }> = [];
-  for (let i = 0; i < 5 && i < rooms.length; i++) {
-    anchors.push({ x: rooms[i].x, y: rooms[i].y, type: i < 3 ? CAMP_TYPES[i % CAMP_TYPES.length] : 'treasure' });
+  for (let z = 0; z < ZONE_COUNT; z++) {
+    if (zones[z].length === 0) continue;
+    const pick = zones[z][Math.floor(rand() * zones[z].length)];
+    anchors.push({ x: pick.x, y: pick.y, type: z === ZONE_COUNT - 1 ? 'treasure' : CAMP_TYPES[z % CAMP_TYPES.length] });
+  }
+  // 确保最远段有宝藏（若前两步未选中）
+  if (!anchors.some(a => a.type === 'treasure') && zones[ZONE_COUNT - 1].length > 0) {
+    const furthest = zones[ZONE_COUNT - 1][Math.floor(rand() * zones[ZONE_COUNT - 1].length)];
+    anchors.push({ x: furthest.x, y: furthest.y, type: 'treasure' });
   }
   return anchors;
 }
@@ -174,4 +178,65 @@ export function spawnCamp(state: GameState, center: { x: number; y: number; type
     }
   }
   return out;
+}
+
+// === Survival 波次模式 ===
+
+/** Survival 波次状态 (模块内持久, 用对象包装以便 main.ts 间接修改) */
+export const survivalState = { wave: 0, onBreak: false, breakT: 0 };
+
+/** 刷一波 Survival 怪物
+ * 每5波为 Boss 波 (Boss + 4精英护卫)，其余为普通波
+ * 怪物数量 = 8 + wave*3，HP倍率 = 1 + wave*0.08 */
+export function spawnSurvivalWave(state: GameState): void {
+  const wave = ++survivalState.wave;
+  state.run.wave = wave;
+
+  const pool = THEME_MONSTER_POOL[state.theme];
+  const pick = () => pool[Math.floor(Math.random() * pool.length)];
+  const hpMult = 1 + wave * 0.08;
+  const eliteChance = Math.min(0.40, 0.08 + wave * 0.02);
+  const lordChance = Math.min(0.15, 0.04 + wave * 0.01);
+
+  // 出生点: 中央
+  const spawn = { x: WORLD_W / 2, y: WORLD_H / 2 };
+
+  // Boss 波 (每5波)
+  if (wave % 5 === 0) {
+    state.fx.monsters.push(spawnMonster(state, pick(), spawn, { forceLord: true, hpMult }));
+    for (let i = 0; i < 4; i++) state.fx.monsters.push(spawnMonster(state, pick(), spawn, { forceElite: true, hpMult }));
+    void import('../../util/jslog').then(({ jsLog }) => jsLog(`[survival] wave=${wave} BOSS`));
+  } else {
+    const monsterCount = 8 + wave * 3;
+    for (let i = 0; i < monsterCount; i++) {
+      const angle = (i / monsterCount) * Math.PI * 2;
+      const r = 300 + Math.random() * 400;
+      const at = { x: spawn.x + Math.cos(angle) * r, y: spawn.y + Math.sin(angle) * r };
+      const opt: Parameters<typeof spawnMonster>[3] = { hpMult };
+      if (Math.random() < eliteChance) opt.forceElite = true;
+      if (Math.random() < lordChance) opt.forceLord = true;
+      state.fx.monsters.push(spawnMonster(state, pick(), at, opt));
+    }
+    void import('../../util/jslog').then(({ jsLog }) => jsLog(`[survival] wave=${wave} n=${state.fx.monsters.length}`));
+  }
+
+  state.run.alive = state.fx.monsters.length;
+  state.run.bossAlive = state.fx.monsters.some(m => m.lord);
+  survivalState.onBreak = false;
+  survivalState.breakT = 0;
+}
+
+/** 检测 Survival 波次是否完成 → 触发休息 + 下一波 */
+export function checkSurvivalWaveComplete(state: GameState): void {
+  if (survivalState.onBreak) return;
+  if (state.fx.monsters.length > 0) return;
+  survivalState.onBreak = true;
+  survivalState.breakT = 1.5; // 1.5s 休息间隔
+}
+
+/** 重置 Survival 波次状态 (新游戏/重新开始时调用) */
+export function resetSurvivalWave(): void {
+  survivalState.wave = 0;
+  survivalState.onBreak = false;
+  survivalState.breakT = 0;
 }

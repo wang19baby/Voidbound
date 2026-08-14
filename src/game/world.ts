@@ -56,20 +56,21 @@ export function spawnPointForMode(mode: MapMode): { x: number; y: number } {
     ][corner];
   }
   if (mode === 'extract') return EXTRACT_SPAWN;
+  if (mode === 'survival') return { x: WORLD_W / 2, y: WORLD_H / 2 };
   return LINEAR_SPAWN;
 }
 
-/** 密度随模式: 线性/肉鸽 18% / 高级 22% (承诺制压力) / 挑战 16% (空间大, 靠营地密度) */
+/** 密度随模式: 线性/肉鸽/survival 18% / 高级 22% (承诺制压力) / 挑战 16% (空间大, 靠营地密度) */
 export function densityForMode(mode: MapMode): number {
   return mode === 'gauntlet' ? 0.22 : mode === 'extract' ? 0.16 : 0.18;
 }
 
-/** chunk 距出生基准的距离 (设计 §2.4 密度梯度; A-W5: 肉鸽同线性 — 左开右密)
- *  linear/rogue: 距左端 (主轴左→右) / extract: 距中央 / gauntlet: 距最近角落 */
+/** chunk 距出生基准的距离 (设计 §2.4 密度梯度; A-W5: 肉鸽同线性 — 左开右密; survival: 距中央)
+ *  linear/rogue/survival: 距左端 (主轴左→右) / extract: 距中央 / gauntlet: 距最近角落 */
 export function chunkDist(mode: MapMode, cx: number, cy: number): number {
   const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
   const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
-  if (mode === 'linear' || mode === 'rogue') {
+  if (mode === 'linear' || mode === 'rogue' || mode === 'survival') {
     const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
     return Math.max(cx, Math.abs(cy - refY));
   }
@@ -115,21 +116,11 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
   // A-W5: 肉鸽复用线性梯度 (左开右密, 主轴走廊 + 分支房间)
   {
     const d = chunkDist(mode, cx, cy);
-    density = Math.min(0.5, density * (1 + d * 0.15)); // 每 chunk 距离 +15%, 封顶 0.5
+    density = Math.min(0.3, density * (1 + d * 0.05)); // 每 chunk 距离 +5%, 封顶 0.3
   }
 
-  // 墙簇数 = density × 格数 / 1.5 (簇含 30% 双格 → 实际墙格 ≈ density × 格数)
-  // 4 直邻互斥 (对角允许): 上限 18 格, 密度梯度 (0.18→0.5) 可表达; 无长墙/死角
-  const clusterTarget = Math.max(3, Math.round((density * G * G) / 1.5));
-  // 上下左右直邻是否已有墙 (簇间留 1 格空隙; 对角相邻不算长墙)
-  const touchingWall = (r: number, c: number): boolean => {
-    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as Array<[number, number]>) {
-      const rr = r + dr, cc = c + dc;
-      if (rr < 0 || rr >= G || cc < 0 || cc >= G) continue;
-      if (isWall[rr][cc]) return true;
-    }
-    return false;
-  };
+  // 墙格数 = density × 格数 / 5 (进一步降低墙量; 允许墙相邻形成连续墙块)
+  const clusterTarget = Math.max(1, Math.round((density * G * G) / 5));
 
   let placed = 0;
   let guard = 0;
@@ -137,15 +128,15 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
     // 内区 1..6 撒点 (外圈保持开放, chunk 间可通行)
     const r = 1 + Math.floor(rand() * (G - 2));
     const c = 1 + Math.floor(rand() * (G - 2));
-    if (isWall[r][c] || touchingWall(r, c)) continue;
+    if (isWall[r][c]) continue;
     isWall[r][c] = true;
     placed++;
-    // 30% 扩展成 2 块簇 (上下左右之一, 仍避开既有墙)
-    if (placed < clusterTarget && rand() < 0.3) {
+    // 50% 扩展成连续墙块 (上下左右随机, 形成条状墙)
+    if (placed < clusterTarget && rand() < 0.5) {
       const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
       const [dr, dc] = dirs[Math.floor(rand() * dirs.length)];
       const r2 = r + dr, c2 = c + dc;
-      if (r2 >= 1 && r2 < G - 1 && c2 >= 1 && c2 < G - 1 && !isWall[r2][c2] && !touchingWall(r2, c2)) {
+      if (r2 >= 1 && r2 < G - 1 && c2 >= 1 && c2 < G - 1 && !isWall[r2][c2]) {
         isWall[r2][c2] = true;
         placed++;
       }
@@ -186,6 +177,42 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
       isWall[rB][bc] = false;
       isWall[rA][cB] = false;
       isWall[rB][cB] = false;
+    }
+  }
+
+  // === A-W2 高级(gauntlet): 四角向中央辐射走廊 + 中央开放锚点 ===
+  // 世界 20×12 chunks: 四角 chunk = (0,0)/(19,0)/(0,11)/(19,11)
+  // 走廊从四角向中央延伸，沿途 chunk 保持通道开放
+  if (mode === 'gauntlet') {
+    const MAIN_ROW = 5;
+    const MAIN_COL = 5;
+    const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1; // 19
+    const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1; // 11
+
+    // 判断当前 chunk 是否在四条边走廊上
+    const onLeftEdge   = cx === 0;
+    const onRightEdge  = cx === maxCx;
+    const onTopEdge    = cy === 0;
+    const onBottomEdge = cy === maxCy;
+    const onCorner     = (onLeftEdge || onRightEdge) && (onTopEdge || onBottomEdge);
+    const onCenterChunk = cx === Math.floor(maxCx / 2) && cy === Math.floor(maxCy / 2);
+
+    // 四角 chunk: 开放 × 形交叉作为锚点 (主通行行+列全开)
+    if (onCorner) {
+      for (let r = 0; r < G; r++) isWall[r][MAIN_COL] = false;
+      for (let c = 0; c < G; c++) isWall[MAIN_ROW][c] = false;
+    }
+    // 沿边走廊 chunk (非四角): 开放主通行列或行
+    else if (onLeftEdge || onRightEdge) {
+      // 左侧/右侧走廊: 主通行列全开
+      for (let r = 0; r < G; r++) isWall[r][MAIN_COL] = false;
+    } else if (onTopEdge || onBottomEdge) {
+      // 上下边走廊: 主通行行全开
+      for (let c = 0; c < G; c++) isWall[MAIN_ROW][c] = false;
+    }
+    // 中央 chunk: 开放 3×3 中心区作为 Boss 场地
+    if (onCenterChunk) {
+      for (let r = 2; r <= 5; r++) for (let c = 2; c <= 5; c++) isWall[r][c] = false;
     }
   }
 
@@ -235,6 +262,22 @@ export function linearBranchRooms(cx: number, cy: number): Array<{ x: number; y:
       x: cx * CHUNK_SIZE + ((bc + cB) / 2 + 0.5) * BLOCK,
       y: cy * CHUNK_SIZE + ((rEnd + rB) / 2 + 0.5) * BLOCK,
     });
+  }
+  return out;
+}
+
+/** 遍历全图所有 chunk 的分支房间中心 (世界 px)
+ *  用于营地分区域均匀锚点: 全图房间收集后再分区分配 */
+export function linearBranchRoomsAll(): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
+  const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
+  for (let cy = 0; cy <= maxCy; cy++) {
+    for (let cx = 0; cx <= maxCx; cx++) {
+      for (const room of linearBranchRooms(cx, cy)) {
+        out.push({ x: room.x, y: room.y });
+      }
+    }
   }
   return out;
 }
@@ -320,6 +363,7 @@ export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: 
   desert: { sprite: 'decor_desert', count: 12 }, // HD 石块
   ruin:   { sprite: 'decor_ruin', count: 10 }, // HD 冰石
   void:   { sprite: 'decor_void', count: 8 }, // HD 虚空水晶
+  ice:    { sprite: 'decor_ruin', count: 10, tint: [0.65, 0.85, 1.0] }, // HD 冰霜石 (青蓝 tint)
 };
 
 const decorCache = new Map<string, Decor[]>();

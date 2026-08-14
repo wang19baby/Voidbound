@@ -33,6 +33,10 @@ export const THORNS_FLAT = 5;
 export const CURSE_SLOW_MULT = 0.6;
 export const CURSE_DURATION = 1.0;
 
+/** 冰冻 (freeze): ice_overlord freeze_ring 命中玩家 → 减速至 40% + 禁翻滚, 2.5s */
+export const FREEZE_SLOW_MULT = 0.4;
+export const FREEZE_DURATION = 2.5;
+
 /** 死亡触发: 死亡时 33%×3 炸裂 / 40%×2 分裂 / 27% 毒池 */
 export const DEATH_EXPLODE_RADIUS = 90;
 export const DEATH_EXPLODE_DMG_MULT = 2.0;

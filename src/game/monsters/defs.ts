@@ -45,6 +45,14 @@ export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
   war_pharaoh:  { type: 'war_pharaoh',  sprite: 'war_pharaoh', size: { w: 56, h: 56 }, hp: 620, speed: 30,  aggroRange: 320, attackRange: 64, contactDmg: 12, score: 170, boss: true, rangedCooldown: 2.5, res: { fire: 30, physical: 20 }, bossSkill: 'ring' }, // HD 新画
   frost_lich:   { type: 'frost_lich',   sprite: 'frost_lich', size: { w: 56, h: 56 }, hp: 700, speed: 36,  aggroRange: 340, attackRange: 56, contactDmg: 15, score: 190, boss: true, rangedCooldown: 2.0, res: { fire: 30, physical: 40, ice: 45 }, bossSkill: 'summon' }, // HD 新画
   void_overlord:{ type: 'void_overlord', sprite: 'void_overlord', size: { w: 72, h: 72 }, hp: 1300, speed: 26, aggroRange: 360, attackRange: 88, contactDmg: 20, score: 270, boss: true, rangedCooldown: 2.4, res: { fire: 50, physical: 45, shadow: 30 }, bossSkill: 'charge' }, // HD 新画
+  // === 冰霜主题 ===
+  ice_overlord:{ type: 'ice_overlord', sprite: 'ice_overlord', size: { w: 64, h: 64 }, hp: 900, speed: 28, aggroRange: 340, attackRange: 72, contactDmg: 18, score: 220, boss: true, rangedCooldown: 2.2, res: { ice: 60, physical: 30, fire: -30 }, bossSkill: 'freeze_ring' },
+  frost_shard:   { type: 'frost_shard',   sprite: 'ghost',    size: { w: 28, h: 28 }, hp: 35,  speed: 130, aggroRange: 220, attackRange: 26, contactDmg: 5,  score: 14, rangedCooldown: 1.8, res: { ice: 40, fire: -20 }, tint: [0.45, 0.85, 1], ai: 'dash' },
+  frost_wisp:    { type: 'frost_wisp',    sprite: 'ghost',    size: { w: 30, h: 30 }, hp: 45,  speed: 85,  aggroRange: 200, attackRange: 24, contactDmg: 4,  score: 16, res: { ice: 55, fire: -25 }, tint: [0.5, 0.9, 1] },
+  ice_golem:     { type: 'ice_golem',     sprite: 'slime',    size: { w: 48, h: 48 }, hp: 180, speed: 32,  aggroRange: 160, attackRange: 40, contactDmg: 14, score: 38, res: { ice: 65, physical: 20, fire: -35 } },
+  winter_wraith: { type: 'winter_wraith', sprite: 'ghost',    size: { w: 32, h: 32 }, hp: 55,  speed: 110, aggroRange: 240, attackRange: 26, contactDmg: 7,  score: 22, rangedCooldown: 2.0, res: { ice: 50, physical: 20, fire: -20 }, tint: [0.6, 0.8, 1], ai: 'dash' },
+  glacial_beetle: { type: 'glacial_beetle', sprite: 'worm',    size: { w: 38, h: 38 }, hp: 100, speed: 58,  aggroRange: 200, attackRange: 30, contactDmg: 10, score: 28, res: { ice: 45, physical: 30, fire: -30 }, tint: [0.4, 0.7, 0.95], ai: 'split' },
+  polar_bear:    { type: 'polar_bear',    sprite: 'slime',    size: { w: 52, h: 52 }, hp: 250, speed: 38,  aggroRange: 180, attackRange: 44, contactDmg: 18, score: 50, res: { ice: 55, physical: 25, fire: -30 } },
 };
 
 /** 主题 Boss (US-013): 每 10 连杀召唤 */
@@ -53,6 +61,7 @@ export const THEME_BOSS: Record<Theme, MonsterType> = {
   desert: 'war_pharaoh',
   ruin:   'frost_lich',
   void:   'void_overlord',
+  ice:    'ice_overlord',
 };
 
 /** 主题怪物池 (US-007: 4 主题不同怪, 初始 spawn 与重生共用) */
@@ -61,10 +70,11 @@ export const THEME_MONSTER_POOL: Record<Theme, MonsterType[]> = {
   desert: ['bee', 'eyeball', 'queen_bee', 'direwolf', 'giant_worm', 'scorpion'],
   ruin:   ['ghost', 'wraith', 'frost_worm', 'giant_worm', 'bloat_eye', 'ice_wisp'],
   void:   ['eyeball', 'wraith', 'bloat_eye', 'direwolf', 'queen_bee', 'void_crawler'],
+  ice:    ['frost_shard', 'frost_wisp', 'ice_golem', 'winter_wraith', 'glacial_beetle', 'polar_bear'],
 };
 
 /** 单层地牢小怪池容量 (OPT-012): 清空后召主题 Boss */
-export const RUN_POOL_SIZE = 24;
+export const RUN_POOL_SIZE = 40;
 
 /** 玩家等级缩放系数 (OPT-018): 1 + 0.05×(lv-1); Lv1=1, Lv21=2, Lv51=3.5 */
 export function levelMonsterScale(level: number): number {

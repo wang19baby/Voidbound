@@ -10,7 +10,7 @@
 import type { GameState } from '../game/state';
 import type { Screen } from '../game/state';
 import { inRect } from '../game/uigrid';
-import { slotRects, pageCount, pageOf, cellRects, cellIndex, flipPage, pageStart, EQ_LAYOUT } from '../game/uigrid';
+import { slotRects, pageCount, pageOf, cellRects, cellIndex, flipPage, pageStart, EQ_LAYOUT, CHAR_LAYOUT, charSkillRects, charPassiveRects } from '../game/uigrid';
 import { CLASS_IDS } from '../game/class';
 import { DIFFICULTIES, DIFFICULTY_MODS, unlockedDifficulty } from '../game/difficulty';
 import { MAP_MODES } from '../game/mapmode';
@@ -22,7 +22,8 @@ import { THEMES } from '../game/state';
 import { EQUIP_SLOTS, EQUIP_NAMES, RARITY_COLORS, getOwned, equipItem, unequipSlot } from '../game/equipment';
 import { townNpcs } from '../game/town';
 import type { CharacterSummary } from '../ipc/save';
-import { chooseRune } from '../game/skill';
+import { chooseRune, getSkill } from '../game/skill';
+import { assignSkillPoint, SKILL_SLOTS } from '../game/skill';
 import { pushToast } from '../game/toast';
 import { playSfxClient } from '../ipc/sfx';
 import { inf, wrn } from '../util/log';
@@ -100,6 +101,30 @@ export function handleUiClick(ctx: UiCtx): boolean {
       return true;
     }
     case 'town': {
+      // 祭坛卡片点击 (在通用面板点击之前处理)
+      if (state.townPanel === 'altar') {
+        const CARD_W = 380, CARD_H = 160, CARD_GAP = 40;
+        const totalW = CARD_W * 2 + CARD_GAP;
+        const cx = w / 2;
+        const cardX0 = cx - totalW / 2;
+        const cardY = 130;
+        for (let i = 0; i < 2; i++) {
+          const cx2 = cardX0 + i * (CARD_W + CARD_GAP);
+          if (inRect(mx, my, cx2, cardY, CARD_W, CARD_H)) {
+            const mode = i === 0 ? 'rogue' : 'survival';
+            state.ngSel = {
+              classIdx: CLASS_IDS.indexOf(state.player.classId),
+              diffIdx: DIFFICULTIES.indexOf(state.difficulty),
+              themeIdx: THEMES.indexOf(state.theme),
+              modeIdx: MAP_MODES.indexOf(mode),
+            };
+            state.ngFrom = 'town';
+            state.townPanel = null;
+            ctx.startExpeditionRun();
+            return true;
+          }
+        }
+      }
       // C-505 城镇面板行点击
       if (state.townPanel) {
         const y0 = 70 + 34;
@@ -111,9 +136,13 @@ export function handleUiClick(ctx: UiCtx): boolean {
           return true;
         }
       }
-      // 城镇左上角"返回主菜单"按钮 (与 drawTownFrame 同步: 16, 16, 160, 32) → 弹确认框保存后回标题
+      // 城镇左上角按钮: 祭坛面板 → 关闭面板; 其他状态 → 返回主菜单确认
       if (inRect(mx, my, 16, 16, 160, 32)) {
-        triggerReturnConfirm();
+        if (state.townPanel === 'altar') {
+          state.townPanel = null;
+        } else {
+          triggerReturnConfirm();
+        }
         return true;
       }
       // v3 NPC 点击
@@ -260,10 +289,12 @@ export function handleUiClick(ctx: UiCtx): boolean {
           return true;
         }
       }
-      // 模式 (cy + EX_LAYOUT.modeY, 居中 160px 间距)
-      for (let i = 0; i < MAP_MODES.length; i++) {
-        if (inRect(mx, my, (w - MAP_MODES.length * EX_LAYOUT.modeSpacing) / 2 + i * EX_LAYOUT.modeSpacing, cy + EX_LAYOUT.modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH)) {
-          state.ngSel.modeIdx = i;
+      // 模式 (cy + EX_LAYOUT.modeY, 居中 160px 间距; 只显示普通/高级/挑战3个)
+      const MAIN_MODES = ['linear', 'gauntlet', 'extract'] as const;
+      const mainModeX0 = (w - MAIN_MODES.length * EX_LAYOUT.modeSpacing) / 2;
+      for (let i = 0; i < MAIN_MODES.length; i++) {
+        if (inRect(mx, my, mainModeX0 + i * EX_LAYOUT.modeSpacing, cy + EX_LAYOUT.modeY, EX_LAYOUT.modeSpacing, EX_LAYOUT.cardH)) {
+          state.ngSel.modeIdx = MAP_MODES.indexOf(MAIN_MODES[i]);
           playSfxClient('ui_click');
           return true;
         }
@@ -361,9 +392,9 @@ export function handleUiClick(ctx: UiCtx): boolean {
         if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
         return true;
       }
-      // 关闭
+      // 关闭 (回来源: 从城镇打开则回 town)
       if (inRect(mx, my, EQ_LAYOUT.btnClose.x, EQ_LAYOUT.btnClose.y, EQ_LAYOUT.btnClose.w, EQ_LAYOUT.btnClose.h)) {
-        ctx.setScreen(state, 'dungeon');
+        ctx.setScreen(state, state.mode === 'town' ? 'town' : 'dungeon');
         inf('ui', 'equipment panel closed (btn)');
         return true;
       }
@@ -375,6 +406,36 @@ export function handleUiClick(ctx: UiCtx): boolean {
       if (inRect(mx, my, EQ_LAYOUT.btnNext.x, EQ_LAYOUT.btnNext.y, EQ_LAYOUT.btnNext.w, EQ_LAYOUT.btnNext.h)) {
         state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), 1, eTotal), eTotal);
         return true;
+      }
+      return true;
+    }
+    case 'character': {
+      // 关闭 (回来源: 从城镇打开则回 town)
+      if (inRect(mx, my, CHAR_LAYOUT.btnClose.x, CHAR_LAYOUT.btnClose.y, CHAR_LAYOUT.btnClose.w, CHAR_LAYOUT.btnClose.h)) {
+        ctx.setScreen(state, state.mode === 'town' ? 'town' : 'dungeon');
+        inf('ui', 'character panel closed (btn)');
+        return true;
+      }
+      // 主动技能槽: 点击加点 (同 Ctrl+1..6)
+      const sRects = charSkillRects(ctx.w);
+      for (let i = 0; i < sRects.length; i++) {
+        const s = sRects[i];
+        if (inRect(mx, my, s.x, s.y, s.w, s.h)) {
+          const errMsg = assignSkillPoint(state, SKILL_SLOTS[i]);
+          if (errMsg) pushToast(state, errMsg === 'no skill points' ? '技能点不足' : errMsg, '#ff5555');
+          else { pushToast(state, `${getSkill(SKILL_SLOTS[i]).name} 升级`, '#9cf'); playSfxClient('ui_click'); }
+          return true;
+        }
+      }
+      // 被动槽: 点击选中
+      const pRects = charPassiveRects(ctx.w);
+      for (let i = 0; i < pRects.length; i++) {
+        const p = pRects[i];
+        if (inRect(mx, my, p.x, p.y, p.w, p.h)) {
+          state.characterSel = i;
+          playSfxClient('ui_click');
+          return true;
+        }
       }
       return true;
     }

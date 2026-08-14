@@ -6,3 +6,4 @@ export { drawGroundLabels, drawDamageNumbers } from './world';
 export { drawLevelUpFlash } from './flash';
 export { drawPotionDodgeButtons } from './controls';
 export { drawEquipmentPanel } from './equipment';
+export { drawCharacterPanel } from './character';

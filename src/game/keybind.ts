@@ -7,7 +7,8 @@ export interface Keybinds {
   potionHp: string;
   potionMp: string;
   interact: string;     // 城镇 NPC / 地牢传送门
-  equip: string;        // 装备面板 (dungeon 内)
+  equip: string;        // 装备面板 (dungeon/town 内)
+  info: string;         // 角色信息面板 (dungeon/town 内)
   skills: Record<'Q' | 'W' | 'E' | 'R', string>;  // 内部槽 → 施放键
 }
 
@@ -17,6 +18,7 @@ export const DEFAULT_KEYBINDS: Keybinds = {
   potionMp: '2',
   interact: 'e',
   equip: 'tab',
+  info: 'c',
   skills: { Q: 'q', W: 'f', E: 'e', R: 'r' },
 };
 
@@ -47,6 +49,7 @@ export function loadKeybinds(): Keybinds {
         potionMp: typeof p.potionMp === 'string' ? p.potionMp : DEFAULT_KEYBINDS.potionMp,
         interact: typeof p.interact === 'string' ? p.interact : DEFAULT_KEYBINDS.interact,
         equip: typeof p.equip === 'string' ? p.equip : DEFAULT_KEYBINDS.equip,
+        info: typeof p.info === 'string' ? p.info : DEFAULT_KEYBINDS.info,
         skills: {
           Q: typeof p.skills?.Q === 'string' ? p.skills.Q : DEFAULT_KEYBINDS.skills.Q,
           W: typeof p.skills?.W === 'string' ? p.skills.W : DEFAULT_KEYBINDS.skills.W,
@@ -96,7 +99,7 @@ export function keyLabel(bind: string): string {
 
 /** 标题底部键位提示 (TS-010): 纯函数, 键位自定义后即时反映; main.ts keyHintMain 委托 */
 export function keyHintMainText(kb: Keybinds): string {
-  return `WASD 移动 · 左/右键 攻击 · ${keyLabel(kb.skills.Q)}/${keyLabel(kb.skills.W)}/${keyLabel(kb.skills.E)}/${keyLabel(kb.skills.R)} 技能 · ${keyLabel(kb.dodge)} 翻滚 · ${keyLabel(kb.potionHp)}/${keyLabel(kb.potionMp)} 药水 · ${keyLabel(kb.equip)} 装备 · ${keyLabel(kb.interact)} 交互 · Esc 暂停`;
+  return `WASD 移动 · 左/右键 攻击 · ${keyLabel(kb.skills.Q)}/${keyLabel(kb.skills.W)}/${keyLabel(kb.skills.E)}/${keyLabel(kb.skills.R)} 技能 · ${keyLabel(kb.dodge)} 翻滚 · ${keyLabel(kb.potionHp)}/${keyLabel(kb.potionMp)} 药水 · ${keyLabel(kb.equip)} 装备 · ${keyLabel(kb.info)} 角色 · ${keyLabel(kb.interact)} 交互 · Esc 暂停`;
 }
 
 /** 设置面板技能名行 (TS-010): 键位动态, 与 keyHintMainText 同源 */

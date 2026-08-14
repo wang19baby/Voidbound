@@ -5,20 +5,22 @@
 
 import type { Theme } from './state';
 
-export type MapMode = 'linear' | 'gauntlet' | 'extract' | 'rogue';
+export type MapMode = 'linear' | 'gauntlet' | 'extract' | 'rogue' | 'survival';
 
-export const MAP_MODES: readonly MapMode[] = ['linear', 'gauntlet', 'extract', 'rogue'];
+export const MAP_MODES: readonly MapMode[] = ['linear', 'gauntlet', 'extract', 'rogue', 'survival'];
 export const MAP_MODE_NAMES: Record<MapMode, string> = {
   linear: '普通 (线性+分支)',
   gauntlet: '高级 (承诺制)',
   extract: '挑战 (提取制)',
   rogue: '肉鸽 (局内 Lv1 起)',
+  survival: '生存 (无限波次)',
 };
 export const MAP_MODE_DESC: Record<MapMode, string> = {
   linear: '主走廊 + 分支密室, 1 门 (右端 Boss)',
   gauntlet: '外→内递进, 四角领主, 1 门 (中央 Boss)',
   extract: '中央出生向外, 4 元素 Boss, 5 门 (可随时撤退)',
   rogue: '局内从 Lv1 临时练级, 战利品带回, 1 门 (右端 Boss)',
+  survival: '无限波次, 难度递增, 每 5 波 Boss 来袭',
 };
 
 /** 存档语义 (v10 mode 字段; 迁移默认 linear) */

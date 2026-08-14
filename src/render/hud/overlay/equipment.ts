@@ -19,7 +19,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   ctx2d.font = 'bold 20px monospace';
   ctx2d.fillStyle = '#ffd';
   ctx2d.textAlign = 'left';
-  ctx2d.fillText(`装备 — 背包 ${owned.length}/${BACKPACK_CAP}  [Tab/Esc] 关闭`, 32, 40);
+  ctx2d.fillText(`装备 — 背包 ${owned.length}/${BACKPACK_CAP}  [Tab/Esc] 关闭`, EQ_LAYOUT.titleX, EQ_LAYOUT.titleY);
 
   // 左: 穿戴 4 槽
   ctx2d.font = 'bold 14px monospace';
@@ -41,11 +41,13 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.fillStyle = '#fff';
     ctx2d.font = 'bold 24px monospace';
     ctx2d.textAlign = 'center';
-    ctx2d.fillText(EQUIP_NAMES[t][0], s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize / 2 + 8);
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(EQUIP_NAMES[t][0], s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize / 2 + 1);
     ctx2d.font = '11px monospace';
     ctx2d.fillStyle = col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556';
     ctx2d.fillText(eq ? `战力+${itemPower(eq)}` : '(空)', s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize + 14);
     ctx2d.textAlign = 'left';
+    ctx2d.textBaseline = 'top';
   }
 
   // 中: 背包 4×5 网格 + 分页
@@ -91,8 +93,10 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.fillStyle = '#fff';
     ctx2d.font = 'bold 13px monospace';
     ctx2d.textAlign = 'center';
-    ctx2d.fillText(b.label, b.r.x + b.r.w / 2, b.r.y + b.r.h / 2 + 4);
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(b.label, b.r.x + b.r.w / 2, b.r.y + b.r.h / 2 + 1);
     ctx2d.textAlign = 'left';
+    ctx2d.textBaseline = 'top';
   }
   // tooltip: 选中物品详情
   const selEq = owned[state.equip.sel];
@@ -115,12 +119,12 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
       ctx2d.fillText(`战力+${itemPower(selEq)}`, EQ_LAYOUT.gridX + 300, EQ_LAYOUT.tipY + 16);
     }
   }
-  // 聚合战斗属性 (右列)
+  // 聚合战斗属性 (右列, 与左/中列标题对齐)
   const c = state.player.combat;
   const rx = vw - 360;
   ctx2d.fillStyle = '#ffd';
-  ctx2d.font = 'bold 15px monospace';
-  ctx2d.fillText('战斗属性 (D-04 聚合)', rx, 40);
+  ctx2d.font = 'bold 14px monospace';
+  ctx2d.fillText('战斗属性 (D-04 聚合)', rx, EQ_LAYOUT.gridY - 12);
   ctx2d.font = '13px monospace';
   const rows: [string, string][] = [
     ['等级', `${state.player.level}`],
@@ -133,7 +137,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ['易伤', `+${Math.round(c.vuln)}%`],
     ['抗性', DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(' ')],
   ];
-  let ry = 66;
+  let ry = EQ_LAYOUT.gridY;
   for (const [k, v] of rows) {
     ctx2d.fillStyle = '#aaa';
     ctx2d.fillText(k, rx, ry);

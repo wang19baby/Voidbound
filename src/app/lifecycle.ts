@@ -27,12 +27,13 @@ export function setLifecycleState(s: GameState): void {
   lifecycleState = s;
 }
 
-/** 失焦自动暂停 (OPT-001): 战斗/装备面板中切走 → 暂停; 城镇不暂停 (回焦点仍停留); 回焦点需手动继续
+/** 失焦自动暂停 (OPT-001): 战斗/装备/角色面板中切走 → 暂停; 城镇不暂停 (回焦点仍停留); 回焦点需手动继续
  *  注册一次性监听器; main.ts 启动时调用 (state 注入之后或之前都可 — state 未注入时调用短路) */
 export function installAutoPauseListeners(): void {
   const handler = (): void => {
     if (!lifecycleState) return;
-    if (lifecycleState.screen !== 'dungeon' && lifecycleState.screen !== 'equipment') return;
+    if (lifecycleState.mode === 'town') return; // 城镇/其子面板 (含装备/角色) 不自动暂停
+    if (lifecycleState.screen !== 'dungeon' && lifecycleState.screen !== 'equipment' && lifecycleState.screen !== 'character') return;
     lifecycleState.pauseFrom = 'dungeon';
     setScreen(lifecycleState, 'pause');
     inf('gl', 'auto-paused (blur)');

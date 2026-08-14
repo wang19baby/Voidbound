@@ -19,11 +19,17 @@ function mk(over: Partial<SM> = {}): SM {
 // === nextScreenOnKey 迁移表 ===
 eq('dungeon+Esc → pause', nextScreenOnKey('dungeon', 'Escape'), 'pause');
 eq('dungeon+Tab → equipment', nextScreenOnKey('dungeon', 'Tab'), 'equipment');
+eq('dungeon+C → character', nextScreenOnKey('dungeon', 'c'), 'character');
 eq('dungeon+W → null', nextScreenOnKey('dungeon', 'w'), null);
 eq('town+Esc → null (弹确认框, 不切屏)', nextScreenOnKey('town', 'escape'), null);
-eq('town+Tab → null', nextScreenOnKey('town', 'Tab'), null);
+eq('town+Tab → equipment', nextScreenOnKey('town', 'Tab'), 'equipment');
+eq('town+C → character', nextScreenOnKey('town', 'c'), 'character');
 eq('equipment+Esc → dungeon', nextScreenOnKey('equipment', 'Escape'), 'dungeon');
 eq('equipment+Tab → dungeon', nextScreenOnKey('equipment', 'Tab'), 'dungeon');
+eq('equipment+C → character', nextScreenOnKey('equipment', 'c'), 'character');
+eq('character+Esc → dungeon', nextScreenOnKey('character', 'Escape'), 'dungeon');
+eq('character+Tab → dungeon', nextScreenOnKey('character', 'Tab'), 'dungeon');
+eq('character+C → dungeon', nextScreenOnKey('character', 'c'), 'dungeon');
 eq('pause+3 → town (城镇, 先弹放弃确认)', nextScreenOnKey('pause', '3'), 'town');
 eq('pause+4 → null (4 已移除)', nextScreenOnKey('pause', '4'), null);
 eq('pause+Esc → dungeon(默认,handler 用 resumeScreen)', nextScreenOnKey('pause', 'Escape'), 'dungeon');

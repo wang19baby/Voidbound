@@ -73,6 +73,9 @@ __pycache__/
 # OMC 运行状态 (会话/状态文件, 不入库)
 .omc/
 
+# Rust 测试构建产物 (assets/atlas/tests/rust_parser/target 等)
+target/
+
 # 临时产物 (测试 bundle / CDP 脚本 / 启动日志)
 tmp/
 .tmp/

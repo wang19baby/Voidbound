@@ -20,6 +20,7 @@ export interface EnemyProjectile {
   vel: { x: number; y: number };
   size: { w: number; h: number };
   dmg: number;
+  dmgType: 'physical' | 'fire' | 'ice' | 'poison' | 'shadow';
   life: number;
   fromId: number; // monster id
 }
@@ -31,6 +32,7 @@ const enemyProjPool = new Pool<EnemyProjectile>({
     vel: { x: 0, y: 0 },
     size: { w: 0, h: 0 },
     dmg: 0,
+    dmgType: 'physical' as const,
     life: 0,
     fromId: 0,
   }),
@@ -39,11 +41,12 @@ const enemyProjPool = new Pool<EnemyProjectile>({
     p.vel.x = 0; p.vel.y = 0;
     p.size.w = 0; p.size.h = 0;
     p.dmg = 0; p.life = 0; p.fromId = 0;
+    p.dmgType = 'physical';
   },
   initial: 32,
 });
 
-export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle = 0): void {
+export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, angle = 0, dmgType: EnemyProjectile['dmgType'] = 'physical'): void {
   const dx = state.player.pos.x - m.pos.x;
   const dy = state.player.pos.y - m.pos.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -58,6 +61,7 @@ export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, 
   p.size.w = 12;
   p.size.h = 12;
   p.dmg = Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1));
+  p.dmgType = dmgType;
   p.life = 2.0;
   p.fromId = m.id;
   state.fx.enemyProj.push(p);

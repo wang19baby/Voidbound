@@ -26,7 +26,7 @@ import { setNgLaunchT, setNgNaming } from '../app/screenMachine';
 import { inf } from '../util/log';
 
 /** 主题中文名 (统一导出, main.ts 副本已删除) */
-export const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空' };
+export const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '沙漠', ruin: '废墟', void: '虚空', ice: '冰霜' };
 
 /** 主属性中文名 (统一导出, main.ts 副本已删除) */
 export const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };

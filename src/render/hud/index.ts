@@ -21,7 +21,7 @@ import {
 import { drawSkillBarOverlay, drawSkillCooldownOverlay } from './skills';
 import {
   drawPickupToasts, drawCombo, drawRuneChoice, drawGroundLabels,
-  drawDamageNumbers, drawLevelUpFlash, drawPotionDodgeButtons, drawEquipmentPanel,
+  drawDamageNumbers, drawLevelUpFlash, drawPotionDodgeButtons, drawEquipmentPanel, drawCharacterPanel,
 } from './overlay';
 import { drawLogPanel } from './log';
 
@@ -125,4 +125,7 @@ export function drawHudOverlay(
 
   // 装备面板 (OPT-014, A1): 左穿戴槽 + 中背包(滚动/选择/对比) + 右聚合属性
   drawEquipmentPanel(ctx2d, state, vw);
+
+  // 角色信息面板 (C 键): 左属性 + 中主动技能 + 右被动技能(加点)
+  drawCharacterPanel(ctx2d, state, vw);
 }

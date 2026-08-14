@@ -33,8 +33,8 @@ eq('x×4 → 难度 4 (clamp 5 档)', JSON.stringify(moveSelection(moveSelection
 // === 主题 ←→ / A·D ===
 eq('d → 主题1(模式不变)', JSON.stringify(moveSelection(ngDefault(), 'd')), '{"classIdx":0,"diffIdx":0,"themeIdx":1,"modeIdx":0}');
 eq('arrowright → 主题1(模式不变)', JSON.stringify(moveSelection(ngDefault(), 'ArrowRight')), '{"classIdx":0,"diffIdx":0,"themeIdx":1,"modeIdx":0}');
-eq('a → 主题末位+模式1', JSON.stringify(moveSelection(ngDefault(), 'a')), '{"classIdx":0,"diffIdx":0,"themeIdx":3,"modeIdx":1}');
-eq('arrowleft → 主题末位+模式1', JSON.stringify(moveSelection(ngDefault(), 'ArrowLeft')), '{"classIdx":0,"diffIdx":0,"themeIdx":3,"modeIdx":1}');
+eq('a → 主题末位+模式1', JSON.stringify(moveSelection(ngDefault(), 'a')), '{"classIdx":0,"diffIdx":0,"themeIdx":4,"modeIdx":1}');
+eq('arrowleft → 主题末位+模式1', JSON.stringify(moveSelection(ngDefault(), 'ArrowLeft')), '{"classIdx":0,"diffIdx":0,"themeIdx":4,"modeIdx":1}');
 eq('enter → null(状态机)', moveSelection(ngDefault(), 'Enter'), null);
 eq('组合: 3 职业 + x 难度 + d 主题', JSON.stringify(moveSelection(moveSelection(moveSelection(ngDefault(), '3')!, 'x')!, 'd')), '{"classIdx":2,"diffIdx":1,"themeIdx":1,"modeIdx":0}');
 
@@ -58,9 +58,10 @@ import { MAP_MODES, validMapMode } from '../src/game/mapmode';
 eq('m → 模式1', JSON.stringify(moveSelection(ngDefault(), 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":1}');
 eq('m×2 → 模式2', JSON.stringify(moveSelection(moveSelection(ngDefault(), 'm')!, 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":2}');
 eq('m×3 → 模式3 (肉鸽)', JSON.stringify(moveSelection(moveSelection(moveSelection(ngDefault(), 'm')!, 'm')!, 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":3}');
-eq('m×4 → 模式回绕 0', JSON.stringify(moveSelection(moveSelection(moveSelection(moveSelection(ngDefault(), 'm')!, 'm')!, 'm')!, 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":0}');
-check('四模式', MAP_MODES.length === 4);
-check('模式名齐全', ['linear', 'gauntlet', 'extract', 'rogue'].every(m => MAP_MODES.includes(m as 'linear' | 'gauntlet' | 'extract' | 'rogue')));
+eq('m×4 → 模式4 (survival)', JSON.stringify(moveSelection(moveSelection(moveSelection(moveSelection(ngDefault(), 'm')!, 'm')!, 'm')!, 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":4}');
+eq('m×5 → 模式回绕 0', JSON.stringify(moveSelection(moveSelection(moveSelection(moveSelection(moveSelection(ngDefault(), 'm')!, 'm')!, 'm')!, 'm')!, 'm')), '{"classIdx":0,"diffIdx":0,"themeIdx":0,"modeIdx":0}');
+check('五模式', MAP_MODES.length === 5);
+check('模式名齐全', ['linear', 'gauntlet', 'extract', 'rogue', 'survival'].every(m => MAP_MODES.includes(m as 'linear' | 'gauntlet' | 'extract' | 'rogue' | 'survival')));
 check('mode linear → 合法', validMapMode('linear') === 'linear');
 check('mode 非法 → linear 兜底', validMapMode('bogus') === 'linear');
 check('mode rogue → 合法', validMapMode('rogue') === 'rogue');

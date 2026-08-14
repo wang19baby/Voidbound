@@ -11,8 +11,10 @@ import type { DamageType } from '../combat';
 export type MonsterType =
   | 'bat' | 'slime' | 'worm' | 'ghost' | 'bee' | 'eyeball' | 'pumpking'
   | 'direwolf' | 'plague_slime' | 'frost_worm' | 'wraith' | 'bloat_eye' | 'queen_bee' | 'giant_worm'
-  | 'sun_pharaoh' | 'frost_lich' | 'void_overlord'
-  | 'spore' | 'scorpion' | 'ice_wisp' | 'void_crawler';
+  | 'war_pharaoh' | 'frost_lich' | 'void_overlord'
+  | 'spore' | 'scorpion' | 'ice_wisp' | 'void_crawler'
+  // 冰霜主题
+  | 'frost_shard' | 'frost_wisp' | 'ice_golem' | 'winter_wraith' | 'glacial_beetle' | 'polar_bear' | 'ice_overlord';
 
 export interface MonsterDef {
   type: MonsterType;
@@ -39,5 +41,5 @@ export interface MonsterDef {
   /** 小怪独有行为 (OPT-021): dash=冲撞 / split=死亡分裂 (每主题 ≥2 只) */
   ai?: 'dash' | 'split';
   /** Boss 独有机制 (OPT-022 + A-W3 包3): summon=召唤小怪 / ring=弹幕环 / charge=冲锋 / spiral=螺旋弹幕 / laser=激光 / nova=新星 / summon_elites=召精英 / enrage=狂暴 */
-  bossSkill?: 'summon' | 'ring' | 'charge' | 'spiral' | 'laser' | 'nova' | 'summon_elites' | 'enrage';
+  bossSkill?: 'summon' | 'ring' | 'charge' | 'spiral' | 'laser' | 'nova' | 'summon_elites' | 'enrage' | 'freeze_ring';
 }

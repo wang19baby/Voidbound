@@ -54,6 +54,7 @@ eq('默认翻滚 Space', kb.dodge, ' ');
 eq('默认药水 1/2', kb.potionHp + kb.potionMp, '12');
 eq('默认交互 e', kb.interact, 'e');
 eq('默认装备 tab', kb.equip, 'tab');
+eq('默认角色信息 c', kb.info, 'c');
 
 // === 持久化: 改键 → 保存 → 重载 ===
 {
@@ -80,6 +81,7 @@ eq('默认装备 tab', kb.equip, 'tab');
   eq('默认提示含 Q/F/E/R', hint.split('技能')[0].includes('Q/F/E/R') ? 'yes' : 'no', 'yes');
   check('默认提示含 Space 翻滚', hint.includes('Space'));
   check('默认提示含 Tab 装备', hint.includes('Tab'));
+  check('默认提示含 C 角色', hint.includes('C 角色'));
   eq('默认技能行', keyHintSkillsText(kb), 'Q 火球 · F 连发 · E 回血 · R 大招');
   // 改键后提示即时反映
   const k2: typeof kb = {

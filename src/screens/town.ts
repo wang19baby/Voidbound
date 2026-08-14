@@ -59,6 +59,8 @@ export interface TownCtx {
   requestDifficulty: (state: GameState, d: Difficulty) => void;
   /** drawTownPanel 回调 (C-403 符文锻造选完 → 触发三选一在外层) — 当前 main.ts 自身递归调用, 留接口 */
   drawTownPanel?: (ctx: TownCtx) => void;
+  /** 挑战祭坛选完直接出发 (altar 跳远征确认屏) */
+  startExpeditionRun?: () => void;
 }
 
 // ============================================================================
@@ -108,8 +110,8 @@ export function interactTown(ctx: TownCtx): void {
       inf('ui', `仓库 (${state.warehouse.length}/${WAREHOUSE_CAP}): 1-9 取回, S 存入, Esc 离开`);
       break;
     case 'difficulty':
-      ctx.requestDifficulty(state, cycleDifficultyGated(state.difficulty, state.cleared));
-      inf('ui', `难度 → ${DIFFICULTY_MODS[state.difficulty].name}`);
+      state.townPanel = 'altar';
+      inf('ui', '挑战祭坛: [1] 肉鸽  [2] 生存  [Esc] 离开');
       break;
     case 'mystery':
       state.mysteryStock = genMysteryStock();
@@ -253,6 +255,33 @@ export function handleTownPanelKey(ctx: TownCtx, e: KeyboardEvent, k: string): v
     }
     return;
   }
+  if (state.townPanel === 'altar') {
+    // 挑战祭坛: [1] 肉鸽 [2] 生存 — 直接出发跳远征过场
+    if (n === 1) {
+      state.ngSel = {
+        classIdx: CLASS_IDS.indexOf(state.player.classId),
+        diffIdx: DIFFICULTIES.indexOf(state.difficulty),
+        themeIdx: THEMES.indexOf(state.theme),
+        modeIdx: MAP_MODES.indexOf('rogue'),
+      };
+      state.ngFrom = 'town';
+      state.townPanel = null;
+      ctx.startExpeditionRun?.();
+      inf('ui', '挑战祭坛 → 肉鸽模式');
+    } else if (n === 2) {
+      state.ngSel = {
+        classIdx: CLASS_IDS.indexOf(state.player.classId),
+        diffIdx: DIFFICULTIES.indexOf(state.difficulty),
+        themeIdx: THEMES.indexOf(state.theme),
+        modeIdx: MAP_MODES.indexOf('survival'),
+      };
+      state.ngFrom = 'town';
+      state.townPanel = null;
+      ctx.startExpeditionRun?.();
+      inf('ui', '挑战祭坛 → 生存模式');
+    }
+    return;
+  }
   if (state.townPanel === 'trainer') {
     // 被动技能树: 1-9,0 选 / ↑↓ 移动 / Enter·空格 升级 (1 技能点/级)
     if (k === 'arrowup' || k === 'w') { state.trainerSel = Math.max(0, state.trainerSel - 1); return; }
@@ -364,13 +393,15 @@ export function drawTownFrame(ctx: TownCtx): void {
   if (state.townPanel) {
     const drawPanel = ctx.drawTownPanel ?? drawTownPanel;
     drawPanel(ctx);
-    // v3 鼠标化: 行 hover 高亮 (与点击命中同几何: y0=104, 行高 24)
-    const pm = mouse.state().pos;
-    if (pm.x > 40 && (pm.y - 104) >= 0) {
-      const r = Math.floor((pm.y - 104) / 24);
-      if (r < 12) {
-        hudCtx.fillStyle = 'rgba(255,255,255,0.08)';
-        hudCtx.fillRect(40, 104 + r * 24, hudCanvas.width - 80, 24);
+    // v3 鼠标化: 行 hover 高亮 — 仅适用于行式面板 (merchant/smith/warehouse/forge/trainer)，祭坛用卡片
+    if (state.townPanel !== 'altar') {
+      const pm = mouse.state().pos;
+      if (pm.x > 40 && (pm.y - 104) >= 0) {
+        const r = Math.floor((pm.y - 104) / 24);
+        if (r < 12) {
+          hudCtx.fillStyle = 'rgba(255,255,255,0.08)';
+          hudCtx.fillRect(40, 104 + r * 24, hudCanvas.width - 80, 24);
+        }
       }
     }
   }
@@ -378,9 +409,10 @@ export function drawTownFrame(ctx: TownCtx): void {
   // v3: NPC 圈 hover → pointer (走向/交互提示)
   const tmx = mouse.state().pos;
   const onNpc = npcs.some(n => inRect(tmx.x, tmx.y, n.pos.x - 30, n.pos.y - 30, 60, 60));
-  // 修复: 城镇左上角"返回主菜单"按钮 (玩家无法 Esc 跨过 town → title)
+  // 祭坛面板: 显示"返回城镇(Esc)"且可关闭面板; 其他状态: "返回主菜单(Esc)"
   const backR: [number, number, number, number] = [16, 16, 160, 32];
   const backHit = inRect(tmx.x, tmx.y, ...backR);
+  const isAltar = state.townPanel === 'altar';
   hudCtx.fillStyle = backHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
   hudCtx.fillRect(...backR);
   hudCtx.strokeStyle = backHit ? '#ffd64a' : '#3a3a48';
@@ -390,7 +422,7 @@ export function drawTownFrame(ctx: TownCtx): void {
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
   hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillText('返回主菜单(Esc)', 96, 32);
+  hudCtx.fillText(isAltar ? '返回城镇(Esc)' : '返回主菜单(Esc)', 96, 32);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
   canvas.style.cursor = (onNpc || backHit) ? 'pointer' : 'default';
@@ -399,7 +431,7 @@ export function drawTownFrame(ctx: TownCtx): void {
 
 /** 城镇面板内容 */
 export function drawTownPanel(ctx: TownCtx): void {
-  const { state, hudCtx, hudCanvas, res } = ctx;
+  const { state, hudCtx, hudCanvas, res, mouse } = ctx;
   hudCtx.fillStyle = 'rgba(6,6,12,0.92)';
   hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
   hudCtx.textAlign = 'left';
@@ -521,6 +553,72 @@ export function drawTownPanel(ctx: TownCtx): void {
         hudCtx.fillText(`   ${r ? RUNE_DEFS[r].desc : ''}`, 60, y); y += 26;
       });
     }
+  } else if (state.townPanel === 'altar') {
+    // ===== 挑战祭坛: 肉鸽 / 生存 卡片双选 =====
+    const cardY = 130; // 固定位置（y 在 altar 分支入口为 70）
+    const CARD_W = 380, CARD_H = 160, CARD_GAP = 40;
+    const totalW = CARD_W * 2 + CARD_GAP;
+    const cx = hudCanvas.width / 2;
+    const cardX0 = cx - totalW / 2;
+
+    const cards = [
+      { key: '1', title: '肉鸽模式', subtitle: 'Roguelike', desc: ['局内从 Lv1 临时练级', '战利品可带回账号'], color: '#c9aaff' },
+      { key: '2', title: '生存模式', subtitle: 'Survival',   desc: ['无限波次, 难度递增', '每 5 波 Boss 来袭'], color: '#ff6666' },
+    ];
+
+    // 标题
+    hudCtx.fillStyle = '#ff8888';
+    hudCtx.font = 'bold 20px monospace';
+    hudCtx.fillText('挑战祭坛', 40, 70);
+
+    const tmx = mouse.state().pos;
+
+    cards.forEach((card, i) => {
+      const cx2 = cardX0 + i * (CARD_W + CARD_GAP);
+      const hit = inRect(tmx.x, tmx.y, cx2, cardY, CARD_W, CARD_H);
+
+      // 背景
+      hudCtx.fillStyle = hit ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)';
+      hudCtx.fillRect(cx2, cardY, CARD_W, CARD_H);
+
+      // 边框
+      hudCtx.strokeStyle = hit ? card.color : 'rgba(255,255,255,0.15)';
+      hudCtx.lineWidth = hit ? 2.5 : 1.5;
+      hudCtx.strokeRect(cx2 + 1, cardY + 1, CARD_W - 2, CARD_H - 2);
+
+      // 顶部色条
+      hudCtx.fillStyle = card.color;
+      hudCtx.fillRect(cx2 + 1, cardY + 1, CARD_W - 2, 4);
+
+      // 键位
+      hudCtx.fillStyle = '#666';
+      hudCtx.font = 'bold 12px monospace';
+      hudCtx.textAlign = 'left';
+      hudCtx.fillText(`[${card.key}]`, cx2 + 16, cardY + 28);
+
+      // 标题
+      hudCtx.fillStyle = card.color;
+      hudCtx.font = 'bold 22px monospace';
+      hudCtx.fillText(card.title, cx2 + 16, cardY + 56);
+
+      // 副标题
+      hudCtx.fillStyle = '#889';
+      hudCtx.font = '13px monospace';
+      hudCtx.fillText(card.subtitle, cx2 + 16, cardY + 76);
+
+      // 描述
+      hudCtx.fillStyle = '#bbb';
+      hudCtx.font = '13px monospace';
+      card.desc.forEach((line, li) => {
+        hudCtx.fillText(line, cx2 + 16, cardY + 104 + li * 22);
+      });
+    });
+
+    // 底部提示
+    hudCtx.fillStyle = '#555';
+    hudCtx.font = '12px monospace';
+    hudCtx.textAlign = 'center';
+    hudCtx.fillText('[Esc] 离开', cx, cardY + CARD_H + 28);
   } else if (state.townPanel === 'trainer') {
     hudCtx.fillText(`训练师 (技能点:${state.player.skillPoints})  [1-9,0] 选 · [Enter] 升级  [Esc] 离开`, 40, y); y += 34;
     hudCtx.fillStyle = '#889';

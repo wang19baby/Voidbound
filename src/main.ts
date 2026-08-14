@@ -20,12 +20,14 @@ import { getActiveWalls, getActiveDecor, resetWorldForMode, EXTRACT_SPAWN, type 
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
 import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, drawIcon, setMouseReticle, hudDungeonHit, setHudHover } from './render/hud';
+import { drawEquipmentPanel, drawCharacterPanel } from './render/hud/overlay';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, SKILL_SPECS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
 import { ELEMENT_DEFS, EXTRACT_ELEMENT_ORDER, randomSubElement } from './game/element';
 import { rollBossSkill3 } from './game/mech';
 import { spawnMonster, spawnRunPool, resolveFireballHits, resolveMeleeHits, MONSTER_DEFS, THEME_BOSS, THEME_MONSTER_POOL, AURA_DEFS } from './game/monster';
+import { checkSurvivalWaveComplete, resetSurvivalWave, spawnSurvivalWave, survivalState } from './game/monsters/spawn';
 import { validMapMode, MAP_MODE_NAMES, MAP_MODE_DESC, MAP_MODES, type MapMode } from './game/mapmode';
 import { saveGame, loadGame, saveAccount, loadAccount, listCharacters, deleteCharacter, type CharacterSummary } from './ipc/save';
 import { pickupLoot, getLoot, getOwned, getEquippedValues, allocEquipmentId, recomputeCombat, equipItem, unequipSlot, itemPowerDelta, cullLoot, collectAllLoot, clearGroundLoot, RARITY_COLORS, describeAffix, getItemSellPrice, getItemBuyPrice, EQUIP_SLOTS, EQUIP_NAMES, emptyMaterials, addMaterial, spendMaterial, materialCount, MATERIAL_NAMES, MATERIAL_IDS, REROLL_IRON_COST, RUNE_FORGE_COST, IRON_SHARD_PRICE, rerollCostOption, SET_BONUSES, type EquipType, type Equipment, type MaterialId } from './game/equipment';
@@ -203,6 +205,7 @@ const state = {
     mpRegen: 0,
     speedMult: 1,
     curseT: 0,
+    freezeT: 0,
     playTime: 0,
   },
   viewport: { w: VW, h: VH },
@@ -216,7 +219,7 @@ const state = {
   paused: false,
   deathSummary: null as DeathSummary | null,
   reviveInvuln: 0,
-  theme: 'forest' as 'forest' | 'desert' | 'ruin' | 'void',
+  theme: 'forest' as Theme,
   mode: 'dungeon' as 'dungeon' | 'town',
   townReturn: null as { x: number; y: number } | null,
   townPanel: null as TownPanel | null,
@@ -229,6 +232,8 @@ const state = {
   teleportT: 0,
   /** 训练师被动面板选中索引 (M5 非目标收尾) */
   trainerSel: 0,
+  /** 角色信息面板被动选中索引 (C 键) */
+  characterSel: 0,
   /** 仓库操作闪光 (C-503 动画): 存取成功后 0.3s 高亮面板 */
   whFlash: 0,
   screen: 'title' as Screen,
@@ -292,6 +297,7 @@ const charactersCtx: CharactersCtx = {
 const townCtx: TownCtx = {
   state, hudCtx, hudCanvas, gl, quad, res, mouse, canvas,
   requestDifficulty: (s, d) => requestDifficultyApp(s, d),
+  startExpeditionRun: () => startExpeditionRun(),
 };
 
 // PR-008: 帧绘制 ctx — 启动时一次性装配, drawFrame 调用处复用
@@ -334,6 +340,7 @@ function drawExpeditionInline(): void {
 function startExpeditionRun(): void {
   const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
   bindClass(state, classId);
+  setScreen(state, 'expedition');
   setNgLaunchT(NG_LAUNCH_MS);
   playSfxClient('ui_click');
   inf('ui', `远征出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
@@ -835,7 +842,8 @@ function loopImpl(now: number) {
   mouse.sync();
 
   // 暂停/装备面板/结算屏: 跳过游戏逻辑, 只渲染 (遮罩/面板画在 drawFrameToScreen)
-  if (state.screen === 'pause' || state.screen === 'equipment' || state.screen === 'death' || state.screen === 'victory') {
+  if (state.screen === 'pause' || state.screen === 'death' || state.screen === 'victory'
+    || ((state.screen === 'equipment' || state.screen === 'character') && state.mode !== 'town')) {
     drawFrame(frameCtx);
     mouse.reset();
     return; // 包装器统一 rAF
@@ -846,6 +854,15 @@ function loopImpl(now: number) {
     // 修复: 城镇屏鼠标点击分发 (line 723 mouse.sync 已生效; closeConfirm 拦截统一在 main.ts loop 顶部 early return 处理)
     if (mouse.wasClicked('LMB')) {
       handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
+    }
+    // 城镇内装备/角色信息面板: 冻结移动, 绘制城镇底 + overlay 面板
+    if (state.screen === 'equipment' || state.screen === 'character') {
+      setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
+      drawTownFrame(townCtx);
+      if (state.screen === 'equipment') drawEquipmentPanel(hudCtx, state, hudCanvas.width);
+      else drawCharacterPanel(hudCtx, state, hudCanvas.width);
+      mouse.reset();
+      return;
     }
     // C-302 传送过场: 1s 倒计时 → 到达目标镇
     if (state.teleportTo) {
@@ -937,6 +954,8 @@ function loopImpl(now: number) {
   if (state.player.dodgeCd > 0) state.player.dodgeCd -= dt;
   // A-W3 诅咒系 (滚动/时间清除)
   if (state.player.curseT > 0) state.player.curseT -= dt;
+  // 冰冻 (freeze): ice_overlord freeze_ring 命中 → 持续递减
+  if (state.player.freezeT > 0) state.player.freezeT -= dt;
   // A-W3 毒池 (death_trigger): 站内每秒伤害
   const pools = state.fx.pools;
   if (pools && pools.length > 0) {
@@ -989,28 +1008,44 @@ function loopImpl(now: number) {
 
   // 跑局推进 (OPT-012): 小怪清空 → 召主题 Boss; Boss 击杀 → 通关结算
   if (state.screen === 'dungeon') {
+    // Survival 模式: 波次检测 + 休息间隔 (survivalState.breakT 递减)
+    if (state.run.mode === 'survival') {
+      if (survivalState.breakT > 0) {
+        survivalState.breakT -= dt;
+        if (survivalState.breakT > 0) {
+          // 仍在休息间隔，跳过波次触发
+        } else {
+          // 休息结束，清空休息标记，允许下一波触发
+          checkSurvivalWaveComplete(state);
+        }
+      } else {
+        checkSurvivalWaveComplete(state);
+      }
+    }
     const ph = runPhase(state.run.alive, state.run.bossAlive, state.run.bossKilled);
-    if (ph === 'boss') {
+    // Survival: 波次怪物清空 + breakT 已衰减 → 刷下一波 (不召 Boss 通关)
+    if (state.run.mode === 'survival' && ph === 'boss' && state.fx.monsters.length === 0 && survivalState.breakT <= 0) {
+      spawnSurvivalWave(state);
+    }
+    // 非 Survival 模式的 Boss 触发
+    if (!state.run.mode?.startsWith('survival') && ph === 'boss') {
       const isExtract = state.run.mode === 'extract';
       if (isExtract && state.run.bossStage === 0) {
-        // A-W4 挑战模式: 四方向区各 1 元素 Boss (未决项拍板: 火/冰/毒/影 固定方向位)
-        // 双元素增强: 每只随机副元素 ≠ 主元素 (附伤 + 可读组合)
+        // A-W4 挑战模式: 四方向区各 1 元素 Boss
         const pool = THEME_MONSTER_POOL[state.run.theme];
         for (let i = 0; i < 4; i++) {
           const t = pool[Math.floor(Math.random() * pool.length)];
-          // Review 修复: forceElite 在 spawn 时生效 (hp×2.2 + mech 挂载), 之前事后置 elite 无效
           const ob = spawnMonster(state, t, undefined, { forceElite: true });
-          const mainElem = EXTRACT_ELEMENT_ORDER[i];  // 方向位固定主元素
+          const mainElem = EXTRACT_ELEMENT_ORDER[i];
           const subElem = randomSubElement(mainElem);
           ob.elementId = mainElem;
           ob.subElement = subElem;
           ob.hue = ELEMENT_DEFS[mainElem].hue;
-          ob.bossLike = true;  // 外层 Boss: 享受二阶段狂暴 + skill3 技能池
+          ob.bossLike = true;
           ob.size = { w: ob.size.w * 1.5, h: ob.size.h * 1.5 };
           ob.hp = Math.round(ob.hp * 3);
           ob.maxHp = ob.hp;
-          ob.skill3 = rollBossSkill3();  // A-W3 技能池 (bossLike 触发)
-          // 分置四方向 (外→内, 锚地图中央出生点 EXTRACT_SPAWN, 不绕玩家)
+          ob.skill3 = rollBossSkill3();
           const a = (Math.PI / 2) * i;
           ob.pos = {
             x: EXTRACT_SPAWN.x + Math.cos(a) * 1400 + (Math.random() * 300 - 150),
@@ -1021,13 +1056,12 @@ function loopImpl(now: number) {
           pushToast(state, `${elemTag} 元素 Boss: ${t} (${i + 1}/4)`, '#ff9530');
         }
         state.run.bossStage = 1;
-        state.run.bossAlive = false;  // 4 只外层 Boss 走 alive-- (死后触发下一阶段)
-        state.run.alive = 4;          // 4 只外层 Boss 计入 alive (killMonster 递减)
+        state.run.bossAlive = false;
+        state.run.alive = 4;
         playSfxClient('boss_roar');
         triggerBossIntro(state, '元素 Boss ×4', '火/冰/毒/影 四方位迫近 — 双元素组合');
         inf('world', `extract: 4 outer boss summoned (${state.run.theme})`);
       } else if (isExtract && state.run.bossStage === 1) {
-        // 4 外层 Boss 全清 → 中央最终主题 Boss (设计 §2.3: 出生区变竞技场)
         const bossType = THEME_BOSS[state.run.theme];
         const boss = spawnMonster(state, bossType, EXTRACT_SPAWN);
         state.fx.monsters.push(boss);
@@ -1041,7 +1075,6 @@ function loopImpl(now: number) {
         inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
-        // A-W2/A-W5 设计 §2: linear/rogue 主轴右端 (终点) / gauntlet 世界中央 (Boss 区)
         const anchor = (state.run.mode === 'linear' || state.run.mode === 'rogue')
           ? { x: WORLD_W - 320, y: WORLD_H / 2 }
           : { x: WORLD_W / 2, y: WORLD_H / 2 };
@@ -1051,20 +1084,19 @@ function loopImpl(now: number) {
         const bossName = MONSTER_DEFS[bossType].type;
         const elemTag = boss.elementId ? `[${ELEMENT_DEFS[boss.elementId].name}] ` : '';
         pushToast(state, `${elemTag}BOSS 出现: ${bossName}`, '#ff9530');
-        playSfxClient('boss_roar');  // OPT-025
+        playSfxClient('boss_roar');
         triggerBossIntro(state, 'BOSS', `${bossName} 出现!`);
         inf('world', `BOSS 出现: ${bossName} (${state.run.theme})`);
       }
-    } else if (ph === 'won' && !state.run.victoryShown) {
+    }
+    // 通关结算 (非 Survival 模式)
+    if (!state.run.mode?.startsWith('survival') && ph === 'won' && !state.run.victoryShown) {
       state.run.victoryShown = true;
-      // A-W1 门结算: 不再自动进 victory 屏 — 玩家走到 Boss 死亡位传送门前按 V 交互结算
       state.run.timeSec = Math.max(0, (performance.now() - state.run.t0) / 1000);
-      // 进度解锁 (OPT-015): 首次通关记录主题 (结算时持久化)
       if (!state.cleared.includes(state.run.theme)) {
         state.cleared.push(state.run.theme);
         pushToast(state, `已解锁: ${state.run.theme}`, '#9cf');
       }
-      // 传承 (D-01 补完): 本局已绑定符文存入账号层, 新局自动绑定 (结算时持久化)
       for (const slot of SKILL_SLOTS) {
         const r = skillRune(slot);
         if (r && !state.legacy.some(l => l.slot === slot)) {

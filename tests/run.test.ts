@@ -27,7 +27,7 @@ eq('Boss 击杀(还余怪) → won(优先级最高)', runPhase(7, true, true), '
 eq('清空未召 Boss 前 killed=false → boss', runPhase(0, false, false), 'boss');
 
 // === RUN_POOL_SIZE ===
-eq('RUN_POOL_SIZE = 24', RUN_POOL_SIZE, 24);
+eq('RUN_POOL_SIZE = 40', RUN_POOL_SIZE, 40);
 
 // === emptyRun 默认值 ===
 {

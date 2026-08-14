@@ -19,7 +19,7 @@ import { bindClass } from '../game/class';
 import { bindSkill } from '../game/skill';
 import { setScreen, THEMES, resetPlayer } from '../game/state';
 import { resetWorldForMode } from '../game/world';
-import { spawnRunPool } from '../game/monsters/spawn';
+import { spawnRunPool, resetSurvivalWave, spawnSurvivalWave } from '../game/monsters/spawn';
 import { MONSTER_DEFS } from '../game/monsters/defs';
 import { bindKeybindAction } from '../game/keybind';
 import { beginRogue } from '../game/rogue';
@@ -50,8 +50,13 @@ export function startRun(state: GameState, theme: Theme, difficulty: Difficulty,
   resetPlayer(state);
   // 重置世界 (chunked 墙 + 装饰)
   resetWorldForMode(mode);
-  // 生成怪物池
-  spawnRunPool(state);
+  // 生成怪物池 / Survival 波次
+  if (mode === 'survival') {
+    resetSurvivalWave();
+    spawnSurvivalWave(state);
+  } else {
+    spawnRunPool(state);
+  }
   // 重置摄像机 + 设置屏
   state.camera.x = state.player.pos.x;
   state.camera.y = state.player.pos.y;
