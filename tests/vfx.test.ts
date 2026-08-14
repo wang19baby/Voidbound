@@ -1,7 +1,7 @@
 // VFX 系统纯函数单测 (UX_REVIEW §8.3 ①): 发射器生命周期 / SkillFx 表
 // 运行: npm test
 
-import { spawnRing, spawnBurst, spawnBolt, spawnGlow, spawnImpact, spawnPlayerHitFx, updateVfx, getVfx, aoeVisual, ELEMENT_FX, type Vfx } from '../src/game/vfx';
+import { spawnRing, spawnBurst, spawnBolt, spawnGlow, spawnImpact, spawnPlayerHitFx, updateVfx, getVfx, aoeVisual, ELEMENT_FX, type Vfx } from '../src/game/fx/vfx';
 import type { GameState } from '../src/game/state';
 
 let failures = 0;
@@ -17,7 +17,8 @@ function check(name: string, cond: boolean): void {
 }
 
 function fakeState(): GameState {
-  return { vfx: [] as Vfx[] } as unknown as GameState;
+  // PR #2: VFX 搬到 state.fx.vfx; 测试 mock 跟随新结构
+  return { fx: { vfx: [] as Vfx[] } } as unknown as GameState;
 }
 
 // === 发射器生命周期 ===
@@ -55,7 +56,7 @@ const s5 = fakeState();
 spawnImpact(s5, 10, 10, [1, 0, 0]);
 const imps = getVfx(s5);
 check('impact = 环 + 爆裂 各 1', imps.length === 2 && imps.some(v => v.kind === 'ring') && imps.some(v => v.kind === 'burst'));
-const s6 = { vfx: [] as Vfx[], player: { pos: { x: 50, y: 60 }, size: { w: 32, h: 32 } } } as unknown as GameState;
+const s6 = { fx: { vfx: [] as Vfx[] }, player: { pos: { x: 50, y: 60 }, size: { w: 32, h: 32 } } } as unknown as GameState;
 spawnPlayerHitFx(s6);
 check('受击特效 = 2 (爆+环)', getVfx(s6).length === 2);
 

@@ -56,23 +56,126 @@ check('线性密度 0.18', densityForMode('linear') === 0.18);
 check('高级密度 0.22', densityForMode('gauntlet') === 0.22);
 check('挑战密度 0.16', densityForMode('extract') === 0.16);
 
-// === A-W2 地标雕刻 pass ===
-import { generateChunkWalls, CHUNK_SIZE, CHUNK_BLOCKS, BLOCK } from '../src/game/world';
-function chunkHasWall(gridWalls: ReturnType<typeof generateChunkWalls>, br: number, bc: number, origin: { x: number; y: number }): boolean {
-  return gridWalls.some(w => Math.round((w.pos.x - origin.x) / BLOCK) === bc && Math.round((w.pos.y - origin.y) / BLOCK) === br);
+// === 开放场地+稀疏墙簇生成 (2026-08-13 v3: 密度驱动小墙簇, 外圈全开) ===
+import { generateChunkWalls, CHUNK_SIZE, BLOCK, aabbOverlap, type Wall } from '../src/game/world';
+const G = CHUNK_SIZE / BLOCK; // 8
+function wallsGrid(ws: Wall[]): boolean[][] {
+  const g: boolean[][] = [];
+  for (let r = 0; r < G; r++) g.push(new Array<boolean>(G).fill(false));
+  for (const w of ws) {
+    g[Math.floor((w.pos.y % CHUNK_SIZE) / BLOCK)][Math.floor((w.pos.x % CHUNK_SIZE) / BLOCK)] = true;
+  }
+  return g;
 }
-// 线性: 主轴带 (cy=midR) 的 row 3-4 全空 → 水平主走廊
-const midR = Math.floor((WORLD_H / CHUNK_SIZE) / 2);
-const linWalls = generateChunkWalls(5, midR, 0.18, 'linear');
-check('线性主轴 row3-4 全空', [3, 4].every(r => [0, 1, 2, 5, 6, 7].every(c => !chunkHasWall(linWalls, r, c, { x: 5 * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
-// 高级: 中央竞技场内部清空 + 环墙
-const midC = Math.floor((WORLD_W / CHUNK_SIZE) / 2);
-const gaWalls = generateChunkWalls(midC, midR, 0.22, 'gauntlet');
-check('高级中央内部清空', [2, 3, 4, 5].every(r => [2, 3, 4, 5].every(c => !chunkHasWall(gaWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
-check('高级中央环墙存在', [1, CHUNK_BLOCKS - 2].some(r => [1, CHUNK_BLOCKS - 2].some(c => chunkHasWall(gaWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
-// 挑战: 中央清空无环墙 (出生竞技场开放)
-const exWalls = generateChunkWalls(midC, midR, 0.16, 'extract');
-check('挑战中央清空', [2, 3, 4, 5].every(r => [2, 3, 4, 5].every(c => !chunkHasWall(exWalls, r, c, { x: midC * CHUNK_SIZE, y: midR * CHUNK_SIZE }))));
+interface Area { size: number; members: Set<string> }
+function areasOfGrid(g: boolean[][]): Area[] {
+  const seen = new Set<string>();
+  const areas: Area[] = [];
+  for (let r = 0; r < G; r++) {
+    for (let c = 0; c < G; c++) {
+      if (g[r][c] || seen.has(`${r},${c}`)) continue;
+      const members = new Set<string>();
+      const q: Array<[number, number]> = [[r, c]];
+      seen.add(`${r},${c}`);
+      while (q.length) {
+        const [rr, cc] = q.pop()!;
+        members.add(`${rr},${cc}`);
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as Array<[number, number]>) {
+          const nr = rr + dr, nc = cc + dc;
+          if (nr >= 0 && nr < G && nc >= 0 && nc < G && !g[nr][nc] && !seen.has(`${nr},${nc}`)) {
+            seen.add(`${nr},${nc}`);
+            q.push([nr, nc]);
+          }
+        }
+      }
+      areas.push({ size: members.size, members });
+    }
+  }
+  areas.sort((a, b) => b.size - a.size);
+  return areas;
+}
+const genWalls = generateChunkWalls(5, 7, 0.18, 'linear');
+check('墙块 128×128 (1:1 贴图)', genWalls.every(w => w.size.w === 128 && w.size.h === 128));
+check('linear 墙量稀疏 0-10 (主轴雕刻后)', genWalls.length <= 10);
+const genGrid = wallsGrid(genWalls);
+const areas = areasOfGrid(genGrid);
+check('最大连通空区 ≥ 52 格 (≥80% 战斗区)', areas[0].size >= 52);
+// 普通模式: 主轴走廊 (row 5 全开) + 分支房间 (设计 §2.1)
+check('linear 主轴 row5 全开 (跨 chunk 左→右走廊)', genGrid[5].every(v => !v));
+check('linear 分支: 非主轴行开放格 ≥ 10 (通道+房间)', (() => {
+  let open = 0;
+  for (let r = 0; r < G; r++) if (r !== 5) for (let c = 0; c < G; c++) if (!genGrid[r][c]) open++;
+  return open >= 10;
+})());
+check('外圈全开放 (chunk 间天然连通, 无孤岛)', genGrid[0].every(v => !v) && genGrid[G - 1].every(v => !v) && genGrid.every(row => !row[0] && !row[G - 1]));
+check('墙簇不相邻 (4 直邻留空, 无长墙死角)', (() => {
+  for (let r = 0; r < G; r++) {
+    for (let c = 0; c < G; c++) {
+      if (!genGrid[r][c]) continue;
+      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as Array<[number, number]>) {
+        const rr = r + dr, cc = c + dc;
+        if (rr < 0 || rr >= G || cc < 0 || cc >= G) continue;
+        if (genGrid[rr][cc]) return false;
+      }
+    }
+  }
+  return true;
+})());
+// density 梯度生效: gauntlet(0.22) > extract(0.16) 远端 > linear(0.18) 全图平均
+{
+  const sums: Record<string, number> = { gauntlet: 0, linear: 0, extract: 0 };
+  const counts: Record<string, number> = { gauntlet: 0, linear: 0, extract: 0 };
+  for (let cx = 0; cx < 10; cx++) {
+    for (let cy = 0; cy < 10; cy++) {
+      for (const [mode, d] of [['gauntlet', 0.22], ['linear', 0.18], ['extract', 0.16]] as Array<[string, number]>) {
+        sums[mode] += generateChunkWalls(cx, cy, d, mode as never).length;
+        counts[mode]++;
+      }
+    }
+  }
+  check('密度梯度: gauntlet > extract > linear (平均墙量; linear 主轴雕刻墙最少)',
+    sums.gauntlet / counts.gauntlet > sums.extract / counts.extract &&
+    sums.extract / counts.extract > sums.linear / counts.linear);
+}
+// 近开远密: linear 远端 (cx=19) 墙量 > 近端 (cx=0) 同 cy 平均
+{
+  const near = [0, 1, 2, 3].map(cy => generateChunkWalls(0, cy, 0.18, 'linear').length);
+  const far = [0, 1, 2, 3].map(cy => generateChunkWalls(19, cy, 0.18, 'linear').length);
+  check('近开远密: linear 远端墙量 > 近端',
+    far.reduce((a, b) => a + b, 0) / far.length > near.reduce((a, b) => a + b, 0) / near.length);
+}
+// 近开远密: gauntlet 角 (出生入口) 开 < 中央 (Boss 区) 密; extract 中央 (出生) 开 < 角落 密
+{
+  const gCorner = [ [0, 0], [19, 0], [0, 10], [19, 10] ].map(([cx, cy]) => generateChunkWalls(cx, cy, 0.22, 'gauntlet').length);
+  const gCenter = generateChunkWalls(10, 5, 0.22, 'gauntlet').length;
+  check('近开远密: gauntlet 四角 (入口) 墙量 < 中央 (Boss)',
+    gCorner.every(n => n < gCenter));
+  const eCenter = generateChunkWalls(10, 5, 0.16, 'extract').length;
+  const eCorner = generateChunkWalls(0, 0, 0.16, 'extract').length;
+  check('近开远密: extract 中央 (出生) 墙量 < 角落', eCorner > eCenter);
+}
+// 同 chunk 同种子 → 确定结果 (缓存/稳定性)
+check('同 chunk 生成确定', JSON.stringify(generateChunkWalls(3, 4, 0.18, 'linear')) === JSON.stringify(generateChunkWalls(3, 4, 0.18, 'linear')));
+// 多 chunk 布局各异 (随机性生效)
+check('不同 chunk 布局不同', JSON.stringify(generateChunkWalls(3, 4, 0.18, 'linear')) !== JSON.stringify(generateChunkWalls(9, 11, 0.18, 'linear')));
+// MM-FIX8: 分支房间坐标与雕刻一致 (MM-FIX8: 坐标落空区, 每 chunk 2-3 个, 确定性)
+import { linearBranchRooms } from '../src/game/world';
+{
+  let roomsTotal = 0, inWall = 0;
+  for (let cx = 0; cx < 10; cx++) {
+    for (let cy = 0; cy < 10; cy++) {
+      const rooms = linearBranchRooms(cx, cy);
+      roomsTotal += rooms.length;
+      const ws = generateChunkWalls(cx, cy, 0.18, 'linear');
+      for (const r of rooms) {
+        if (ws.some(w => aabbOverlap(r.x - 48, r.y - 48, 96, 96, w.pos.x, w.pos.y, w.size.w, w.size.h))) inWall++;
+      }
+    }
+  }
+  check('分支房间坐标全部落在空区 (MM-FIX8)', inWall === 0 && roomsTotal >= 20);
+  check('每 chunk 分支房间 2-3 个 (100 chunk 200-300)', roomsTotal >= 200 && roomsTotal <= 300);
+  check('分支房间确定 (同 chunk 同坐标)', JSON.stringify(linearBranchRooms(5, 7)) === JSON.stringify(linearBranchRooms(5, 7)));
+}
 
 // === A-W4 挑战多 Boss 阶段驱动 (alive 计数驱动阶段迁移) ===
 // 外层 Boss spawn 后 alive=4; 依次击杀 → ph='boss' 于 0; bossStage 1→2 由 main 处理

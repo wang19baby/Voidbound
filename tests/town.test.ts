@@ -29,10 +29,10 @@ function mkEq(name: string, type: EquipType = 'weapon'): Equipment {
   };
 }
 
-/** 造仓库最小状态: 背包 getOwned 需要 _owned 挂载; recomputeCombat 需 equipped/combat */
-function mkWh(backpack: Equipment[], warehouse: Equipment[]): WarehouseSrc & { _owned: Equipment[] } & import('../src/game/equipment').EquipState {
+/** 造仓库最小状态: 背包 getOwned 需要 fx.owned 挂载; recomputeCombat 需 equipped/combat */
+function mkWh(backpack: Equipment[], warehouse: Equipment[]): WarehouseSrc & { fx: { owned: Equipment[] } } & import('../src/game/equipment').EquipState {
   return {
-    _owned: backpack,
+    fx: { owned: backpack },
     warehouse,
     player: {
       gold: 0, potions: { hp: 0, mp: 0 },
@@ -77,19 +77,19 @@ eq('MP 药水 30 金', POTION_PRICES.mp, 30);
 {
   const s = mkWh([mkEq('背包剑'), mkEq('背包盾', 'armor')], []);
   check('存入 0 号成功', warehouseStore(s, 0));
-  eq('背包剩 1', s._owned.length, 1);
+  eq('背包剩 1', s.fx.owned.length, 1);
   eq('仓库 1', s.warehouse.length, 1);
   eq('仓内为背包剑', s.warehouse[0].name, '背包剑');
   check('再存 0 号 (仍有效, 背包 1 项)', warehouseStore(s, 0));
   eq('仓库 2', s.warehouse.length, 2);
-  eq('背包空', s._owned.length, 0);
+  eq('背包空', s.fx.owned.length, 0);
   check('背包空后 0 号存入失败', !warehouseStore(s, 0));
 }
 {
   const s = mkWh([], [mkEq('仓内戒', 'ring')]);
   check('取回成功', warehouseTake(s, 0));
   eq('仓库空', s.warehouse.length, 0);
-  eq('背包 1', s._owned.length, 1);
+  eq('背包 1', s.fx.owned.length, 1);
   check('空仓取回失败', !warehouseTake(s, 0));
 }
 {
@@ -97,7 +97,7 @@ eq('MP 药水 30 金', POTION_PRICES.mp, 30);
   const full = Array.from({ length: WAREHOUSE_CAP }, (_, i) => mkEq(`w${i}`));
   const s = mkWh([mkEq('多余')], full);
   check('仓库满拒存', !warehouseStore(s, 0));
-  eq('背包仍 1', s._owned.length, 1);
+  eq('背包仍 1', s.fx.owned.length, 1);
 }
 {
   // 背包满: 拒绝取回
@@ -146,11 +146,11 @@ function TOWN_IDS_ok(): boolean {
 
 // === C-402 重铸双轨 (100金 或 灵铁) ===
 function mkRerollState(gold: number, iron: number, eq: Equipment): import('../src/game/state').GameState {
-  // 测试只需 player.gold/materials/_owned; GameState 其余字段不触碰 (纯函数路径)
+  // 测试只需 player.gold/equip.materials/fx.owned; GameState 其余字段不触碰 (纯函数路径)
   const s = {
     player: { gold, potions: { hp: 0, mp: 0 }, equipped: {}, hp: 100, mp: 100, combat: { phys: 0, elem: 0, elemLv: 0, elemPct: 0, critRate: 0.05, critBonus: 1.5, dmgPct: 0, shred: 0, res: {}, lifesteal: 0 } },
-    _owned: [eq],
-    materials: emptyMaterials(),
+    fx: { owned: [eq] },
+    equip: { sel: 0, page: 0, runeChoice: null, rejectedRunes: [], materials: emptyMaterials() },
   } as unknown as import('../src/game/state').GameState;
   addMaterial(s, 'iron_shard', iron);
   return s;
@@ -167,13 +167,13 @@ function mkRerollState(gold: number, iron: number, eq: Equipment): import('../sr
   const item = mkEq('灵铁轨戒', 'ring'); item.rarity = 'set';
   const s = mkRerollState(0, 30, item);
   check('灵铁重铸 (set 20 需 20, 有 30)', rerollOwned(s, 0) === 'iron');
-  eq('灵铁剩 10', s.materials['iron_shard'], 10);
+  eq('灵铁剩 10', s.equip.materials['iron_shard'], 10);
 }
 {
   const item = mkEq('不足件', 'weapon'); item.rarity = 'unique';
   const s = mkRerollState(0, 10, item);
   check('unique 需 40 灵铁, 10 不足 → null', rerollOwned(s, 0) === null);
-  eq('不足不扣', s.materials['iron_shard'], 10);
+  eq('不足不扣', s.equip.materials['iron_shard'], 10);
 }
 {
   const item = mkEq('普通件', 'weapon'); item.rarity = 'normal';
@@ -183,7 +183,7 @@ function mkRerollState(gold: number, iron: number, eq: Equipment): import('../sr
 
 // === C-403 符文锻造扣费 ===
 function mkForgeState(arcane: number, voidFrag: number) {
-  const s = { materials: emptyMaterials() } as unknown as import('../src/game/state').GameState;
+  const s = { equip: { materials: emptyMaterials() } } as unknown as import('../src/game/state').GameState;
   addMaterial(s, 'arcane_core', arcane);
   addMaterial(s, 'void_fragment', voidFrag);
   return s;
@@ -191,13 +191,13 @@ function mkForgeState(arcane: number, voidFrag: number) {
 {
   const s = mkForgeState(5, 1);
   check('材料足 → 锻造成功', runeForgePay(s));
-  eq('奥术核心扣 5→0', s.materials['arcane_core'], 0);
-  eq('虚空碎片扣 1→0', s.materials['void_fragment'], 0);
+  eq('奥术核心扣 5→0', s.equip.materials['arcane_core'], 0);
+  eq('虚空碎片扣 1→0', s.equip.materials['void_fragment'], 0);
 }
 {
   const s = mkForgeState(3, 1);
   check('奥术核心不足 → 拒绝', !runeForgePay(s));
-  eq('拒绝不扣', s.materials['arcane_core'], 3);
+  eq('拒绝不扣', s.equip.materials['arcane_core'], 3);
 }
 
 if (failures > 0) {
