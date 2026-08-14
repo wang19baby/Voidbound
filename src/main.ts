@@ -330,11 +330,10 @@ function drawExpeditionInline(): void {
 
 /** 远征屏出发 (MM-UG1): bindClass + 0.7s 地牢生成过场 → doLaunchRun 真正开跑 */
 function startExpeditionRun(): void {
-  const { classId } = ngResolve(state.ngSel);
+  const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
   bindClass(state, classId);
   setNgLaunchT(NG_LAUNCH_MS);
   playSfxClient('ui_click');
-  const { difficulty, theme, mode } = ngResolve(state.ngSel);
   inf('ui', `远征出发: ${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name} · ${THEME_NAMES[theme]} · ${MAP_MODE_NAMES[mode]}`);
 }
 
