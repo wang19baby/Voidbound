@@ -100,7 +100,7 @@ const rz = randomEquipment('magic');
 
 // === OPT-014 穿戴模型 (A1) ===
 function mkState(owned: Equipment[]): EquipState {
-  const st: EquipState = { player: { equipped: {}, hp: 100, mp: 100, combat: baseCombat() }, _owned: owned };
+  const st: EquipState = { player: { equipped: {}, hp: 100, mp: 100, combat: baseCombat() }, fx: { owned } };
   recomputeCombat(st);
   return st;
 }
@@ -112,13 +112,13 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
   eq('未穿戴 physPct = 0 (仅背包不生效)', st.player.combat.physPct, 0);
   check('穿戴 w1 成功', equipItem(st, w1));
   eq('穿戴后 physPct 生效', st.player.combat.physPct, 0.4);
-  eq('穿戴后背包剩 2 件', st._owned!.length, 2);
+  eq('穿戴后背包剩 2 件', st.fx!.owned!.length, 2);
   check('同槽换装 w2 成功', equipItem(st, w2));
-  check('换装后 w1 回背包', st._owned!.includes(w1));
+  check('换装后 w1 回背包', st.fx!.owned!.includes(w1));
   eq('换装后 w2 生效 (elemPct)', st.player.combat.elemPct, 0.2);
   eq('w1 不再生效 (physPct 归 0)', st.player.combat.physPct, 0);
   check('卸下 weapon 槽', unequipSlot(st, 'weapon'));
-  check('卸下后 w2 回背包', st._owned!.includes(w2));
+  check('卸下后 w2 回背包', st.fx!.owned!.includes(w2));
   eq('卸下后 elemPct 归 0', st.player.combat.elemPct, 0);
   eq('getEquippedValues 空 (weapon 已卸下)', getEquippedValues(st).length, 0);
   check('穿戴 ring 成功', equipItem(st, r1));
@@ -128,15 +128,15 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
 // 背包上限
 {
   const st = mkState([]);
-  for (let i = 0; i < BACKPACK_CAP; i++) st._owned!.push(makeItem([], 'charm'));
+  for (let i = 0; i < BACKPACK_CAP; i++) st.fx!.owned!.push(makeItem([], 'charm'));
   const equippedRing = makeItem([], 'ring');
   st.player.equipped = { ring: equippedRing };
   recomputeCombat(st);
   check('背包满(20)时卸下被拒', !unequipItem(st, equippedRing));
   const swing = makeItem([], 'weapon');
-  st._owned!.push(swing);
-  check('超限件仍可读 (cap 由 pickup/buy 门控)', st._owned!.length === BACKPACK_CAP + 1);
-  check('背包满时换装 weapon 槽成功(旧件回背包不占位)', st._owned!.length > 0 && equipItem(st, swing));
+  st.fx!.owned!.push(swing);
+  check('超限件仍可读 (cap 由 pickup/buy 门控)', st.fx!.owned!.length === BACKPACK_CAP + 1);
+  check('背包满时换装 weapon 槽成功(旧件回背包不占位)', st.fx!.owned!.length > 0 && equipItem(st, swing));
 }
 // 对比增量
 {
@@ -209,35 +209,37 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
 
 // === 内容扩充: 精英保底掉落 ===
 {
-  const st: { theme: 'desert'; _loot: Equipment[] } = { theme: 'desert', _loot: [] };
+  const st: { theme: 'desert'; fx: { loot: Equipment[] } } = { theme: 'desert', fx: { loot: [] } };
   const eqElite = dropEliteLoot(st, 10, 10);
   check('精英掉落 rare+', eqElite.rarity === 'rare' || eqElite.rarity === 'set' || eqElite.rarity === 'unique');
-  check('精英掉落入 _loot', st._loot.length === 1);
+  check('精英掉落入 fx.loot', st.fx.loot.length === 1);
   check('精英掉落带主题倾向 (火抗)', eqElite.affixes.some(a => a.stat === 'res' && a.element === 'fire'));
 }
 
 // === M5 实测修复: 通关收集地上物品 + 回城清理 ===
 {
-  const st = mkState([]) as unknown as { player: { equipped: Partial<Record<EquipType, Equipment>>; hp: number; mp: number; combat: CombatStats }; _owned: Equipment[]; _loot?: Equipment[] };
-  const fake = st as unknown as { theme: 'desert'; _loot?: Equipment[] };
+  const st = mkState([]) as unknown as { player: { equipped: Partial<Record<EquipType, Equipment>>; hp: number; mp: number; combat: CombatStats }; fx?: { owned: Equipment[]; loot: Equipment[] } };
+  const fake = st as unknown as { theme: 'desert'; fx: { loot: Equipment[] } };
   dropEliteLoot(fake, 10, 10);
   dropEliteLoot(fake, 20, 20);
   const picked = collectAllLoot(st as never);
   check('通关收集全部地上物品', picked.length === 2);
-  check('收集后入背包', st._owned.length === 2);
-  check('收集后地上清空', (fake._loot ?? []).length === 0);
+  check('收集后入背包', st.fx!.owned!.length === 2);
+  check('收集后地上清空', (fake.fx.loot ?? []).length === 0);
 }
 {
   const st2 = mkState([]) as never;
-  const fake2 = st2 as unknown as { theme: 'desert'; _loot?: Equipment[] };
+  const fake2 = st2 as unknown as { theme: 'desert'; fx: { loot: Equipment[] } };
   dropEliteLoot(fake2, 5, 5);
   clearGroundLoot(st2 as never);
-  check('回城清理地上物品', (fake2._loot ?? []).length === 0);
+  check('回城清理地上物品', (fake2.fx.loot ?? []).length === 0);
 }
 
 // === C-401 材料系统 (M5 W4) ===
 {
-  const m = { materials: emptyMaterials() };
+  // PR #2: addMaterial/spendMaterial/materialCount 都读 state.equip.materials
+  // 测试 mock 只需 GameState 顶层 equip 字段
+  const m = { equip: { materials: emptyMaterials() } };
   eq('初始 0', materialCount(m, 'iron_shard'), 0);
   addMaterial(m, 'iron_shard', 3);
   addMaterial(m, 'arcane_core', 1);
@@ -249,11 +251,11 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
 }
 {
   // rerollCostOption: 金优先, 灵铁可替代
-  const m = { materials: { iron_shard: 10, arcane_core: 0, void_fragment: 0 }, player: { gold: 50 } };
+  const m = { equip: { materials: { iron_shard: 10, arcane_core: 0, void_fragment: 0 } }, player: { gold: 50 } };
   eq('rare 10 灵铁 → iron', rerollCostOption(m, makeItem([], 'weapon')) === 'iron' ? 1 : 0, 1);
-  const m2 = { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 }, player: { gold: 200 } };
+  const m2 = { equip: { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 } }, player: { gold: 200 } };
   eq('无灵铁 金足 → gold', rerollCostOption(m2, makeItem([], 'weapon')) === 'gold' ? 1 : 0, 1);
-  const m3 = { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 }, player: { gold: 50 } };
+  const m3 = { equip: { materials: { iron_shard: 0, arcane_core: 0, void_fragment: 0 } }, player: { gold: 50 } };
   eq('两者皆不足 → null', rerollCostOption(m3, makeItem([], 'weapon')) === null ? 1 : 0, 1);
 }
 

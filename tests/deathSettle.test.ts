@@ -26,10 +26,12 @@ eq('负金保护', deathGoldPenalty(-10, 'town', false), 0);
 {
   const s = {
     player: { level: 12, gold: 345 },
-    killsTotal: 88,
-    combo: { count: 7 },
+    combat: {
+      killsTotal: 88,
+      combo: { count: 7, timer: 0 },
+      lastKiller: 'void_overlord',
+    },
     difficulty: 'hardcore',
-    lastKiller: 'void_overlord',
   } as const;
   const ds = deathSummary(s);
   eq('level', ds.level, 12);
@@ -39,7 +41,7 @@ eq('负金保护', deathGoldPenalty(-10, 'town', false), 0);
   eq('hardcore 标记', ds.hardcore, true);
   eq('killer 记录', ds.killer, 'void_overlord');
   eq('普通难度 hardcore=false', deathSummary({ ...s, difficulty: 'normal' }).hardcore, false);
-  eq('无 killer → null', deathSummary({ ...s, lastKiller: undefined }).killer, null);
+  eq('无 killer → null', deathSummary({ ...s, combat: { ...s.combat, lastKiller: undefined } }).killer, null);
 }
 
 if (failures > 0) {
