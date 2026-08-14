@@ -5,42 +5,29 @@ import { WORLD_W, WORLD_H, worldToScreen } from '../../game/state';
 import { ELEMENT_DEFS } from '../../game/element';
 import { drawSprite } from '../../render/draw';
 
-const FLOOR_TILE = 64;
-/** 地板整幅纹理边长 (import_art.py FLOOR_FULL=384); 64px 格 → 6x6 世界对齐周期, 无缝无接缝 (32px 格太矮 + 条带对齐格边界 → 假拼接) */
-const FLOOR_FULL = 384;
-/** 每主题首次绘制标记 (只打一次: 确认加载的瓦片组) */
-const loggedThemes = new Set<string>();
-
 /** 地板 + 墙 + 装饰 静态背景层 */
 export function drawFloor(ctx: DrawCtx): void {
   const { state, gl, quad, res } = ctx;
   const vw = state.viewport.w;
   const vh = state.viewport.h;
 
-  // V1 地板瓦片: HD 32px 格平铺
+  // 地面: floor_<theme>_full 整幅纹理, 64px 格世界对齐平铺 (UV 世界对齐采样, 零接缝)
+  // 2026-08-13 用户指令: 恢复地面 (三件套验证完毕)
+  const floorSprite = `floor_${state.theme}_full`;
+  const runHue = state.run.element ? ELEMENT_DEFS[state.run.element].hue : 0;
+  const FLOOR_TILE = 64;
+  const FLOOR_FULL = 384;
   const t0x = Math.max(0, Math.floor(state.camera.x / FLOOR_TILE));
   const t0y = Math.max(0, Math.floor(state.camera.y / FLOOR_TILE));
   const t1x = Math.min(Math.floor(WORLD_W / FLOOR_TILE), Math.ceil((state.camera.x + vw) / FLOOR_TILE));
   const t1y = Math.min(Math.floor(WORLD_H / FLOOR_TILE), Math.ceil((state.camera.y + vh) / FLOOR_TILE));
-  const floorBase = `floor_${state.theme}`;
-  const floorSprite = `${floorBase}_full`;
-  // 首次绘制每主题: 日志确认加载的是哪组瓦片 (终端可见)
-  if (!loggedThemes.has(floorSprite)) {
-    loggedThemes.add(floorSprite);
-    void import('../../util/jslog').then(({ jsLog }) =>
-      jsLog(`[map] floor first-draw ${floorSprite} tile=${FLOOR_TILE}px full=${FLOOR_FULL}px uv-cells=${FLOOR_FULL / FLOOR_TILE}`),
-    );
-  }
-  // 世界对齐采样: 每格取整幅纹理的 (tx,ty)%12 区域 → 周期天然对齐, 相邻格贴边同源列, 零接缝
   const uvCells = FLOOR_FULL / FLOOR_TILE;
   const uvStep = 1 / uvCells;
-  // M3 元素地图: 本局元素色相旋转整图
-  const runHue = state.run.element ? ELEMENT_DEFS[state.run.element].hue : 0;
   for (let ty = t0y; ty < t1y; ty++) {
     for (let tx = t0x; tx < t1x; tx++) {
       const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
       const r = (h % 1000) / 1000;
-      const u = (tx % uvCells) / uvCells; // 世界对齐: 格子 ← 源纹理同列切片
+      const u = (tx % uvCells) / uvCells;
       const v = (ty % uvCells) / uvCells;
       const opt: { color?: [number, number, number]; hue?: number; uv?: [number, number, number, number] } =
         r > 0.9 ? { color: [0.9, 0.9, 0.96], hue: runHue, uv: [u, v, uvStep, uvStep] } : { hue: runHue, uv: [u, v, uvStep, uvStep] };
@@ -48,21 +35,32 @@ export function drawFloor(ctx: DrawCtx): void {
     }
   }
 
-  // V1 墙: HD 主题墙 128px 1:1
+  // V1 墙: 32px 墙块 (旧 128px 的 1/4), 贴图 128px 缩放显示
   const wallName = `wall_${state.theme}`;
+  let wallDrawn = 0;
+  let wallSkipped = 0;
   for (const w of state.world.walls) {
     const sp = worldToScreen(state, w.pos);
-    if (sp.x + w.size.w < 0 || sp.x > vw) continue;
-    if (sp.y + w.size.h < 0 || sp.y > vh) continue;
+    if (sp.x + w.size.w < 0 || sp.x > vw) { wallSkipped++; continue; }
+    if (sp.y + w.size.h < 0 || sp.y > vh) { wallSkipped++; continue; }
+    wallDrawn++;
     drawSprite(gl, quad, res, sp, w.size, 'world', wallName, runHue ? { hue: runHue } : undefined);
   }
-
+  void import('../../util/jslog').then(({ jsLog }) =>
+    jsLog(`[map] wall-phase n=${state.world.walls.length} drawn=${wallDrawn} skipped=${wallSkipped} cam=(${state.camera.x.toFixed(0)},${state.camera.y.toFixed(0)})`),
+  );
   // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞) — 128px 1:1 (HD 烘焙同规格)
+  let decorDrawn = 0;
+  let decorSkipped = 0;
   for (const d of state.world.decor) {
     const sp = worldToScreen(state, d.pos);
-    if (sp.x + 128 < 0 || sp.x > vw) continue;
-    if (sp.y + 128 < 0 || sp.y > vh) continue;
+    if (sp.x + 128 < 0 || sp.x > vw) { decorSkipped++; continue; }
+    if (sp.y + 128 < 0 || sp.y > vh) { decorSkipped++; continue; }
+    decorDrawn++;
     const dopt: { color?: [number, number, number]; hue?: number } = d.tint ? { color: d.tint, hue: runHue } : { hue: runHue };
     drawSprite(gl, quad, res, sp, { w: 128, h: 128 }, 'world', d.sprite, dopt);
   }
+  void import('../../util/jslog').then(({ jsLog }) =>
+    jsLog(`[map] decor-phase n=${state.world.decor.length} drawn=${decorDrawn} skipped=${decorSkipped}`),
+  );
 }

@@ -326,15 +326,20 @@ function handleNewgameKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
     return true;
   }
   const moveMap: Record<string, [number, number]> = {
-    'arrowup': [-1, 0], 'w': [-1, 0],
-    'arrowdown': [1, 0], 's': [1, 0],
-    'arrowleft': [0, -1], 'a': [0, -1],
-    'arrowright': [0, 1], 'd': [0, 1],
+    'arrowleft': [-1, 0], 'a': [-1, 0],
+    'arrowright': [1, 0], 'd': [1, 0],
   };
   const mv = moveMap[k];
   if (mv) {
     state.ngSel.classIdx = (state.ngSel.classIdx + mv[0] + CLASS_IDS.length) % CLASS_IDS.length;
     playSfxClient('ui_click');
+    return true;
+  }
+  // 创建模式 步骤 1 → 步骤 2 (←→ 已切职业, Enter 确认进步骤 2 命名+难度+主题+模式)
+  if (state.ngFrom === 'create' && state.ui.classStep1 && k === 'enter') {
+    state.ui.classStep1 = false;
+    setNgNaming(true);
+    inf('ui', `步骤 1 → 步骤 2: 已选 ${CLASS_IDS[state.ngSel.classIdx]}`);
     return true;
   }
   if (k === 'enter') { ctx.startFromNewgame(); return true; }
@@ -526,6 +531,8 @@ function handleTownKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext
     ctx.handleTownPanelKey(state, e, k);
     return true;
   }
+  // 修复: Backspace / B 键 → 返回主菜单 (玩家困在城镇的出口)
+  if (k === 'backspace' || k === 'b') { setScreen(state, 'title'); return true; }
   if (keyMatch(e, loadKeybinds().interact)) { ctx.interactTown(state); return true; }
   if (k === '1' || k === '2' || k === '3' || k === '4') return true;
   return true;

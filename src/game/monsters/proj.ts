@@ -57,7 +57,7 @@ export function spawnEnemyProjectile(state: GameState, m: Monster, dmg: number, 
   p.vel.y = Math.sin(base) * speed;
   p.size.w = 12;
   p.size.h = 12;
-  p.dmg = Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1));
+  p.dmg = Math.round(dmg * DIFFICULTY_MODS[state.difficulty].projMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1));
   p.life = 2.0;
   p.fromId = m.id;
   state.fx.enemyProj.push(p);

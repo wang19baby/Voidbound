@@ -264,9 +264,11 @@ export function handleSettingsClick(state: GameState, hudCanvas: HTMLCanvasEleme
 /** 设置面板 (C8 合并标题/暂停两处绘制 + 键位自定义区) */
 export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingContext2D, hudCanvas: HTMLCanvasElement): void {
   const w = hudCanvas.width;
+  const h = hudCanvas.height;
   const y0 = hudCanvas.height / 2 - 130;
-  hudCtx.fillStyle = 'rgba(0,0,0,0.72)';
-  hudCtx.fillRect(0, y0, w, 440);
+  // 加强遮罩: 全屏 + alpha 0.85, 盖住首页菜单 (用户要求)
+  hudCtx.fillStyle = 'rgba(0,0,0,0.85)';
+  hudCtx.fillRect(0, 0, w, h);
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
   hudCtx.fillStyle = '#ffd';
@@ -313,7 +315,7 @@ export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingConte
   hudCtx.fillText(`技能: ${keyHintSkills()} (键位可改)`, w / 2, y0 + 350);
   hudCtx.fillStyle = '#888';
   hudCtx.font = '14px monospace';
-  hudCtx.fillText('[Esc] 返回', w / 2, y0 + 372);
+  // [Esc] 返回文字已删除 (左上角已加 "返回主菜单(Esc)" 按钮, 文字提示重复)
   if (state.confirmHardcore) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = 'bold 15px monospace';
@@ -323,10 +325,13 @@ export function drawSettingsPanel(state: GameState, hudCtx: CanvasRenderingConte
   hudCtx.textBaseline = 'top';
 }
 
-/** UI 屏职业立绘: 刷 WebGL 层 (2D 层对应区域须 clearRect 挖孔露出) */
-export function drawUiPortrait(gl: GL, quad: QuadBuffer, res: RenderResources, classId: ClassId, x: number, y: number, w: number, h: number): void {
-  gl.clearColor(0.043, 0.043, 0.071, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+/** UI 屏职业立绘: 刷 WebGL 层 (2D 层对应区域须 clearRect 挖孔露出)
+ *  noClear=true 跳过 gl.clear (用于步骤 1 6 卡片连画, 避免互相清掉) */
+export function drawUiPortrait(gl: GL, quad: QuadBuffer, res: RenderResources, classId: ClassId, x: number, y: number, w: number, h: number, noClear = false): void {
+  if (!noClear) {
+    gl.clearColor(0.043, 0.043, 0.071, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
   drawSprite(gl, quad, res, { x, y }, { w, h }, 'characters', CLASS_SPRITES[classId] ?? CLASS_SPRITES.barbarian, {});
 }
 
@@ -370,9 +375,12 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   const menuRects: Array<[number, number, number, number]> = [];
   const hasSave = state.charList.length > 0;
   ctx.syncTitleFocus(hasSave);
-  // 最近存档排序: 按 last_played 降序取前 5 (0/缺失排最后)
+  // 最近存档排序: 按 last_played 降序取前 5, 排除当前角色 (继续游戏已显示) (0/缺失排最后)
   const recentCards = hasSave
-    ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
+    ? state.charList
+        .filter(c => c.id !== state.currentChar)
+        .sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0))
+        .slice(0, 5)
     : [];
   // 立绘职业: 当前角色优先, 无存档用默认 (TS-001)
   const curChar = hasSave ? (state.charList.find(c => c.id === state.currentChar) ?? state.charList[0]) : null;
@@ -381,14 +389,14 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   const menuY0 = h / 2 - 30;
   const menuItems: Array<{ y: number; label: string; key: string; icon: 'sword' | 'gear' | 'portrait'; sub: string }> = hasSave
     ? [
-        { y: menuY0 + 40, label: '新游戏', key: '2', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
-        { y: menuY0 + 80, label: '设置', key: '3', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
-        { y: menuY0 + 120, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
+        { y: menuY0 + 52, label: '新游戏', key: '2', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
+        { y: menuY0 + 104, label: '设置', key: '3', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
+        { y: menuY0 + 156, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
       ]
     : [
         { y: menuY0, label: '新游戏', key: '1', icon: 'sword', sub: '选择职业 · 难度 · 主题' },
-        { y: menuY0 + 40, label: '设置', key: '2', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
-        { y: menuY0 + 80, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
+        { y: menuY0 + 52, label: '设置', key: '2', icon: 'gear', sub: '音量 · 全屏 · 键位 · 难度' },
+        { y: menuY0 + 104, label: '角色管理', key: 'R', icon: 'portrait', sub: '切换 / 新建 / 删除角色' },
       ];
   const itemW = 320, itemH = 38;
 
@@ -418,7 +426,8 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   drawTitleWordmark(hudCtx, hudCanvas);
 
   // 右侧最近存档卡片区 — TS-003: 加场景图标 (当前角色用内存 scene, 其余用存档摘要)
-  const cardX = w - 460, cardW = 360, cardY0 = 330, cardH = 42, cardGap = 6;
+  // 调整: 避开继续游戏按钮 (400-880, 307-353), cardX=900 cardY0=400, 与按钮完全错开 20px
+  const cardX = w - 380, cardW = 300, cardY0 = 400, cardH = 42, cardGap = 6;
   recentCards.forEach((c, i) => {
     const cy = cardY0 + i * (cardH + cardGap);
     const hit = inRect(mx, my, cardX, cy, cardW, cardH);
@@ -443,9 +452,10 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   });
   // 金色大按钮"继续游戏" — TS-003: + 相对时间 / 场景图标 / 跑局进度条 (剩余怪)
   if (hasSave) {
-    const recent = recentCards[0];
-    const contW = 480, contH = 46;
-    const contX = w / 2 - contW / 2, contY = menuY0 - contH / 2;
+    // 继续游戏按钮显示的是当前角色 (state.currentChar), 不用 recentCards[0] (右侧列表已排除当前)
+    const recent = state.charList.find(c => c.id === state.currentChar);
+    const contW = 480, contH = 56;
+    const contX = w / 2 - contW / 2, contY = menuY0 - 45;  // 上移 22 px, 高度增加 10 → 56, 整体保持居中
     const hit = inRect(mx, my, contX, contY, contW, contH);
     const down = hit && lmb;
     const focused = ctx.getTitleFocus() === 0;

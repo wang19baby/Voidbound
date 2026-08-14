@@ -55,6 +55,7 @@ export function drawTopRightStats(ctx2d: CanvasRenderingContext2D, state: GameSt
 }
 
 // 小地图 (OPT-024): 战斗场景右上
+// 设计: 已探索灰底持久显示 + 墙 (仅已探索区) + 怪物红点 (仅已探索区, 反透视) + 玩家三角 + 传送门标记
 export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number): void {
   if (state.screen !== 'dungeon') return;
   const mw = 140;
@@ -66,34 +67,43 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
   ctx2d.fillRect(mx, my, mw, mh);
   const sx = mw / state.world.w;
   const sy = mh / state.world.h;
-  const BX = 64;
-  const camBx0 = Math.max(0, Math.floor(state.camera.x / BX));
-  const camBy0 = Math.max(0, Math.floor(state.camera.y / BX));
-  const camBx1 = Math.min(Math.floor(WORLD_W / BX) - 1, Math.floor((state.camera.x + vw) / BX));
-  const camBy1 = Math.min(Math.floor(WORLD_H / BX) - 1, Math.floor((state.camera.y + state.viewport.h) / BX));
-  const cellPx = mw / state.viewport.w * BX;
-  const cellPy = mh / state.viewport.h * BX;
-  for (let by = camBy0; by <= camBy1; by++) {
-    for (let bx = camBx0; bx <= camBx1; bx++) {
-      if (state.ui.explored.has(`${bx},${by}`)) {
-        ctx2d.fillStyle = 'rgba(180,200,255,0.14)';
-        ctx2d.fillRect(mx + (bx * BX - state.camera.x) * (mw / state.viewport.w), my + (by * BX - state.camera.y) * (mh / state.viewport.h), cellPx + 0.5, cellPy + 0.5);
-      }
-    }
+  // 已探索底: 遍历 explored (持久, 非视野内) — 64px 块降采样为 8px 方格 (320x180 → 40x23 格)
+  const GRP = 8;
+  const groups = new Set<string>();
+  for (const key of state.ui.explored) {
+    const [bx, by] = key.split(',').map(Number);
+    groups.add(`${bx >> 3},${by >> 3}`);
   }
+  ctx2d.fillStyle = 'rgba(180,200,255,0.14)';
+  for (const g of groups) {
+    const [gx, gy] = g.split(',').map(Number);
+    ctx2d.fillRect(mx + gx * GRP * 64 * sx, my + gy * GRP * 64 * sy, GRP * 64 * sx + 0.5, GRP * 64 * sy + 0.5);
+  }
+  // 墙: 仅已探索块 (与旧逻辑一致)
   for (const w of state.world.walls) {
-    const bl = Math.floor(w.pos.x / BX) + ',' + Math.floor(w.pos.y / BX);
+    const bl = Math.floor(w.pos.x / 64) + ',' + Math.floor(w.pos.y / 64);
     if (!state.ui.explored.has(bl)) continue;
     ctx2d.fillStyle = '#5a5a6a';
     ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
   }
+  // 怪物: 3×3 红点 (Boss 4×4 橙), 仅已探索区 (战争迷雾反透视)
   for (const m of state.fx.monsters) {
-    ctx2d.fillStyle = MONSTER_DEFS[m.type].boss ? '#f80' : '#f55';
-    ctx2d.fillRect(mx + m.pos.x * sx, my + m.pos.y * sy, 2, 2);
+    const bl = Math.floor(m.pos.x / 64) + ',' + Math.floor(m.pos.y / 64);
+    if (!state.ui.explored.has(bl)) continue;
+    const boss = MONSTER_DEFS[m.type].boss;
+    ctx2d.fillStyle = boss ? '#f80' : '#f55';
+    ctx2d.fillRect(mx + m.pos.x * sx - 1, my + m.pos.y * sy - 1, boss ? 4 : 3, boss ? 4 : 3);
   }
+  // 传送门 (Boss 死亡位, A-W1): 紫色标记 — 出口/终点标记 (OPT-024)
+  for (const p of state.run.portals) {
+    if (p.used) continue;
+    ctx2d.fillStyle = '#c9aaff';
+    ctx2d.fillRect(mx + p.x * sx - 1, my + p.y * sy - 1, 4, 4);
+  }
+  // 玩家: 白三角 (canvas 无旋转: 用方块 + 朝向小点)
   ctx2d.fillStyle = '#fff';
   ctx2d.fillRect(mx + state.player.pos.x * sx - 2, my + state.player.pos.y * sy - 2, 5, 5);
-  const explFrac = Math.min(1, state.ui.explored.size / ((WORLD_W / BX) * (WORLD_H / BX)));
+  const explFrac = Math.min(1, state.ui.explored.size / ((WORLD_W / 64) * (WORLD_H / 64)));
   ctx2d.fillStyle = '#8f8';
   ctx2d.font = '11px monospace';
   ctx2d.fillText(`探索 ${Math.round(explFrac * 100)}%`, rx, my + mh + 4);

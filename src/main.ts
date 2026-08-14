@@ -16,7 +16,7 @@ import { createEmptyUiState } from './game/state/ui';
 import { createEmptyFxState } from './game/state/fx';
 import { createEmptyEquipState } from './game/state/equip';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
-import { getActiveWalls, getActiveDecor, resetWorldForMode, type Wall } from './game/world';
+import { getActiveWalls, getActiveDecor, resetWorldForMode, EXTRACT_SPAWN, type Wall } from './game/world';
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
 import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, drawIcon, setMouseReticle, hudDungeonHit, setHudHover } from './render/hud';
@@ -164,6 +164,9 @@ inf('atlas', `loaded: ${[characters, particles, ui, icons, world, monsters, npcs
 const res = await buildRenderResources(gl, [characters, particles, ui, icons, world, monsters, npcs]);
 inf('atlas', 'PNG decoded + textures uploaded');
   invoke('js_log', { msg: '[boot] atlases done' }).catch(() => {});
+  // 诊断: 启动即打印 world 图集全部 sprite 名 (核对"加载的瓦片"清单, 防缺图集)
+  const worldSprites = [...(res.atlases.get('world')?.sprites.keys() ?? [])];
+  invoke('js_log', { msg: `[diag:atlas] world sprites(${worldSprites.length}): ${worldSprites.join(',')}` }).catch(() => {});
 
 
 const keys = attachKeyboard(window);
@@ -305,7 +308,7 @@ function drawNewgameInline(): void {
   const rects: Array<[number, number, number, number]> = [];
   const ngCtx: NewgameCtx = {
     state, hudCtx, hudCanvas, mouse,
-    drawUiPortrait: (classId, x, y, w, h) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h); },
+    drawUiPortrait: (classId, x, y, w, h, noClear) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h, noClear); },
     isNgNaming, getNgLaunchT, loadLastNg: () => loadLastNg(),
     uiCursor: (rects) => { uiCursor(canvas, mouse, rects); },
   };
@@ -348,12 +351,12 @@ const handleTownPanelKeyWrap = (state: GameState, e: KeyboardEvent, k: string): 
 // uiCallbacks: 鼠标 UI 点击分发回调 (US-031 内联, handleUiClick 包装层已删除)
 const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
   confirmCloseSave, confirmCloseCancel,
-  continueLastSave: () => continueLastSave(state, saveCtx),
+  continueLastSave: () => continueLastSave(state),
   enterTargetCharacter: (target) => enterTargetCharacter(state, target, saveCtx),
-  titleAct,
+  titleAct: (idx) => titleAct(idx, state, screenKeyCtx),
   handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
   handleTownPanelKey: (e, k) => handleTownPanelKeyWrap(state, e, k),
-  startFromNewgame: () => startFromNewgame(state),
+  startFromNewgame: () => startFromNewgame(state, (s) => enterTownWrap(s)),
   startCreateNewgame: () => startCreateNewgame(state),
   enterTown: () => enterTownWrap(state),
   startRun: () => startRun(state, state.theme, state.difficulty, state.run.mode),
@@ -365,7 +368,7 @@ const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
 const screenKeyCtx: ScreenKeyContext = {
   confirmCloseSave,
   confirmCloseCancel,
-  continueLastSave: () => continueLastSave(state, saveCtx),
+  continueLastSave: () => continueLastSave(state),
   openCharactersList: () => openCharactersList(state),
   saveLastNg: () => saveLastNg(state),
   loadLastNg: () => loadLastNg(),
@@ -526,7 +529,7 @@ if (e.key === 'o' || e.key === 'O') {
       restoreMaterialsApp(state, d);  // M5 W4 C-401
       restorePassivesApp(state, d);  // v9 被动技能树
       inf('save', `loaded: pos=(${d.player_x.toFixed(0)},${d.player_y.toFixed(0)}) hp=${d.player_hp.toFixed(0)} owned=${owned.length} theme=${state.theme}`);
-      resumeFromSave(state, d, saveCtx);  // v11: 场景分派 (上次在城镇 → 回城镇整理)
+      resumeFromSave(state, d);  // 读档统一回城镇 (GAME_FLOW §3: 城镇 → 传送门出发)
       return loadAccount();  // OPT-029: 账号层 (cleared/best) 独立文件
     }).then(a => {
       state.cleared = a.cleared ?? [];
@@ -614,12 +617,83 @@ function handleScreenClick(): void {
   mouse.reset();
 }
 function loop(now: number) {
+  // 全屏通用: 设置面板音量滑条拖动 (任何屏打开设置面板都能拖, 包括 title/newgame/characters)
+  // 几何与 drawSettingsPanel 一致: sliderY = h/2 - 130 + 106 = h/2 - 24 (修复: 原 loopImpl 内只走 dungeon 分支, title/pause 打不开滑条)
+  if (state.ui.settingsOpen && mouse.state().buttons.LMB) {
+    const p = mouse.state().pos;
+    const sx = state.viewport.w / 2 - 120, sy = state.viewport.h / 2 - 24, sw = 240, sh = 10;
+    if (p.y >= sy - 14 && p.y <= sy + sh + 14 && p.x >= sx - 10 && p.x <= sx + sw + 10) {
+      state.volume = Math.min(1, Math.max(0, (p.x - sx) / sw));
+      setVolumeClient(state.volume);
+    }
+  }
   // 心跳 (每帧可被 js_log 确认): 首帧 + 崩溃转发, 防止 rAF 内异常静默冻结
   if (!loopStartedLogged) {
     loopStartedLogged = true;
     invoke('js_log', { msg: '[boot] rAF loop started' }).catch(() => {});
   }
   try {
+    // 关窗确认面板优先: 打开时跳过所有屏绘制 + 屏内 mouse click, 避免 hover 视觉穿透 (NPC/玩家/菜单 hover 在确认对话框下仍显示)
+    if (isCloseConfirmOpen()) {
+      mouse.sync();
+      const cp = mouse.state().pos;
+      const yH = inRect(cp.x, cp.y, state.viewport.w / 2 - 140, state.viewport.h / 2 + 40, 120, 40);
+      const nH = inRect(cp.x, cp.y, state.viewport.w / 2 + 20, state.viewport.h / 2 + 40, 120, 40);
+      if (mouse.wasClicked('LMB')) {
+        if (yH) confirmCloseSave();
+        else if (nH) confirmCloseCancel();
+      }
+      canvas.style.cursor = (yH || nH) ? 'pointer' : 'default';
+      mouse.reset();
+      // 清空 hudCanvas + gl canvas 防止 NPC/玩家/图标透过确认对话框 (GL 双缓冲不会自动清除, 需显式 gl.clear)
+      hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      // 完全不透明黑色背景 (替代 close.ts 内 alpha 0.7 半透明遮罩, 防止图标/玩家/NPC 透过)
+      hudCtx.fillStyle = 'rgba(0,0,0,0.96)';
+      hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+      drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, isCloseConfirmSaving(), mouse);
+      requestAnimationFrame(loop);
+      return;
+    }
+    // 设置面板: 打开时跳过所有屏绘制, 屏蔽 hover 透传 (同 closeConfirm 处理方式)
+    if (state.ui.settingsOpen) {
+      mouse.sync();
+      // 清空 hudCanvas + gl canvas, 防止屏 UI (NPC/玩家/菜单/立绘) 透过设置面板
+      hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      drawSettingsPanel(state, hudCtx, hudCanvas);  // 内含 0.85 alpha 全屏遮罩 + 面板内容
+      // 鼠标处理: 替代 uiDispatch 'title'/'pause' 中的 settingsOpen 处理 (因为屏分支被早 return 跳过)
+      // 注: 设置面板非 modal, 面板外点击不关闭 (与 closeConfirm 不同); 只有左上角"返回主菜单"按钮/键位条目/键盘 Esc 关闭
+      if (mouse.wasClicked('LMB')) {
+        const mx2 = mouse.state().pos.x, my2 = mouse.state().pos.y;
+        // 左上角 "返回主菜单(Esc)" 按钮 (20, 20, 200, 40)
+        if (inRect(mx2, my2, 20, 20, 200, 40)) {
+          state.ui.settingsOpen = false;
+        } else {
+          handleSettingsClick(state, hudCanvas, mx2, my2);  // 键位条目点击
+        }
+      }
+      // 左上角 "返回主菜单(Esc)" 按钮 (画在设置面板之上)
+      {
+        const backR: [number, number, number, number] = [20, 20, 200, 40];
+        const backHit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...backR);
+        hudCtx.fillStyle = backHit ? 'rgba(102,204,255,0.18)' : 'rgba(20,20,28,0.85)';
+        hudCtx.fillRect(...backR);
+        hudCtx.strokeStyle = backHit ? '#66ccff' : '#3a3a48';
+        hudCtx.lineWidth = backHit ? 2 : 1;
+        hudCtx.strokeRect(...backR);
+        hudCtx.fillStyle = backHit ? '#fff' : '#9cf';
+        hudCtx.font = 'bold 14px monospace';
+        hudCtx.textAlign = 'center';
+        hudCtx.textBaseline = 'middle';
+        hudCtx.fillText('返回主菜单(Esc)', 120, 40);
+      }
+      mouse.reset();
+      requestAnimationFrame(loop);
+      return;
+    }
     if (state.screen === 'title') {
       // 每 5s 最多一次: 刷新最近游玩排序 (玩完回首页时卡片次序最新)
       if (now - titleListAt > 5000) {
@@ -646,7 +720,6 @@ function loop(now: number) {
     } else {
       loopImpl(now);
     }
-    if (isCloseConfirmOpen()) drawCloseConfirmScreen(hudCtx, hudCanvas, state.screen, isCloseConfirmSaving(), mouse);
   } catch (e) {
     if (now - loopCrashCooldown > 500) {
       loopCrashCooldown = now;
@@ -699,15 +772,7 @@ function loopImpl(now: number) {
     }
   }
 
-  // 设置滑条拖动 (v3 鼠标化): LMB 按住且在滑条±容差带 → 音量即点即得 (title/pause 共用同一几何)
-  if (state.ui.settingsOpen && mouse.state().buttons.LMB) {
-    const p = mouse.state().pos;
-    const sx = state.viewport.w / 2 - 120, sy = state.viewport.h / 2 - 22, sw = 240, sh = 10;
-    if (p.y >= sy - 14 && p.y <= sy + sh + 14 && p.x >= sx - 10 && p.x <= sx + sw + 10) {
-      state.volume = Math.min(1, Math.max(0, (p.x - sx) / sw));
-      setVolumeClient(state.volume);
-    }
-  }
+  // 设置滑条拖动逻辑已搬到 loop 函数开头 (v3 鼠标化, 跨屏通用)
   if (now - lastFpsT >= 1000) {
     inf('loop', `fps=${frameCount}`);
     frameCount = 0;
@@ -726,6 +791,10 @@ function loopImpl(now: number) {
 
   // 城镇场景: 只移动+绘制 (战斗全部冻结)
   if (state.mode === 'town') {
+    // 修复: 城镇屏鼠标点击分发 (line 723 mouse.sync 已生效; closeConfirm 拦截统一在 main.ts loop 顶部 early return 处理)
+    if (mouse.wasClicked('LMB')) {
+      handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
+    }
     // C-302 传送过场: 1s 倒计时 → 到达目标镇
     if (state.teleportTo) {
       state.teleportT -= dt;
@@ -906,9 +975,9 @@ function loopImpl(now: number) {
         triggerBossIntro(state, '元素 Boss ×4', '火/冰/毒/影 四方位迫近 — 双元素组合');
         inf('world', `extract: 4 outer boss summoned (${state.run.theme})`);
       } else if (isExtract && state.run.bossStage === 1) {
-        // 4 外层 Boss 全清 → 中央最终主题 Boss
+        // 4 外层 Boss 全清 → 中央最终主题 Boss (设计 §2.3: 出生区变竞技场)
         const bossType = THEME_BOSS[state.run.theme];
-        const boss = spawnMonster(state, bossType);
+        const boss = spawnMonster(state, bossType, EXTRACT_SPAWN);
         state.fx.monsters.push(boss);
         state.run.bossStage = 2;
         state.run.bossAlive = true;
@@ -920,7 +989,11 @@ function loopImpl(now: number) {
         inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
-        const boss = spawnMonster(state, bossType);
+        // A-W2 设计 §2: linear 主轴右端 (终点) / gauntlet 世界中央 (Boss 区)
+        const anchor = state.run.mode === 'linear'
+          ? { x: WORLD_W - 320, y: WORLD_H / 2 }
+          : { x: WORLD_W / 2, y: WORLD_H / 2 };
+        const boss = spawnMonster(state, bossType, anchor);
         state.fx.monsters.push(boss);
         state.run.bossAlive = true;
         const bossName = MONSTER_DEFS[bossType].type;

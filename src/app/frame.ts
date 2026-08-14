@@ -18,11 +18,13 @@ import { drawFloor } from '../presentation/worldDraw/floor';
 import { drawPortalAndPools } from '../presentation/worldDraw/portal';
 import { drawParticles } from '../presentation/worldDraw/particles';
 import { drawMonsters } from '../presentation/worldDraw/monsters';
+import { MONSTER_DEFS } from '../game/monsters/defs';
 import { drawVfx } from '../presentation/worldDraw/vfx';
 import { drawLoot } from '../presentation/worldDraw/loot';
 import { drawPlayer } from '../presentation/worldDraw/player';
 import { inRect } from '../game/uigrid';
-import { portalActive, nearPortal } from '../game/portal';
+import { portalActive, nearPortal, nearestPortal } from '../game/portal';
+import { diag } from '../util/diag';
 
 export interface FrameCtx {
   // 渲染资源
@@ -121,16 +123,27 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
   ctx.setMouseReticle(mouse.state().pos.x, mouse.state().pos.y);
 
   const drawCtx: DrawCtx = { state, gl, quad, res, particleBatch };
-  drawFloor(drawCtx);
-  drawPortalAndPools(drawCtx);
-  drawParticles(drawCtx);
-  drawMonsters(drawCtx);
-  drawVfx(drawCtx);
-  drawLoot(drawCtx);
-  drawPlayer(drawCtx, mouse.state().pos.x);
-
-  ctx.drawHud(gl, quad, state);
-  ctx.drawHudOverlay(hudCtx, state);
+  // 阶段包裹: 抛错时定位到具体绘制阶段 (diag 后原样重抛, loop 层继续兜底)
+  const phases: Array<[string, () => void]> = [
+    ['floor', () => drawFloor(drawCtx)],
+    ['portal', () => drawPortalAndPools(drawCtx)],
+    ['particles', () => drawParticles(drawCtx)],
+    ['monsters', () => drawMonsters(drawCtx)],
+    ['vfx', () => drawVfx(drawCtx)],
+    ['loot', () => drawLoot(drawCtx)],
+    ['player', () => drawPlayer(drawCtx, mouse.state().pos.x)],
+    ['hud', () => ctx.drawHud(gl, quad, state)],
+    ['hudOverlay', () => ctx.drawHudOverlay(hudCtx, state)],
+  ];
+  for (const [name, fn] of phases) {
+    try {
+      fn();
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e);
+      diag('render', `phase ${name} threw: ${msg}`);
+      throw e;
+    }
+  }
 
   // 暂停遮罩 (Canvas2D 文字层; 装备面板时全屏面板代替)
   if (state.screen === 'pause') {
@@ -138,16 +151,18 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hudCtx.textAlign = 'center';
     if (!state.ui.settingsOpen) {
+      // UI-FIX6: 重排 PAUSED/主提示/4 选项/副提示 垂直位置, 消除重叠
+      // PAUSED (h/2-90, 40px), 主提示 16px (h/2-50), 4 选项 [h/2-30, h/2+14], 副提示 (h/2+40)
       hudCtx.fillStyle = '#fff';
-      hudCtx.font = 'bold 48px monospace';
+      hudCtx.font = 'bold 40px monospace';
       hudCtx.textBaseline = 'middle';
-      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 60);
-      hudCtx.font = '20px monospace';
+      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
+      hudCtx.font = '16px monospace';
       hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · 4 城镇 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2);
+      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · 4 城镇 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 - 50);
       hudCtx.fillStyle = '#777';
-      hudCtx.font = '14px monospace';
-      hudCtx.fillText('Ctrl+1..6 分配技能点 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 + 34);
+      hudCtx.font = '12px monospace';
+      hudCtx.fillText('Ctrl+1..6 分配技能点 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 + 40);
     } else {
       // 设置面板 (C8: 与标题共用 drawSettingsPanel, 含滑条/键位自定义)
       ctx.drawSettingsPanel(state, hudCtx, hudCanvas);
@@ -260,6 +275,28 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     hudCtx.textBaseline = 'top';
   }
 
+  // dungeon HUD: Boss 方向指引 (设计 §2: 按模式锚定远处 — linear 右端/gauntlet 中央/extract 中央);
+  // Boss 在场且未击杀 → 常驻方向箭头 (复用传送门指引式样, 橙色)
+  if (state.screen === 'dungeon' && state.run.bossAlive && !state.run.bossKilled) {
+    let bx = -1, by = -1;
+    for (const m of state.fx.monsters) {
+      if (m.hp > 0 && (MONSTER_DEFS[m.type].boss || m.bossLike)) { bx = m.pos.x + m.size.w / 2; by = m.pos.y + m.size.h / 2; break; }
+    }
+    if (bx >= 0) {
+      const dx = bx - (state.player.pos.x + state.player.size.w / 2);
+      const dy = by - (state.player.pos.y + state.player.size.h / 2);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 320) {
+        const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
+        hudCtx.textAlign = 'center';
+        hudCtx.fillStyle = '#ff9530';
+        hudCtx.font = 'bold 15px monospace';
+        hudCtx.fillText(`BOSS ${dir} (${Math.round(dist / 40)}格)`, hudCanvas.width / 2, hudCanvas.height - 84);
+        hudCtx.textAlign = 'left';
+      }
+    }
+  }
+
   // dungeon HUD: 门前提示 (V 交互); Boss 死后未交互 → 持续引导到门
   if (state.screen === 'dungeon' && portalActive(state)) {
     hudCtx.textAlign = 'center';
@@ -267,13 +304,16 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     hudCtx.font = 'bold 15px monospace';
     if (nearPortal(state)) {
       hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
-    } else if (state.run.portal) {
-      const dx = state.run.portal.x - (state.player.pos.x + state.player.size.w / 2);
-      const dy = state.run.portal.y - (state.player.pos.y + state.player.size.h / 2);
-      const dist = Math.hypot(dx, dy);
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
-      hudCtx.fillStyle = '#ccaaff';
-      hudCtx.fillText(`传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`, hudCanvas.width / 2, hudCanvas.height - 60);
+    } else {
+      const np = nearestPortal(state);
+      if (np) {
+        const dx = np.x - (state.player.pos.x + state.player.size.w / 2);
+        const dy = np.y - (state.player.pos.y + state.player.size.h / 2);
+        const dist = Math.hypot(dx, dy);
+        const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
+        hudCtx.fillStyle = '#ccaaff';
+        hudCtx.fillText(`传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`, hudCanvas.width / 2, hudCanvas.height - 60);
+      }
     }
     hudCtx.textAlign = 'left';
   }

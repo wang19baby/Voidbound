@@ -1,8 +1,8 @@
 // app/save.ts — 存档业务层 (US-027 拆分)
 //
 // 本次拆分: buildSavePayload (纯函数) + persistNow/restoreMaterials/restorePassives (state 首参)
-// 本次 US-027-b 追加: continueLastSave/resumeFromSave/enterTargetCharacter (跨异步链 + 场景分派)
-//   - 这三个需要 main.ts-only 函数 (startRun/ensureDungeonRun), 通过 SaveCtx 注入
+// 本次 US-027-b 追加: continueLastSave/resumeFromSave/enterTargetCharacter (跨异步链 + 读档回城镇)
+//   - enterTargetCharacter 需要 main.ts-only 函数 (startRun/ensureDungeonRun), 通过 SaveCtx 注入
 //
 // 依赖: game/* 领域模块 (只读 state, 不引入循环依赖)
 
@@ -119,8 +119,8 @@ export function persistNowApp(state: GameState): Promise<void> {
     });
 }
 
-/** 继续最近角色 (标题 [O], 键盘/点击共用): 读最近角色档 → 按场景分派 */
-export function continueLastSave(state: GameState, ctx: SaveCtx): void {
+/** 继续最近角色 (标题 [O], 键盘/点击共用): 读最近角色档 → 回城镇 */
+export function continueLastSave(state: GameState): void {
   let loadedD: SaveData | null = null;
   loadAccount().then(a => {
     const last = (a.last_char && a.last_char.length > 0) ? a.last_char : 'char_0';
@@ -149,25 +149,22 @@ export function continueLastSave(state: GameState, ctx: SaveCtx): void {
       pickedUp: true,
       setName: it.setName,
     }));
-    if (loadedD) resumeFromSave(state, loadedD, ctx);
+    if (loadedD) resumeFromSave(state, loadedD);
     state.ui.titleMsg = '';
     inf('save', `读档并继续 (角色 ${state.currentChar}, 含账号层)`);
   }).catch((err: unknown) => { state.ui.titleMsg = `无存档或读档失败: ${String(err)}`; wrn('save', String(err)); });
 }
 
-/** 读档场景分派 (v11): 上次在城镇 → 进城镇整理; 否则进地牢继续 */
-export function resumeFromSave(state: GameState, d: { scene?: string }, ctx: SaveCtx): void {
-  if (d.scene === 'town') {
-    state.mode = 'town';
-    state.townPanel = null;
-    state.player.pos = { x: 560, y: 500 };
-    setScreen(state, 'town');
-    inf('ui', `读档 → 城镇 (${TOWN_DEFS[state.townId]?.name ?? state.townId})`);
-  } else {
-    ctx.ensureDungeonRun(state);
-    setScreen(state, 'dungeon');
-    inf('ui', '读档 → 地牢继续');
-  }
+/** 读档统一进城镇 (GAME_FLOW §3: 继续 → 城镇 → 传送门/地下城入口出发) */
+export function resumeFromSave(state: GameState, d: { scene?: string }): void {
+  state.mode = 'town';
+  state.townPanel = null;
+  state.player.pos = { x: 560, y: 500 };
+  setScreen(state, 'town');
+  inf('ui', `读档 → 城镇 (${TOWN_DEFS[state.townId]?.name ?? state.townId})`);
+  void import('../util/diag').then(({ diag }) =>
+    diag('save', `load scene=${d.scene ?? 'dungeon'} theme=${state.theme} mode=${state.mode} run.theme=${state.run.theme} run.mode=${String(state.run.mode ?? '?')} element=${String(state.run.element ?? 'none')} pos=(${state.player.pos.x.toFixed(0)},${state.player.pos.y.toFixed(0)})`),
+  );
 }
 
 /** 进入/切换角色 (v4 复用: 列表 Enter / 大按钮 / 最近 3 快捷卡) */
@@ -230,7 +227,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
       const sk = getSkill(sl.slot);
       if (sk) sk.level = sl.level;
     }
-    resumeFromSave(state, d, ctx);
+    resumeFromSave(state, d);
     state.ui.titleMsg = '';
     void persistNowApp(state);  // 更新 last_char
     inf('save', `切换到角色 ${target.id} (Lv${d.level ?? 1} ${d.class ?? 'barbarian'})`);

@@ -80,7 +80,10 @@ export function enterTown(ctx: TownCtx, townId?: TownId): void {
   state.mysteryStock = null;
   state.teleportTo = null;
   state.teleportT = 0;
-  state.player.pos = { x: 560, y: 500 };
+  state.player.pos = {
+    x: (state.viewport.w - state.player.size.w) / 2,
+    y: state.viewport.h * 0.7 - state.player.size.h / 2,
+  };
 }
 
 /** 城镇: E 交互 */
@@ -279,9 +282,53 @@ export function drawTownFrame(ctx: TownCtx): void {
   const [cr, cg, cb] = townColor.split(',').map(s => parseFloat(s.trim()));
   gl.clearColor(cr, cg, cb, 1);   // C-302 城镇底色按镇 (GL 层, 勿画进 canvas 否则盖住角色)
   gl.clear(gl.COLOR_BUFFER_BIT);
-  // 先画角色 (GL 层; 城镇=屏幕坐标, 直接按 pos 绘制)
+  // 玩家 sprite 预计算 (含朝向)
   const tSprite = pickPlayerSprite(state, mouse.state().pos.x);
-  drawSprite(gl, quad, res, state.player.pos, state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot });
+  // 渲染层: 玩家 + NPC 混合按 painter's 算法 (脚底 y 升序) — 玩家走到 NPC 脚下时
+  // 玩家正确显示在 NPC 前面, 走到 NPC 头顶时正确被 NPC 遮挡 (修: 角色在 NPC 下方时被遮挡)
+  type TownSprite = { depth: number; draw: () => void };
+  const townSprites: TownSprite[] = [
+    {
+      // 玩家脚底 = pos.y + size.h (top-left 坐标)
+      depth: state.player.pos.y + state.player.size.h,
+      draw: () => drawSprite(gl, quad, res, state.player.pos, state.player.size, 'characters', tSprite.name, { flip: { x: tSprite.flipX ? -1 : 1, y: 1 }, rot: tSprite.rot }),
+    },
+  ];
+  // NPC (C-301: 按当前镇布局 + viewport 缩放) — npcs 图集 sprite; 祭坛结构物用 ui 光环; 传送阵铺脚下
+  const npcs = townNpcs(state.townId, { w: hudCanvas.width, h: hudCanvas.height });
+  const nearKind = nearestNpc(state, state.townId)?.kind ?? null;
+  for (const npc of npcs) {
+    const near = nearKind === npc.kind;
+    if (npc.kind === 'difficulty') {
+      // 挑战祭坛 (结构物): 脉冲光环 — 脚底近似 npc.pos.y + 26
+      townSprites.push({
+        depth: npc.pos.y + 26,
+        draw: () => {
+          const pulse = 0.75 + 0.25 * Math.sin((performance.now() / 1000) * 3 + npc.pos.x * 0.01);
+          drawSprite(gl, quad, res, { x: npc.pos.x - 26 * pulse, y: npc.pos.y - 26 * pulse }, { w: 52 * pulse, h: 52 * pulse }, 'ui', 'slide_horizontal_color', { color: near ? [1, 0.85, 0.35] : [0.85, 0.4, 1], blend: 'add' });
+        },
+      });
+    } else if (npc.kind === 'exit') {
+      // 出城传送阵: 地面贴图铺脚下 — 脚底 npc.pos.y + 44
+      townSprites.push({
+        depth: npc.pos.y + 44,
+        draw: () => drawSprite(gl, quad, res, { x: npc.pos.x - 44, y: npc.pos.y - 44 }, { w: 88, h: 88 }, 'npcs', 'portal_array'),
+      });
+    } else {
+      // 角色 NPC: 脚下光环 (交互提示) + 站桩 — 脚底 = npc.pos.y - 32 + 56 = npc.pos.y + 24
+      townSprites.push({
+        depth: npc.pos.y + 24,
+        draw: () => {
+          drawSprite(gl, quad, res, { x: npc.pos.x - 16, y: npc.pos.y + 18 }, { w: 32, h: 6 }, 'ui', 'slide_horizontal_color', { color: near ? [0.5, 1, 0.8] : [0.35, 0.55, 0.6] });
+          drawSprite(gl, quad, res, { x: npc.pos.x - 28, y: npc.pos.y - 32 }, { w: 56, h: 56 }, 'npcs', npc.sprite);
+        },
+      });
+    }
+  }
+  // 脚底 y 升序: 在前的画早 (画家算法)
+  townSprites.sort((a, b) => a.depth - b.depth);
+  for (const s of townSprites) s.draw();
+  // 城镇标题 (HUD 层, 永远在 sprite 之上)
   hudCtx.textAlign = 'center';
   hudCtx.fillStyle = '#9aa';
   hudCtx.font = 'bold 26px monospace';
@@ -289,23 +336,8 @@ export function drawTownFrame(ctx: TownCtx): void {
   hudCtx.fillStyle = '#889';
   hudCtx.font = '12px monospace';
   hudCtx.fillText('WASD 移动 · 靠近 NPC 按 E 交互 · [1-5]买 [6]卖 [1-9]重铸/仓储 · Esc 暂停', hudCanvas.width / 2, 62);
-  // NPC (C-301: 按当前镇布局) — npcs 图集 sprite; 祭坛结构物用 ui 光环; 传送阵铺脚下
-  const npcs = townNpcs(state.townId);
-  const nearKind = nearestNpc(state, state.townId)?.kind ?? null;
+  // NPC 名字/提示 (HUD 层, 永远在 sprite 之上)
   for (const npc of npcs) {
-    const near = nearKind === npc.kind;
-    if (npc.kind === 'difficulty') {
-      // 挑战祭坛 (结构物): 脉冲光环
-      const pulse = 0.75 + 0.25 * Math.sin((performance.now() / 1000) * 3 + npc.pos.x * 0.01);
-      drawSprite(gl, quad, res, { x: npc.pos.x - 26 * pulse, y: npc.pos.y - 26 * pulse }, { w: 52 * pulse, h: 52 * pulse }, 'ui', 'slide_horizontal_color', { color: near ? [1, 0.85, 0.35] : [0.85, 0.4, 1], blend: 'add' });
-    } else if (npc.kind === 'exit') {
-      // 出城传送阵: 地面贴图铺脚下
-      drawSprite(gl, quad, res, { x: npc.pos.x - 44, y: npc.pos.y - 44 }, { w: 88, h: 88 }, 'npcs', 'portal_array');
-    } else {
-      // 角色 NPC: 脚下光环 (交互提示) + 站桩
-      drawSprite(gl, quad, res, { x: npc.pos.x - 16, y: npc.pos.y + 18 }, { w: 32, h: 6 }, 'ui', 'slide_horizontal_color', { color: near ? [0.5, 1, 0.8] : [0.35, 0.55, 0.6] });
-      drawSprite(gl, quad, res, { x: npc.pos.x - 28, y: npc.pos.y - 32 }, { w: 56, h: 56 }, 'npcs', npc.sprite);
-    }
     hudCtx.fillStyle = '#fff';
     hudCtx.font = 'bold 14px monospace';
     hudCtx.fillText(npc.name, npc.pos.x, npc.pos.y - 40);
@@ -313,12 +345,12 @@ export function drawTownFrame(ctx: TownCtx): void {
     hudCtx.font = '11px monospace';
     hudCtx.fillText(npc.hint, npc.pos.x, npc.pos.y + 48);
   }
-  // 交互提示
+  // 交互提示 (UI-FIX3: 从 npc.pos.y+14 改为 npc.pos.y-55, 避开脚底光环)
   const npc = nearestNpc(state, state.townId);
   if (npc) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y + 14);
+    hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y - 55);
   }
   // HUD (金/技能点)
   hudCtx.textAlign = 'left';
@@ -345,8 +377,23 @@ export function drawTownFrame(ctx: TownCtx): void {
   if (state.whFlash > 0) state.whFlash = Math.max(0, state.whFlash - 1 / 60);
   // v3: NPC 圈 hover → pointer (走向/交互提示)
   const tmx = mouse.state().pos;
-  const onNpc = townNpcs(state.townId).some(n => inRect(tmx.x, tmx.y, n.pos.x - 30, n.pos.y - 30, 60, 60));
-  canvas.style.cursor = onNpc ? 'pointer' : 'default';
+  const onNpc = npcs.some(n => inRect(tmx.x, tmx.y, n.pos.x - 30, n.pos.y - 30, 60, 60));
+  // 修复: 城镇右上角"返回主菜单"按钮 (玩家无法 Esc 跨过 town → title)
+  const backR: [number, number, number, number] = [hudCanvas.width - 180, 16, 160, 32];
+  const backHit = inRect(tmx.x, tmx.y, ...backR);
+  hudCtx.fillStyle = backHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
+  hudCtx.fillRect(...backR);
+  hudCtx.strokeStyle = backHit ? '#ffd64a' : '#3a3a48';
+  hudCtx.lineWidth = backHit ? 2 : 1;
+  hudCtx.strokeRect(...backR);
+  hudCtx.fillStyle = backHit ? '#fff' : '#9aa';
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.font = 'bold 13px monospace';
+  hudCtx.fillText('返回主菜单(Esc)', hudCanvas.width - 100, 32);
+  hudCtx.textAlign = 'left';
+  hudCtx.textBaseline = 'top';
+  canvas.style.cursor = (onNpc || backHit) ? 'pointer' : 'default';
   mouse.reset();
 }
 

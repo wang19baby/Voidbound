@@ -77,11 +77,12 @@ export function rollElite(r: () => number): boolean {
   return r() < ELITE_CHANCE;
 }
 
-/** 领主判定 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×5 — 精英之上 Boss 之下 */
+/** 领主判定 (M3): 4% 概率, 元素变体 + 体型 ×1.6 + HP×6 — 精英之上 Boss 之下 */
 export const LORD_CHANCE = 0.04;
 export const LORD_SIZE_SCALE = 1.6;
-export const LORD_HP_MULT = 5;
-/** 领主伤害倍率 (M3): 接触/投射 ×1.5 */
+/** 领主 HP 倍率 (×精英基准, 设计 §4 "5-8× 精英" 取 6; 实际 = 2.2×6 = 13.2× 白怪) */
+export const LORD_HP_MULT = 6;
+/** 领主伤害倍率 (×精英基准, 设计 §4; 实际 = 1.5×1.5 = 2.25× 白怪) */
 export const LORD_DMG_MULT = 1.5;
 
 /** 精英属性倍率 */

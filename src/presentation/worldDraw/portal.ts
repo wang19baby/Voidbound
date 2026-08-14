@@ -11,9 +11,9 @@ export function drawPortalAndPools(ctx: DrawCtx): void {
   const vw = state.viewport.w;
   const vh = state.viewport.h;
 
-  // A-W1 门结算: Boss 死亡位传送门 (脉冲光环, 玩家在交互范围内高亮)
-  if (state.run.portal && !state.run.portal.used) {
-    const pp = state.run.portal;
+  // A-W1/A-W4 门结算: 所有 Boss 死亡位传送门 (挑战模式多门并存)
+  for (const pp of state.run.portals) {
+    if (pp.used) continue;
     const sp = worldToScreen(state, { x: pp.x, y: pp.y });
     if (sp.x > -80 && sp.x < vw + 80 && sp.y > -80 && sp.y < vh + 80) {
       const pulse = 0.5 + Math.sin(performance.now() / 250) * 0.15;

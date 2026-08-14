@@ -22,10 +22,3 @@ export const MAP_MODE_DESC: Record<MapMode, string> = {
 export function validMapMode(s: string): MapMode {
   return (MAP_MODES as readonly string[]).includes(s) ? (s as MapMode) : 'linear';
 }
-
-/** 各模式 Boss 召唤阈值 (波2: 复用现有 10 连杀机制, 门数/领主群随波3 补全) */
-export const MODE_BOSS_KILLS: Record<MapMode, number> = {
-  linear: 10,
-  gauntlet: 14,
-  extract: 8,
-};

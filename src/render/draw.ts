@@ -67,8 +67,10 @@ export function drawSprite(
   // (uUv 直通 shader, 必须 atlas-space; 旧实现直传局部值 → NEAREST 采到图集错误区域)
   const fw = sprite.frame_width / bundle.atlas.width;
   const fh = sprite.frame_height / bundle.atlas.height;
+  // UV 是 PNG 坐标 (顶部=0)。纹理上传 UNPACK_FLIP_Y_WEBGL=true (textures.ts: 画布顶部→v=1),
+  // 采样区间需 v 镜像。spriteUv 已内置镜像; opts.uv 覆盖 (sprite 局部坐标) 在此镜像。
   const [du0, dv0, duw, duh] = opts.uv
-    ? [sprite.x / bundle.atlas.width + opts.uv[0] * fw, sprite.y / bundle.atlas.height + opts.uv[1] * fh, opts.uv[2] * fw, opts.uv[3] * fh]
+    ? [sprite.x / bundle.atlas.width + opts.uv[0] * fw, 1 - (sprite.y / bundle.atlas.height + (opts.uv[1] + opts.uv[3]) * fh), opts.uv[2] * fw, opts.uv[3] * fh]
     : spriteUv(sprite, bundle.atlas.width, bundle.atlas.height);
   if (!diagLogged.has(dkey)) {
     diagLogged.add(dkey);

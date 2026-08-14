@@ -18,7 +18,7 @@ import { rollMech, SHIELD_UP_T, SHIELD_DOWN_T, EXPLODE_HP_THRESHOLD, EXPLODE_DMG
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT } from '../moveai';
 import { DIFFICULTY_MODS } from '../difficulty';
 import { AURA_TYPES, THEME_MONSTER_POOL } from './defs';
-import { aabbOverlap } from '../world';
+import { aabbOverlap, worldToChunk, getChunkWalls, densityForMode } from '../world';
 import { spawnRing, spawnBurst, spawnPlayerHitFx } from '../fx/vfx';
 import { spawnDamageNum } from '../fx/damageNum';
 import { spawnDeathFx } from '../fx/deathFx';
@@ -45,14 +45,14 @@ export interface PoisonPool {
 /** 在玩家周围 (安全距离外) 随机 spawn 一只怪物; 避开墙
  *  at: 营地生成锚点 (该点附近 80px 聚簇); 缺省 = 玩家周围 600-1200px
  *  camp: 营地生成选项 (A-W1 三型营地) */
-export function spawnMonster(state: GameState, type: MonsterType, at?: { x: number; y: number }, camp?: { eliteAura?: AuraType; pureSupport?: boolean; forceElite?: boolean }): Monster {
+export function spawnMonster(state: GameState, type: MonsterType, at?: { x: number; y: number }, camp?: { eliteAura?: AuraType; pureSupport?: boolean; forceElite?: boolean; forceLord?: boolean }): Monster {
   const def = MONSTER_DEFS[type];
   const lvScale = levelMonsterScale(state.player.level);
-  // 层级: camp 生成 = 组成确定 (forceElite→精英 / pureSupport→增强光环者 / 其余→白怪);
+  // 层级: camp 生成 = 组成确定 (forceLord→领主 / forceElite→精英 / pureSupport→增强光环者 / 其余→白怪);
   // 无 camp = 全图散怪, 才滚随机 领主 4% / 精英 8% / 增强 30%
-  const isLord = !camp && !def.boss && Math.random() < LORD_CHANCE;
-  const elite = camp ? !!camp.forceElite : !def.boss && !isLord && rollElite(Math.random);
-  const enhanced = camp ? !!camp.pureSupport : !def.boss && !isLord && !elite && Math.random() < ENHANCED_CHANCE;
+  const isLord = camp ? !!camp.forceLord : !def.boss && Math.random() < LORD_CHANCE;
+  const elite = camp ? (camp.forceLord ? false : !!camp.forceElite) : !def.boss && !isLord && rollElite(Math.random);
+  const enhanced = camp ? (camp.forceLord ? false : !!camp.pureSupport) : !def.boss && !isLord && !elite && Math.random() < ENHANCED_CHANCE;
   // 光环: camp 精英带 eliteAura; 专职光环者随机 1 光环; 散怪增强带随机光环
   const aura: AuraType | undefined = camp
     ? (camp.eliteAura ?? (camp.pureSupport ? AURA_TYPES[Math.floor(Math.random() * AURA_TYPES.length)] : undefined))
@@ -61,6 +61,10 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   const mech: import('../mech').MechType | undefined = (elite || isLord) && !def.boss ? rollMech() : undefined;
   // 移动 AI (A-W3 包1): 领主专属
   const moveAI: import('../moveai').MoveAI | undefined = isLord && !def.boss ? rollMoveAI() : undefined;
+  // 领主 bossSkill 三选一 (设计 §6.4: summon/ring/charge 复用; 实例级挂载, 独立于 def.bossSkill)
+  const lordSkill: 'summon' | 'ring' | 'charge' | undefined = isLord && !def.boss
+    ? (['summon', 'ring', 'charge'] as const)[Math.floor(Math.random() * 3)]
+    : undefined;
   // Boss 技能包3 (A-W3): Boss 额外随机 1 个, 与原 bossSkill 组合 (每 Boss 不同)
   const skill3: import('../mech').BossSkill3 | undefined = def.boss ? rollBossSkill3() : undefined;
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
@@ -68,10 +72,17 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
   const baseHp = Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * lvScale);
   const hp = Math.round(
-    baseHp * (elite ? ELITE_HP_MULT : 1) * (isLord ? LORD_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1),
+    baseHp * (elite && !isLord ? ELITE_HP_MULT : 1) * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1),
   );
   const center = at ?? { x: state.player.pos.x, y: state.player.pos.y };
   const ringR = at ? 80 : 600;
+  // 校验墙列表: 玩家附近墙 + at 锚点所在 chunk 墙 (锚点可能远离玩家, 否则远处落点无法验墙)
+  const checkWalls = [...state.world.walls];
+  if (at) {
+    const cc = worldToChunk(center.x, center.y);
+    const d = densityForMode(state.run.mode ?? 'linear');
+    checkWalls.push(...getChunkWalls(cc.cx, cc.cy, d, state.run.mode ?? 'linear'));
+  }
   // 半径 600-1200 px (或营地聚簇 80px), 超出 aggroRange, 不立刻追杀
   for (let i = 0; i < 30; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -79,9 +90,9 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     const x = center.x + Math.cos(a) * r;
     const y = center.y + Math.sin(a) * r;
     if (x < 64 || y < 64 || x > state.world.w - 64 || y > state.world.h - 64) continue;
-    // 验证 spawn 点不撞墙
+    // 验证 spawn 点不撞墙 (含锚点 chunk 远处墙)
     let blocked = false;
-    for (const w of state.world.walls) {
+    for (const w of checkWalls) {
       if (aabbOverlap(x, y, def.size.w * sizeScale, def.size.h * sizeScale, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
         blocked = true;
         break;
@@ -115,6 +126,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       pureSupport: camp?.pureSupport ?? false,
       mech,
       moveAI,
+      bossSkill: lordSkill,
       leapT: 0,
       burrowT: 0,
       shieldT: 0,
@@ -134,17 +146,17 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     }
     return m;
   }
-  // 兜底: 中心北 800
-  return {
+  // 兜底: 中心北 800 (落点校验, 防卡墙); 尊重层级挂载 (forceLord camp 兜底不丢领主)
+  const fb: Monster = {
     id: nextMonsterId++,
     type,
     pos: { x: center.x, y: center.y - 800 },
     vel: { x: 0, y: 0 },
-    hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
-    maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult),
+    hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : elite ? ELITE_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1)),
+    maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : elite ? ELITE_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1)),
     phase: 1,
     burnT: 0, burnDps: 0, burnAccum: 0,
-    size: { w: 32, h: 32 },
+    size: { w: def.size.w * (isLord ? LORD_SIZE_SCALE : 1), h: def.size.h * (isLord ? LORD_SIZE_SCALE : 1) },
     wanderTarget: { x: center.x, y: center.y - 1000 },
     wanderTimer: 3,
     attackCd: 0,
@@ -154,26 +166,30 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     aiT: 0,
     aiCd: 0,
     aiSpawned: 0,
-    elite: false,
-    lord: false,
-    enhanced: false,
-    aura: undefined,
+    elite,
+    lord: isLord,
+    enhanced,
+    aura,
     regenAccum: 0,
     pureSupport: false,
-    mech: undefined,
-    moveAI: undefined,
+    mech,
+    moveAI,
+    bossSkill: lordSkill,
     leapT: 0,
     burrowT: 0,
     shieldT: 0,
     skill3: undefined,
     laserT: 0,
     enrageT: 0,
-    hue: 0,
+    hue,
+    elementId: element,
     subElement: undefined,
     spawned: false,
     bossLike: false,
     fleeT: 0,
   };
+  placeMonsterFree(state, fb, fb.pos.x, fb.pos.y);
+  return fb;
 }
 
 export function pickWanderTarget(state: GameState, x: number, y: number, radius: number): { x: number; y: number } {
@@ -182,9 +198,46 @@ export function pickWanderTarget(state: GameState, x: number, y: number, radius:
     const r = Math.random() * radius;
     const tx = x + Math.cos(a) * r;
     const ty = y + Math.sin(a) * r;
-    if (tx >= 0 && ty >= 0 && tx < state.world.w && ty < state.world.h) return { x: tx, y: ty };
+    if (tx >= 0 && ty >= 0 && tx < state.world.w && ty < state.world.h) {
+      // 目标不落在墙内 (防贴墙磨 / 卡墙角)
+      if (!overlapsWalls(state, tx - 16, ty - 16, 32, 32)) return { x: tx, y: ty };
+    }
   }
   return { x, y };
+}
+
+/** 矩形是否与任何墙重叠 */
+function overlapsWalls(state: GameState, x: number, y: number, w: number, h: number): boolean {
+  for (const wall of state.world.walls) {
+    if (aabbOverlap(x, y, w, h, wall.pos.x, wall.pos.y, wall.size.w, wall.size.h)) return true;
+  }
+  return false;
+}
+
+/** 把怪物安置到 (x,y) 附近不卡墙的位置: 滑移推出 → 仍重叠则随机重掷 */
+function placeMonsterFree(state: GameState, m: Monster, x: number, y: number): void {
+  const w = m.size.w, h = m.size.h;
+  const slid = slideAxis({ x, y, w, h }, state.world.walls);
+  if (!overlapsWalls(state, slid.x, slid.y, w, h)) {
+    m.pos.x = slid.x;
+    m.pos.y = slid.y;
+    return;
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 48 + Math.random() * 160;
+    const nx = x + Math.cos(a) * r;
+    const ny = y + Math.sin(a) * r;
+    if (nx < 0 || ny < 0 || nx + w > state.world.w || ny + h > state.world.h) continue;
+    if (!overlapsWalls(state, nx, ny, w, h)) {
+      m.pos.x = nx;
+      m.pos.y = ny;
+      return;
+    }
+  }
+  // 兜底: 原滑移结果 (至少比墙内好)
+  m.pos.x = slid.x;
+  m.pos.y = slid.y;
 }
 
 /** AABB 滑移: 沿最浅重叠轴推出 (最多 4 次迭代) */
@@ -314,7 +367,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         }
         if (m.burrowT <= 0) {
           if (dist < def.attackRange * 2 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
-            const bdmg = Math.round(def.contactDmg * BURROW_EXIT_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
+            const bdmg = Math.round(def.contactDmg * BURROW_EXIT_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1));
             state.player.hp -= bdmg;
             state.combat.lastKiller = m.type;
             spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${bdmg}`, '#c9aaff');
@@ -338,7 +391,7 @@ export function updateMonsters(state: GameState, dt: number): void {
           m.vel.y = (dy / (dist || 1)) * sp2;
         }
         if (m.leapT <= 0 && dist < def.attackRange * 1.6 && state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
-          const ldmg = Math.round(def.contactDmg * LEAP_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? LORD_DMG_MULT : 1));
+          const ldmg = Math.round(def.contactDmg * LEAP_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1));
           state.player.hp -= ldmg;
           state.combat.lastKiller = m.type;
           spawnDamageNum(state, state.player.pos.x + state.player.size.w / 2, state.player.pos.y - 10, `-${ldmg}`, '#ff9600');
@@ -359,7 +412,7 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.vel.y = 0;
     }
     if (m.mech === 'explode' && m.hp > 0 && m.hp <= m.maxHp * EXPLODE_HP_THRESHOLD && dist < def.attackRange * 2.5) {
-      const dmg = Math.round(def.contactDmg * EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1));
+      const dmg = Math.round(def.contactDmg * EXPLODE_DMG_MULT * DIFFICULTY_MODS[state.difficulty].dmgMult * levelMonsterScale(state.player.level) * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1));
       if (state.player.dodgeT <= 0 && (state.player.reviveInvuln ?? 0) <= 0) {
         state.player.hp -= dmg;
         state.combat.lastKiller = m.type;
@@ -383,29 +436,31 @@ export function updateMonsters(state: GameState, dt: number): void {
       m.attackCd = m.phase === 2 ? 1.6 : def.rangedCooldown;
     }
 
-    if (def.ai === 'dash' || def.bossSkill === 'charge') {
+    if (def.ai === 'dash' || def.bossSkill === 'charge' || m.bossSkill === 'charge') {
       m.aiT -= dt;
       m.aiCd -= dt;
       if (m.aiT <= 0 && m.aiCd <= 0 && dist < def.aggroRange && dist > def.attackRange * 1.5) {
-        m.aiT = def.bossSkill === 'charge' ? 0.5 : 0.35;
-        m.aiCd = def.bossSkill === 'charge' ? 5.0 : 2.5;
+        m.aiT = (def.bossSkill === 'charge' || m.bossSkill === 'charge') ? 0.5 : 0.35;
+        m.aiCd = (def.bossSkill === 'charge' || m.bossSkill === 'charge') ? 5.0 : 2.5;
       }
     }
-    if ((def.boss || m.bossLike) && m.phase === 2) {
+    // 领主 bossSkill (summon/ring/charge, 实例级) 常驻触发; Boss/外层 Boss 二阶段触发
+    if (((def.boss || m.bossLike) && m.phase === 2) || m.bossSkill) {
       m.aiCd -= dt;
       if (m.aiCd <= 0) {
+        const activeSkill = def.bossSkill ?? m.bossSkill;
         const didBase = (() => {
-          if (def.bossSkill === 'summon' && (m.aiSpawned ?? 0) < 3) {
+          if (activeSkill === 'summon' && (m.aiSpawned ?? 0) < 3) {
             const pool = THEME_MONSTER_POOL[state.run.theme];
             const minion = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
-            minion.pos = { x: m.pos.x + (Math.random() * 80 - 40), y: m.pos.y + (Math.random() * 80 - 40) };
+            placeMonsterFree(state, minion, m.pos.x + (Math.random() * 80 - 40), m.pos.y + (Math.random() * 80 - 40));
             minion.spawned = true;
             state.fx.monsters.push(minion);
             spawnRing(state, minion.pos.x + minion.size.w / 2, minion.pos.y + minion.size.h / 2, 44, 0.5, 'circle_02', [0.6, 0.35, 1]);
             m.aiSpawned = (m.aiSpawned ?? 0) + 1;
             m.aiCd = 4.0;
             return true;
-          } else if (def.bossSkill === 'ring') {
+          } else if (activeSkill === 'ring') {
             for (let k = 0; k < 10; k++) spawnEnemyProjectile(state, m, def.contactDmg, (k * Math.PI * 2) / 10);
             spawnRing(state, m.pos.x + m.size.w / 2, m.pos.y + m.size.h / 2, 80, 0.5, 'circle_02', [1, 0.55, 0.3]);
             m.aiCd = 6.0;
@@ -444,7 +499,7 @@ export function updateMonsters(state: GameState, dt: number): void {
               for (let k = 0; k < SUMMON_ELITES_COUNT + 1; k++) {
                 const pool = THEME_MONSTER_POOL[state.run.theme];
                 const e = spawnMonster(state, pool[Math.floor(Math.random() * pool.length)], undefined, { forceElite: true });
-                e.pos = { x: m.pos.x + (Math.random() * 120 - 60), y: m.pos.y + (Math.random() * 120 - 60) };
+                placeMonsterFree(state, e, m.pos.x + (Math.random() * 120 - 60), m.pos.y + (Math.random() * 120 - 60));
                 e.spawned = true;
                 state.fx.monsters.push(e);
                 spawnRing(state, e.pos.x + e.size.w / 2, e.pos.y + e.size.h / 2, 40, 0.5, 'circle_02', [0.6, 0.35, 1]);
@@ -490,7 +545,7 @@ export function updateMonsters(state: GameState, dt: number): void {
 
     const charging = m.aiT > 0;
     const auraHaste = auraActive(state, m, 'haste') ? 1.25 : 1;
-    const spd = def.speed * (charging ? (def.bossSkill === 'charge' ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste * (m.enrageT > 0 ? ENRAGE_SPEED_MULT : 1);
+    const spd = def.speed * (charging ? ((def.bossSkill === 'charge' || m.bossSkill === 'charge') ? 3.5 : 3.2) : m.phase === 2 ? 1.6 : 1) * auraHaste * (m.enrageT > 0 ? ENRAGE_SPEED_MULT : 1);
     const moveAIActive =
       fleeActive ||
       (m.moveAI === 'burrow' && m.burrowT > 0) ||
@@ -505,7 +560,7 @@ export function updateMonsters(state: GameState, dt: number): void {
         const frenzyMult = auraActive(state, m, 'frenzy') ? 0.7 : 1;
         const stoneskin = auraActive(state, m, 'stoneskin');
         const elemental = auraActive(state, m, 'elemental');
-        let dmg = def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1);
+        let dmg = def.contactDmg * DIFFICULTY_MODS[state.difficulty].dmgMult * lvScale * (m.elite ? ELITE_DMG_MULT : 1) * (m.lord ? ELITE_DMG_MULT * LORD_DMG_MULT : 1) * (m.enhanced ? ENHANCED_DMG_MULT : 1);
         if (stoneskin) dmg *= 0.7;
         state.player.hp -= dmg;
         m.attackCd = 1.0 * frenzyMult;
@@ -546,9 +601,9 @@ export function updateMonsters(state: GameState, dt: number): void {
       }
     }
 
-    m.pos.x = Math.max(0, Math.min(state.world.w - def.size.w, m.pos.x + m.vel.x * dt));
-    m.pos.y = Math.max(0, Math.min(state.world.h - def.size.h, m.pos.y + m.vel.y * dt));
-    const slid = slideAxis({ x: m.pos.x, y: m.pos.y, w: def.size.w, h: def.size.h }, walls);
+    m.pos.x = Math.max(0, Math.min(state.world.w - m.size.w, m.pos.x + m.vel.x * dt));
+    m.pos.y = Math.max(0, Math.min(state.world.h - m.size.h, m.pos.y + m.vel.y * dt));
+    const slid = slideAxis({ x: m.pos.x, y: m.pos.y, w: m.size.w, h: m.size.h }, walls);
     m.pos.x = slid.x;
     m.pos.y = slid.y;
   }
@@ -575,7 +630,10 @@ export function killMonster(state: GameState, m: Monster): void {
   state.run.kills = (state.run.kills ?? 0) + 1;
   if (def.boss) {
     state.run.bossKilled = true;
-    state.run.portal = { x: cx, y: cy, bossType: m.type, used: false };
+  }
+  // A-W4: Boss 与外层 Boss (bossLike) 死亡位都生门 — 挑战模式 5 门, 击杀 ≥1 可撤退
+  if (def.boss || m.bossLike) {
+    state.run.portals.push({ x: cx, y: cy, bossType: m.type, used: false });
   } else if (state.run.alive > 0 && !m.spawned) state.run.alive--;
   const ups = gainExp(state, Math.round(def.score * 2 * DIFFICULTY_MODS[state.difficulty].expMult));
   if (ups > 0) inf('combat', `LEVEL UP → ${state.player.level} (+${ups})`);
@@ -616,7 +674,7 @@ export function killMonster(state: GameState, m: Monster): void {
         c.aiSpawned = 1;
         c.spawned = true;
         c.mech = undefined;
-        c.pos = { x: cx + (i === 0 ? -28 : 28), y: cy };
+        placeMonsterFree(state, c, cx + (i === 0 ? -28 : 28), cy);
         state.fx.monsters.push(c);
       }
       spawnBurst(state, cx, cy, 8, [0.8, 0.8, 0.4], 'spark_03', 160, 6, 0.4);
@@ -638,7 +696,7 @@ export function killMonster(state: GameState, m: Monster): void {
       c.maxHp = c.hp;
       c.aiSpawned = 1;
       c.spawned = true;
-      c.pos = { x: cx + (i === 0 ? -24 : 24), y: cy };
+      placeMonsterFree(state, c, cx + (i === 0 ? -24 : 24), cy);
       state.fx.monsters.push(c);
     }
     inf('combat', `${def.type} 分裂 ×2`);

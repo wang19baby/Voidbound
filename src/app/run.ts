@@ -52,6 +52,10 @@ export function startRun(state: GameState, theme: Theme, difficulty: Difficulty,
   state.pauseFrom = 'dungeon';
   // T1a: emit 事件 (FX 服务订阅做 bgm 切换 / 难度提示)
   bus.emit('run.started', { theme, difficulty, mode });
+  // 进图快照: 主题/模式/难度/坐标/element (element 已在 spawnRunPool 内决定)
+  void import('../util/diag').then(({ diag }) =>
+    diag('map', `dungeon start theme=${theme} mode=${mode} diff=${difficulty} element=${String(state.run.element ?? 'none')} pos=(${state.player.pos.x.toFixed(0)},${state.player.pos.y.toFixed(0)}) cam=(${state.camera.x.toFixed(0)},${state.camera.y.toFixed(0)}) viewport=${state.viewport.w}x${state.viewport.h}`),
+  );
 }
 
 /** 确保 dungeon 模式已就绪 (城镇退出时调): 若已是 dungeon 则跳过 */

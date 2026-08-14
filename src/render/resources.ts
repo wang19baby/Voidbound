@@ -81,5 +81,14 @@ export function spriteUv(
   atlasW: number,
   atlasH: number,
 ): [number, number, number, number] {
-  return [s.x / atlasW, s.y / atlasH, s.frame_width / atlasW, s.frame_height / atlasH];
+  // 纹理上传 UNPACK_FLIP_Y_WEBGL=true (gl/textures.ts): 画布顶部 → v=1。
+  // sprite 元数据 y 是 PNG 坐标 (顶部=0) → 采样区间 v 镜像: v0' = 1 - (y+h)/H。
+  // 不镜像时矮 sprite (如 world 图集 128px wall/decor 混排 384px floor) 会采样到
+  // 镜像后的空白区 → 全透明不可见 (碰撞仍在) — 2026-08-13 修复。
+  return [
+    s.x / atlasW,
+    1 - (s.y + s.frame_height) / atlasH,
+    s.frame_width / atlasW,
+    s.frame_height / atlasH,
+  ];
 }

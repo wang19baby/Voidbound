@@ -22,6 +22,8 @@ export interface UiState {
   explored: Set<string>;
   /** 标题屏提示消息 (跨屏通用, 多处显示) */
   titleMsg: string;
+  /** 创建模式 2 步流程: true = 选职业, false = 命名+难度+主题+模式 */
+  classStep1: boolean;
 }
 
 /** 空 UiState 工厂 (GameState 初始化用) */
@@ -34,5 +36,6 @@ export function createEmptyUiState(): UiState {
     deathUndo: 0,
     explored: new Set<string>(),
     titleMsg: '',
+    classStep1: false,
   };
 }

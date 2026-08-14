@@ -85,7 +85,8 @@ export function drawCollectionPanel(ctx: CollectionCtx): void {
     hudCtx.fillStyle = col;
     hudCtx.font = '14px monospace';
     hudCtx.fillText(val, w / 2 + 40, y);
-    y += 32;
+    // UI-FIX5: 紧凑布局 (32→24), 关闭按钮从 h-84 上移到 y=460, 整体收尾到 y≤500
+    y += 24;
   };
   const skillBound = SKILL_SLOTS.filter(slot => !!getSkill(slot)).length;
   row('技能池', `${skillBound}/${Object.keys(SKILL_SPECS).length} (当前职业绑定)`);
@@ -103,8 +104,8 @@ export function drawCollectionPanel(ctx: CollectionCtx): void {
     .join(' · ');
   row('最佳记录', bestText || '—');
 
-  // 关闭按钮
-  const cr: [number, number, number, number] = [w / 2 - 90, h - 84, 180, 40];
+  // 关闭按钮 (UI-FIX5: 从 h-84 上移到 y=460, 减少底部空白)
+  const cr: [number, number, number, number] = [w / 2 - 90, 460, 180, 40];
   const hit = inRect(mouse.state().pos.x, mouse.state().pos.y, ...cr);
   hudCtx.fillStyle = hit ? 'rgba(255,255,255,0.12)' : 'rgba(30,30,42,0.9)';
   hudCtx.fillRect(...cr);

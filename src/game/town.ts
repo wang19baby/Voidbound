@@ -71,9 +71,17 @@ export const TOWN_DEFS: Record<TownId, TownDef> = {
   },
 };
 
-/** 当前镇 NPC 列表 (C-301): 按 townId 取 */
-export function townNpcs(townId: TownId): TownNpc[] {
-  return TOWN_DEFS[townId]?.npcs ?? TOWN_DEFS.greenwing.npcs;
+/** 城镇 NPC 基准视口 (1280×720 为设计基准) */
+const BASE_W = 1280;
+const BASE_H = 720;
+
+/** 当前镇 NPC 列表 (C-301): 按 townId 取, viewport 缩放 (修复: 窗口放大 NPC 不跑左上角) */
+export function townNpcs(townId: TownId, viewport?: { w: number; h: number }): TownNpc[] {
+  const base = TOWN_DEFS[townId]?.npcs ?? TOWN_DEFS.greenwing.npcs;
+  if (!viewport || (viewport.w === BASE_W && viewport.h === BASE_H)) return base;
+  const sx = viewport.w / BASE_W;
+  const sy = viewport.h / BASE_H;
+  return base.map(n => ({ ...n, pos: { x: n.pos.x * sx, y: n.pos.y * sy } }));
 }
 
 /** 城镇解锁判定 (C-301): 通关前置主题全部 → 解锁; 新手镇默认 */
@@ -88,12 +96,13 @@ export function unlockedTowns(cleared: readonly string[]): TownId[] {
   return TOWN_IDS.filter(t => unlockedTown(cleared, t));
 }
 
-/** 最近 NPC (80px 内; 按当前镇布局) */
+/** 最近 NPC (80px 内; 按当前镇布局 + viewport 缩放) */
 export function nearestNpc(state: GameState, townId: TownId): TownNpc | null {
   const p = state.player.pos;
+  const npcs = townNpcs(townId, { w: state.viewport.w, h: state.viewport.h });
   let best: TownNpc | null = null;
   let bestD = 80 * 80;
-  for (const n of townNpcs(townId)) {
+  for (const n of npcs) {
     const dx = n.pos.x - (p.x + 32);
     const dy = n.pos.y - (p.y + 32);
     const d = dx * dx + dy * dy;

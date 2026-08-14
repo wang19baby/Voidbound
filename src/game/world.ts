@@ -8,7 +8,7 @@ export interface Wall {
   size: { w: number; h: number };
 }
 
-export const BLOCK = 128;
+export const BLOCK = 128; // 墙块尺寸恢复 (2026-08-13: 32px 1/4 看不清贴图 → 回 128px 1:1)
 export const CHUNK_BLOCKS = 8;
 export const CHUNK_SIZE = BLOCK * CHUNK_BLOCKS; // 1024
 export const WORLD_W = 20480; // 16x 视口
@@ -72,105 +72,168 @@ export function worldToChunk(x: number, y: number): { cx: number; cy: number } {
   };
 }
 
-/** 生成单个 chunk 的 wall 列表
+/** 生成单个 chunk 的 wall 列表 (开放场地 + 稀疏墙簇, 2026-08-13 重写 v3)
  *  设计:
- *   - 8x8 grid, 1 block = 128px
- *   - 中间 2x2 走廊 (row 3-4, col 3-4) 强制空
- *   - 外圈 (row 0/7, col 0/7) 强制空 → 保证相邻 chunk 跨边界连通
- *   - 内部 6x6 范围 18% 密度墙
+ *   - 8x8 grid, 1 block = 128px (墙块 1:1, 贴图清晰)
+ *   - 默认全开放 → 按 density 撒 1-2 块小墙簇作战斗掩体 (不围房间, 不封路)
+ *   - 外圈 1 块永不置墙 → chunk 边界天然连通, 无门洞/孤岛问题
+ *   - density 直接控制墙量: linear 0.18 / gauntlet 0.22 / extract 0.16
+ *     (旧 v2 全图填墙再挖房间, 墙占比 52% 且 density 无效 → 战斗空区过小)
+ *   - 墙簇互不相邻 (8 邻域留空) → 无长墙、无死角, 怪物可绕行不卡墙
  */
 export function generateChunkWalls(cx: number, cy: number, density: number = 0.18, mode: MapMode = 'linear'): Wall[] {
   const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xcafef00d);
-  const walls: Wall[] = [];
-  // 默认全空, 然后随机填墙
+  const G = CHUNK_BLOCKS; // 8
   const isWall: boolean[][] = [];
-  for (let r = 0; r < CHUNK_BLOCKS; r++) {
-    const row: boolean[] = [];
-    for (let c = 0; c < CHUNK_BLOCKS; c++) {
-      // 边界 + 十字走廊 强制空 (row 3,4 / col 3,4 全空, 含中央 2x2 交汇 → 跨 chunk 连通)
-      const isBorder = r === 0 || r === CHUNK_BLOCKS - 1 || c === 0 || c === CHUNK_BLOCKS - 1;
-      const isAxisCorridor = (r === 3 || r === 4) || (c === 3 || c === 4);
-      if (isBorder || isAxisCorridor) {
-        row.push(false);
-      } else {
-        // 内部 4x4 + 边角 12 块, 按模式密度 (A-W2: 线性18% / 高级22% / 挑战16%)
-        row.push(rand() < density);
-      }
+  for (let r = 0; r < G; r++) isWall.push(new Array<boolean>(G).fill(false));
+
+  // === 密度梯度 (设计 §2.4): 距出生基准点越远墙越密 (近开远密) ===
+  // 纯 (cx,cy,mode) 函数 → chunk 缓存确定性
+  // linear: 距左端 (主轴左→右, 左开右密) / extract: 距中央 (中央出生向外, 中开外密)
+  // gauntlet: 距最近角落 (出生角随机四选一, 角开中密 — 角落入口 → 中央 Boss, 外→内递进)
+  {
+    const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
+    const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
+    let d: number;
+    if (mode === 'linear') {
+      const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
+      d = Math.max(cx, Math.abs(cy - refY));
+    } else if (mode === 'extract') {
+      const refX = Math.floor((WORLD_W / 2) / CHUNK_SIZE);
+      const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
+      d = Math.max(Math.abs(cx - refX), Math.abs(cy - refY));
+    } else {
+      // gauntlet: 距 4 个角落的最近 Chebyshev 距离
+      d = Math.min(
+        Math.max(cx, cy),
+        Math.max(maxCx - cx, cy),
+        Math.max(cx, maxCy - cy),
+        Math.max(maxCx - cx, maxCy - cy),
+      );
     }
-    isWall.push(row);
+    density = Math.min(0.5, density * (1 + d * 0.15)); // 每 chunk 距离 +15%, 封顶 0.5
   }
 
-  // === A-W2 地标雕刻 pass (设计文档 §2.4): 模式专属结构覆盖随机墙 ===
-  applyLandmarkCarve(isWall, cx, cy, mode);
+  // 墙簇数 = density × 格数 / 1.5 (簇含 30% 双格 → 实际墙格 ≈ density × 格数)
+  // 4 直邻互斥 (对角允许): 上限 18 格, 密度梯度 (0.18→0.5) 可表达; 无长墙/死角
+  const clusterTarget = Math.max(3, Math.round((density * G * G) / 1.5));
+  // 上下左右直邻是否已有墙 (簇间留 1 格空隙; 对角相邻不算长墙)
+  const touchingWall = (r: number, c: number): boolean => {
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as Array<[number, number]>) {
+      const rr = r + dr, cc = c + dc;
+      if (rr < 0 || rr >= G || cc < 0 || cc >= G) continue;
+      if (isWall[rr][cc]) return true;
+    }
+    return false;
+  };
+
+  let placed = 0;
+  let guard = 0;
+  while (placed < clusterTarget && guard++ < 200) {
+    // 内区 1..6 撒点 (外圈保持开放, chunk 间可通行)
+    const r = 1 + Math.floor(rand() * (G - 2));
+    const c = 1 + Math.floor(rand() * (G - 2));
+    if (isWall[r][c] || touchingWall(r, c)) continue;
+    isWall[r][c] = true;
+    placed++;
+    // 30% 扩展成 2 块簇 (上下左右之一, 仍避开既有墙)
+    if (placed < clusterTarget && rand() < 0.3) {
+      const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      const [dr, dc] = dirs[Math.floor(rand() * dirs.length)];
+      const r2 = r + dr, c2 = c + dc;
+      if (r2 >= 1 && r2 < G - 1 && c2 >= 1 && c2 < G - 1 && !isWall[r2][c2] && !touchingWall(r2, c2)) {
+        isWall[r2][c2] = true;
+        placed++;
+      }
+    }
+  }
+
+  // === 地标雕刻 pass (A-W2 设计 §2.4): 普通模式 = 主轴走廊 + 分支房间 ===
+  // 主轴: 全局固定行 (row 5 = 出生行 y=5760/128 mod 8) 全开 → 跨 chunk 对齐成左→右主走廊
+  // 分支: 2-3 条垂直通道 (1 格宽, 喉点) + 末端 2×2 宝藏/营地房间; 分支列不重复且间隔 ≥2
+  // 分支布局用独立种子 RNG (branchRand): 撒墙簇主 rand 消费次数随机, 不可重放 →
+  // linearBranchRooms 用同一 branchRand 复算 → 房间坐标确定一致 (MM-FIX8)
+  if (mode === 'linear') {
+    const MAIN_ROW = 5;
+    for (let c = 0; c < G; c++) isWall[MAIN_ROW][c] = false;
+
+    const branchRand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0x5eedf00d);
+    const branchCount = 2 + Math.floor(branchRand() * 2); // 2-3 条
+    const usedCols: number[] = [];
+    for (let i = 0; i < branchCount; i++) {
+      // 分支列: 避开边 (0/7) 与已用列 (间隔 ≥2)
+      let bc = -1;
+      for (let tries = 0; tries < 12 && bc < 0; tries++) {
+        const cand = 1 + Math.floor(branchRand() * (G - 2));
+        if (usedCols.some(u => Math.abs(u - cand) < 2)) continue;
+        bc = cand;
+      }
+      if (bc < 0) break;
+      usedCols.push(bc);
+      // 通道方向: 上/下随机, 长度 2-3 格 (喉点)
+      const dir = branchRand() < 0.5 ? -1 : 1;
+      const len = 2 + Math.floor(branchRand() * 2);
+      const r1 = MAIN_ROW + dir;
+      const rEnd = Math.max(1, Math.min(G - 2, r1 + dir * (len - 1)));
+      for (let r = Math.min(r1, rEnd); r <= Math.max(r1, rEnd); r++) isWall[r][bc] = false;
+      // 末端 2×2 房间 (通道末端 + 横向 1 格)
+      const rA = rEnd, rB = Math.max(1, Math.min(G - 2, rEnd + dir));
+      const cB = Math.max(1, Math.min(G - 2, bc + 1));
+      isWall[rB][bc] = false;
+      isWall[rA][cB] = false;
+      isWall[rB][cB] = false;
+    }
+  }
 
   // 转 walls
   const ox = cx * CHUNK_SIZE;
   const oy = cy * CHUNK_SIZE;
-  for (let r = 0; r < CHUNK_BLOCKS; r++) {
-    for (let c = 0; c < CHUNK_BLOCKS; c++) {
-      if (isWall[r][c]) {
-        walls.push({ pos: { x: ox + c * BLOCK, y: oy + r * BLOCK }, size: { w: BLOCK, h: BLOCK } });
-      }
+  const walls: Wall[] = [];
+  for (let r = 0; r < G; r++) {
+    for (let c = 0; c < G; c++) {
+      if (isWall[r][c]) walls.push({ pos: { x: ox + c * BLOCK, y: oy + r * BLOCK }, size: { w: BLOCK, h: BLOCK } });
     }
   }
   return walls;
 }
 
-/** 地标雕刻: 覆盖随机墙, 建立模式结构
- *  linear  : 主轴带 (y 中部 2 块高) 全空 → 左→右主走廊; 主带两侧随机留墙 (分支感)
- *  gauntlet: 中央 2x2 清空成竞技场 + 周边环墙 (外→内递进终点); 四角领主区清空小块
- *  extract : 中央 2x2 清空成出生竞技场; 四方向区保留随机 (密度梯度由 density 承担)
- */
-function applyLandmarkCarve(isWall: boolean[][], cx: number, cy: number, mode: MapMode): void {
-  const midC = Math.floor((WORLD_W / CHUNK_SIZE) / 2);
-  const midR = Math.floor((WORLD_H / CHUNK_SIZE) / 2);
-  const clearBlock = (r0: number, c0: number, rows: number, cols: number) => {
-    for (let r = Math.max(1, r0); r < Math.min(CHUNK_BLOCKS - 1, r0 + rows); r++) {
-      for (let c = Math.max(1, c0); c < Math.min(CHUNK_BLOCKS - 1, c0 + cols); c++) isWall[r][c] = false;
-    }
-  };
-  if (mode === 'linear') {
-    // 主轴带: y 中部 2 块高, 全图水平贯通 (出生左 → Boss 右)
-    if (cy === midR || cy === midR - 1) {
-      for (let r = 3; r <= 4; r++) for (let c = 0; c < CHUNK_BLOCKS; c++) isWall[r][c] = false;
-    }
-    // 分支密室: 主带两侧偶发死路 pocket (1 块宽 2 块深, 藏宝)
-    const pocketRng = mulberry32(cx * 99371 ^ cy * 1913 ^ 0xabcd);
-    if (pocketRng() < 0.25 && cy !== midR && cy !== midR - 1) {
-      const side = cy < midR - 1 ? 0 : 1;  // 主带上/下侧
-      const c0 = 2 + Math.floor(pocketRng() * 4);  // Review: 种子化 + c0≥2 (不写边界/走廊列)
-      if (side === 0) { for (let c = c0; c < c0 + 2; c++) isWall[2][c] = false; }
-      else { for (let c = c0; c < c0 + 2; c++) isWall[5][c] = false; }
-    }
-  } else if (mode === 'gauntlet') {
-    // 中央竞技场: 2x2 清空 + 环墙 (外圈是墙)
-    if (Math.abs(cx - midC) <= 1 && Math.abs(cy - midR) <= 1) {
-      clearBlock(2, 2, 4, 4);  // 内部 4x4 清空
-      for (let r = 1; r < CHUNK_BLOCKS - 1; r++) {
-        for (let c = 1; c < CHUNK_BLOCKS - 1; c++) {
-          if (r === 1 || r === CHUNK_BLOCKS - 2 || c === 1 || c === CHUNK_BLOCKS - 2) isWall[r][c] = true;  // 环墙
-        }
-      }
-    }
-    // 四角领主区: 角 chunk 清空小块 (守卫群位置)
-    const corner = (cx === 0 || cx === Math.floor(WORLD_W / CHUNK_SIZE) - 1) && (cy === 0 || cy === Math.floor(WORLD_H / CHUNK_SIZE) - 1);
-    if (corner) {
-      clearBlock(2, 2, 2, 2);
-      for (let r = 1; r < 4; r++) for (let c = 1; c < 4; c++) {
-        if (r === 1 || c === 1) isWall[r][c] = true;
-      }
-    }
-  } else if (mode === 'extract') {
-    // 中央出生竞技场: 2x2 清空 (回中央决战)
-    if (Math.abs(cx - midC) <= 1 && Math.abs(cy - midR) <= 1) {
-      clearBlock(2, 2, 4, 4);
-    }
-  }
-}
-
 /** chunk 缓存 (同 chunk 同墙, 避免重复生成); A-W2 按 密度+模式 分键 (模式切换清缓存) */
 const chunkCache = new Map<string, Wall[]>();
 function chunkKey(cx: number, cy: number, density: number, mode: MapMode): string { return `${cx},${cy}:${density}:${mode}`; }
+
+/** linear 模式分支房间中心坐标 (世界 px) — MM-FIX8
+ *  与 generateChunkWalls 雕刻共用同一 branchRand 种子 → 房间位置确定一致
+ *  用于 spawnRunPool: 分支尽头放营地/宝藏/强化点 (设计 §2.1) */
+export function linearBranchRooms(cx: number, cy: number): Array<{ x: number; y: number }> {
+  const G = CHUNK_BLOCKS;
+  const MAIN_ROW = 5;
+  const branchRand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0x5eedf00d);
+  const out: Array<{ x: number; y: number }> = [];
+  const branchCount = 2 + Math.floor(branchRand() * 2);
+  const usedCols: number[] = [];
+  for (let i = 0; i < branchCount; i++) {
+    let bc = -1;
+    for (let tries = 0; tries < 12 && bc < 0; tries++) {
+      const cand = 1 + Math.floor(branchRand() * (G - 2));
+      if (usedCols.some(u => Math.abs(u - cand) < 2)) continue;
+      bc = cand;
+    }
+    if (bc < 0) break;
+    usedCols.push(bc);
+    const dir = branchRand() < 0.5 ? -1 : 1;
+    const len = 2 + Math.floor(branchRand() * 2);
+    const r1 = MAIN_ROW + dir;
+    const rEnd = Math.max(1, Math.min(G - 2, r1 + dir * (len - 1)));
+    const rB = Math.max(1, Math.min(G - 2, rEnd + dir));
+    const cB = Math.max(1, Math.min(G - 2, bc + 1));
+    // 房间中心 = 2×2 房间对角中点
+    out.push({
+      x: cx * CHUNK_SIZE + ((bc + cB) / 2 + 0.5) * BLOCK,
+      y: cy * CHUNK_SIZE + ((rEnd + rB) / 2 + 0.5) * BLOCK,
+    });
+  }
+  return out;
+}
 
 export function getChunkWalls(cx: number, cy: number, density: number = 0.18, mode: MapMode = 'linear'): Wall[] {
   const k = chunkKey(cx, cy, density, mode);
@@ -213,7 +276,14 @@ export function getActiveWalls(state: GameState, radius = 2): Wall[] {
       out.push(...getChunkWalls(cx, cy, density, mode));
     }
   }
-  return out;
+  // 防出生卡墙 (房间+通道生成后出生点可能落在墙区): 剔除玩家矩形占据的所有墙 cell
+  const p = state.player;
+  const pcx0 = Math.floor(p.pos.x / BLOCK), pcy0 = Math.floor(p.pos.y / BLOCK);
+  const pcx1 = Math.floor((p.pos.x + p.size.w - 1) / BLOCK), pcy1 = Math.floor((p.pos.y + p.size.h - 1) / BLOCK);
+  return out.filter(w => {
+    const wx = Math.floor(w.pos.x / BLOCK), wy = Math.floor(w.pos.y / BLOCK);
+    return wx < pcx0 || wx > pcx1 || wy < pcy0 || wy > pcy1;
+  });
 }
 
 /** 检测玩家矩形与墙列表中任意墙是否碰撞; 返回首个碰撞墙 */
@@ -232,7 +302,7 @@ export function buildDungeonWalls(): Wall[] {
   return generateChunkWalls(10, 7); // 占位, 实际用 getActiveWalls
 }
 
-// === V1 画质: 障碍物装饰 (纯视觉, 无碰撞) ===
+/** V1 画质: 障碍物装饰 (纯视觉, 无碰撞) */
 
 export interface Decor {
   pos: { x: number; y: number };

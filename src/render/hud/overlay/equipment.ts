@@ -138,7 +138,15 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.fillStyle = '#aaa';
     ctx2d.fillText(k, rx, ry);
     ctx2d.fillStyle = '#eee';
-    ctx2d.fillText(v, rx + 130, ry);
+    if (k === '抗性') {
+      // UI-FIX4: 抗性行用 11px 字号 + 逗号分隔, 防止 350 px 文字溢出右边界 120 px
+      ctx2d.save();
+      ctx2d.font = '11px monospace';
+      ctx2d.fillText(DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(', '), rx + 130, ry);
+      ctx2d.restore();
+    } else {
+      ctx2d.fillText(v, rx + 130, ry);
+    }
     ry += 20;
   }
   ctx2d.fillStyle = '#888';

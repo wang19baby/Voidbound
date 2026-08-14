@@ -84,16 +84,10 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   const my = mouse.state().pos.y;
   const hover = (x: number, y: number, ww: number, hh: number) => inRect(mx, my, x, y, ww, hh);
 
-  // GL 立绘 (左上, 2D 层挖孔)
-  const px = w / 2 - 620, py = 56, pw = 150, ph = 150;
-  drawUiPortrait(selClass.id, px, py, pw, ph);
+  // 背景清空 (单色 0,0,12) — 替代之前 line 88-99 的 GL 立绘 100×100 (已删, 步骤 2 自带 80×80 立绘)
   hudCtx.clearRect(0, 0, w, h);
   hudCtx.fillStyle = '#0b0b12';
   hudCtx.fillRect(0, 0, w, h);
-  hudCtx.clearRect(px, py, pw, ph);
-  hudCtx.strokeStyle = '#8a8a96';
-  hudCtx.lineWidth = 2;
-  hudCtx.strokeRect(px - 4, py - 4, pw + 8, ph + 8);
 
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
@@ -106,8 +100,8 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
     : creating ? '输入角色名, 选择职业与挑战, Enter 出发'
     : '选择职业与挑战, 出发进入地牢', w / 2, 110);
 
-  // 创建模式: 命名框 (点击聚焦, Enter 出发)
-  if (creating) {
+  // 创建模式: 命名框 (仅步骤 2 显示, 步骤 1 只选职业)
+  if (creating && !state.ui.classStep1) {
     const nx = w / 2 - 180, ny = 148, nw = 360, nh = 40;
     const nHit = hover(nx, ny, nw, nh);
     hudCtx.fillStyle = isNgNaming() ? 'rgba(255,214,74,0.10)' : nHit ? 'rgba(255,255,255,0.07)' : 'rgba(20,20,28,0.92)';
@@ -132,202 +126,254 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
     rects.push([nx, ny, nw, nh]);
   }
 
-  // 上次配置复用 (右上)
-  const last = loadLastNg();
-  const lx = w - 460, ly = 20, lw = 220, lh = 40;
-  const lHit = hover(lx, ly, lw, lh);
-  hudCtx.fillStyle = lHit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.9)';
-  hudCtx.fillRect(lx, ly, lw, lh);
-  hudCtx.strokeStyle = lHit ? '#66ccff' : '#3a3a48';
-  hudCtx.lineWidth = lHit ? 2 : 1;
-  hudCtx.strokeRect(lx, ly, lw, lh);
-  hudCtx.fillStyle = lHit ? '#fff' : '#9aa';
-  hudCtx.font = 'bold 13px monospace';
-  if (last) {
-    const lc = CLASS_DEFS[CLASS_IDS[Math.min(Math.max(0, last.classIdx), CLASS_IDS.length - 1)]];
-    hudCtx.fillText(`上次: ${lc.name} · ${DIFFICULTY_MODS[DIFFICULTIES[Math.min(Math.max(0, last.diffIdx), DIFFICULTIES.length - 1)]].name}`, lx + lw / 2, ly + 15);
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '11px monospace';
-    hudCtx.fillText(`[↺ 复用] ${THEME_NAMES[THEMES[Math.min(Math.max(0, last.themeIdx), THEMES.length - 1)]]} · ${MAP_MODE_NAMES[MAP_MODES[Math.min(Math.max(0, last.modeIdx), MAP_MODES.length - 1)]]}`, lx + lw / 2, ly + 31);
-  } else {
-    hudCtx.fillText('上次配置: 暂无', lx + lw / 2, ly + lh / 2);
-  }
-  rects.push([lx, ly, lw, lh]);
+  // ===== 方案 G: 中央大字 + 横排小字 (集中布局) =====
 
-  // 左列: 职业 (town 模式锁定当前角色)
-  const cx = w / 2 + NG_LAYOUT.classX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#9cf';
-  hudCtx.fillText(fromTown ? `当前: ${selClass.name}` : '职业 [1-6]', cx + 140, cy - 40);
-  if (fromTown) {
-    hudCtx.font = 'bold 20px monospace';
-    hudCtx.fillStyle = selClass.color;
-    hudCtx.fillText(selClass.name, cx + 140, cy - 8);
-    hudCtx.font = '13px monospace';
-    hudCtx.fillStyle = '#bbb';
-    hudCtx.fillText(selClass.title, cx + 140, cy + 20);
-    hudCtx.fillStyle = '#889';
-    hudCtx.font = '12px monospace';
-    hudCtx.fillText(`${selClass.desc}`, cx + 140, cy + 44);
-  } else {
-    CLASS_IDS.forEach((id, i) => {
-      const def = CLASS_DEFS[id];
-      const sel = state.ngSel.classIdx === i;
-      const ry = cy + i * NG_ROW_CLASS - NG_LAYOUT.classH / 2;
-      if (hover(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH)) {
-        hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-        hudCtx.fillRect(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH);
-      }
-      hudCtx.font = 'bold 18px monospace';
-      hudCtx.fillStyle = sel ? def.color : '#8a8a96';
-      hudCtx.fillText(`${i + 1} ${sel ? '▶ ' : '  '}${def.name}${sel ? ' ◀' : ''}`, cx + 150, cy + i * NG_ROW_CLASS);
-      hudCtx.font = '12px monospace';
-      hudCtx.fillStyle = sel ? '#bbb' : '#8a8a96';
-      hudCtx.fillText(def.title, cx + 150, cy + i * NG_ROW_CLASS + 18);
-      // 副行: 起始技能 + 主属性
-      const slots = def.skillSlots;
-      const skillLine = ['Q', 'W', 'E', 'R'].map(s => SKILL_SPECS[slots[s as keyof typeof slots]]?.name ?? '').filter(Boolean).join('/');
-      hudCtx.fillStyle = sel ? '#9aa' : '#8a8a96';
+  // 中央: 职业大字 (固定, 不能切换, 不显示候选)
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  // 副标 (职业说明)
+  hudCtx.fillStyle = '#889';
+  hudCtx.font = '13px monospace';
+  hudCtx.fillText(fromTown ? '当前已确认 (城镇出发)' : creating ? '新建角色 (请确认职业)' : '当前已确认 (复用角色)', w / 2, cy - 120);
+  if (creating) {
+    if (state.ui.classStep1) {
+      // ===== 创建模式 步骤 1: 选职业 (modal: 全屏遮罩 + 6 卡片 + 早 return) =====
+      // 全屏半透明黑色遮罩, 防止下面屏 hover/绘制透传
+      hudCtx.fillStyle = 'rgba(0, 0, 0, 0.92)';
+      hudCtx.fillRect(0, 0, w, h);
+      // 标题 + 步骤提示
+      hudCtx.fillStyle = '#c9aaff';
+      hudCtx.font = 'bold 36px monospace';
+      hudCtx.fillText('选择职业', w / 2, 80);
+      hudCtx.fillStyle = '#9aa';
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText('步骤 1/2  ·  ←→ / 鼠标 切换  ·  Enter 确定', w / 2, 120);
+      const cardW = 160, cardH = 220, cardGap = 14;
+      const cardTotalW = CLASS_IDS.length * cardW + (CLASS_IDS.length - 1) * cardGap;
+      const cardX0 = (w - cardTotalW) / 2;
+      const cardY = cy - 50;
+      CLASS_IDS.forEach((id, i) => {
+        const def = CLASS_DEFS[id];
+        const sel = state.ngSel.classIdx === i;
+        const cx2 = cardX0 + i * (cardW + cardGap);
+        // 卡片立绘 (60×60, 顶部居中) — 第一张 clear, 后续不清 (叠加保留 6 张)
+        const px2 = cx2 + cardW / 2 - 30, py2 = cardY + 12;
+        const pSize = 60;
+        drawUiPortrait(id, px2, py2, pSize, pSize, i > 0);
+        hudCtx.clearRect(px2, py2, pSize, pSize);
+        hudCtx.strokeStyle = sel ? '#ffd64a' : '#3a3a48';
+        hudCtx.lineWidth = sel ? 3 : 1;
+        hudCtx.strokeRect(px2 - 3, py2 - 3, pSize + 6, pSize + 6);
+        if (sel) {
+          hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
+          hudCtx.fillRect(cx2, cardY, cardW, cardH);
+        }
+        hudCtx.strokeStyle = sel ? '#ffd64a' : '#3a3a48';
+        hudCtx.lineWidth = sel ? 3 : 1;
+        hudCtx.strokeRect(cx2, cardY, cardW, cardH);
+        hudCtx.fillStyle = sel ? def.color : '#eee';
+        hudCtx.font = 'bold 16px monospace';
+        hudCtx.textAlign = 'center';
+        hudCtx.textBaseline = 'middle';
+        hudCtx.fillText(def.name, cx2 + cardW / 2, cardY + 100);
+        hudCtx.fillStyle = sel ? '#fda' : '#888';
+        hudCtx.font = '12px monospace';
+        hudCtx.fillText(def.title, cx2 + cardW / 2, cardY + 122);
+        hudCtx.fillStyle = '#666';
+        hudCtx.font = '10px monospace';
+        const descShort = def.desc.length > 12 ? def.desc.slice(0, 12) + '…' : def.desc;
+        hudCtx.fillText(descShort, cx2 + cardW / 2, cardY + 148);
+        hudCtx.fillStyle = '#555';
+        hudCtx.font = '10px monospace';
+        const sk = ['Q', 'W', 'E', 'R'].map(s => SKILL_SPECS[def.skillSlots[s as keyof typeof def.skillSlots]]?.name ?? '').filter(Boolean).join('/');
+        hudCtx.fillText(sk, cx2 + cardW / 2, cardY + 170);
+        // 属性
+        hudCtx.fillStyle = '#777';
+        hudCtx.font = '10px monospace';
+        hudCtx.fillText(ATTR_NAMES[def.attr] ?? def.attr, cx2 + cardW / 2, cardY + 195);
+        rects.push([cx2, cardY, cardW, cardH]);
+      });
+      // 步骤 1 是 modal: 早 return, 跳过下面难度/主题/模式/出发 (避免透传)
+      return;
+    } else {
+      // ===== 创建模式 步骤 2: 立绘 + 职业名 (可点回步骤 1) + 角色名 + 命名 =====
+      // 职业立绘 100×100 居中 (原 100×100 位置: 中心 cx-300, cy-60, 范围 cx-340..cx-260, cy-100..cy-20)
+      const pSize = 100;
+      const px2 = w / 2 - 60 - pSize, py2 = cy - 40;
+      drawUiPortrait(selClass.id, px2, py2, pSize, pSize, true);
+      hudCtx.clearRect(px2, py2, pSize, pSize);
+      hudCtx.strokeStyle = '#66ccff';
+      hudCtx.lineWidth = 2;
+      hudCtx.strokeRect(px2 - 2, py2 - 2, pSize + 4, pSize + 4);
+      // 职业名 (40px, 在立绘右侧, 居中)
+      hudCtx.fillStyle = selClass.color;
+      hudCtx.font = 'bold 40px monospace';
+      hudCtx.textAlign = 'center';
+      hudCtx.textBaseline = 'middle';
+      hudCtx.fillText(selClass.name, w / 2 + 30, cy - 20);
+      // 副标 (点击提示)
+      hudCtx.fillStyle = '#888';
       hudCtx.font = '11px monospace';
-      hudCtx.fillText(`${skillLine} · ${ATTR_NAMES[def.attr] ?? def.attr}`, cx + 150, cy + i * NG_ROW_CLASS + 36);
-      rects.push([cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH]);
-    });
+      hudCtx.fillText('▼ 点击职业区切换职业 ▼', w / 2 + 30, cy + 18);
+      // 职业区点击命中 (立绘 + 职业名 + 角色名 区域, 命名框下方避开)
+      rects.push([w / 2 - 200, cy - 60, 400, 100]);
+    }
+  } else {
+    // ===== 非创建模式: 单职业, 中央大字, 不可切换 (复用当前角色) =====
+    hudCtx.fillStyle = selClass.color;
+    hudCtx.font = 'bold 40px monospace';
+    hudCtx.fillText(selClass.name, w / 2, cy - 50);
+    // 职业副标
+    hudCtx.fillStyle = '#9aa';
+    hudCtx.font = '14px monospace';
+    const skillLine = ['Q', 'W', 'E', 'R'].map(s => SKILL_SPECS[selClass.skillSlots[s as keyof typeof selClass.skillSlots]]?.name ?? '').filter(Boolean).join('/');
+    hudCtx.fillText(`${selClass.title}  ·  ${skillLine}  ·  ${ATTR_NAMES[selClass.attr] ?? selClass.attr}`, w / 2, cy - 10);
+    // 职业描述
+    hudCtx.fillStyle = '#666';
+    hudCtx.font = '12px monospace';
+    hudCtx.fillText(selClass.desc, w / 2, cy + 12);
+    // 角色名
+    hudCtx.fillStyle = '#9cf';
+    hudCtx.font = 'bold 14px monospace';
+    hudCtx.fillText(state.charNameInput || 'char_0', w / 2, cy + 34);
   }
 
-  // 中列: 难度 (Z/X)
-  const dx = w / 2 + NG_LAYOUT.diffX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#ffb0a0';
-  hudCtx.fillText('难度 [Z/X]', dx + 140, cy - 40);
+  // 横排 难度 (居中, 选中金)
+  const diffY = cy + 100;
+  const diffSpacing = 120;
+  const diffTotalW = DIFFICULTIES.length * diffSpacing;
+  const diffX0 = (w - diffTotalW) / 2;
   DIFFICULTIES.forEach((d, i) => {
     const sel = state.ngSel.diffIdx === i;
     const locked = !unlockedDifficulty(state.cleared, d);
     const mod = DIFFICULTY_MODS[d];
-    const ry = cy + i * NG_ROW_DIFF - NG_LAYOUT.diffH / 2;
+    const dx2 = diffX0 + i * diffSpacing;
+    const dHit = inRect(mx, my, dx2, diffY, diffSpacing, 30);
+    // 背景
     if (sel) {
-      hudCtx.fillStyle = 'rgba(255,214,74,0.15)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
-    } else if (hover(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH)) {
-      hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-      hudCtx.fillRect(dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH);
+      hudCtx.fillStyle = 'rgba(255,214,74,0.18)';
+      hudCtx.fillRect(dx2, diffY, diffSpacing, 30);
+    } else if (dHit && !locked) {
+      hudCtx.fillStyle = 'rgba(102,204,255,0.10)';
+      hudCtx.fillRect(dx2, diffY, diffSpacing, 30);
     }
-    hudCtx.font = 'bold 18px monospace';
-    hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#4a4a55' : '#99a';
-    hudCtx.fillText(`${sel ? '▶ ' : '  '}${mod.name}${sel ? ' ◀' : ''}`, dx + 140, cy + i * NG_ROW_DIFF);
-    hudCtx.font = '12px monospace';
+    hudCtx.fillStyle = sel ? '#ffd64a' : (locked ? '#4a4a55' : (dHit ? '#fff' : '#9aa'));
+    hudCtx.font = 'bold 16px monospace';
+    hudCtx.fillText(mod.name, dx2 + diffSpacing / 2, diffY + 15);
     if (locked) {
-      // 解锁条件提示 (DIFFICULTY_GATES: 通关对应主题)
+      // 解锁条件
       const gate = DIFFICULTY_GATES[d];
       hudCtx.fillStyle = '#887';
-      hudCtx.fillText(gate ? `未解锁 · 通关 ${THEME_NAMES[gate] ?? gate} 后开放` : '未解锁', dx + 140, cy + i * NG_ROW_DIFF + 18);
-    } else {
-      hudCtx.fillStyle = sel ? '#caa' : '#8a8a96';
-      hudCtx.fillText(`HP×${mod.hpMult} 掉落×${mod.dropMult}${d === 'hardcore' ? ' 永久死亡' : ''}`, dx + 140, cy + i * NG_ROW_DIFF + 18);
+      hudCtx.font = '10px monospace';
+      hudCtx.fillText(gate ? `通关 ${THEME_NAMES[gate] ?? gate} 解锁` : '未解锁', dx2 + diffSpacing / 2, diffY + 28);
     }
-    rects.push([dx, ry, NG_LAYOUT.diffW, NG_LAYOUT.diffH]);
+    if (!locked) rects.push([dx2, diffY, diffSpacing, 30]);
   });
+  // 难度提示
+  hudCtx.fillStyle = '#666';
+  hudCtx.font = '11px monospace';
+  hudCtx.fillText('难度 [Z/X]', w / 2, diffY - 16);
 
-  // 右列: 主题卡 (←/→) + 模式卡 (M)
-  const rx = w / 2 + NG_LAYOUT.rightX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#8f8';
-  hudCtx.fillText('主题 [←/→]', rx + 180, cy - 40);
-  let hoverTheme: Theme | null = null;
+  // 横排 主题 (居中)
+  const themeY = cy + 160;
+  const themeSpacing = 140;
+  const themeTotalW = THEMES.length * themeSpacing;
+  const themeX0 = (w - themeTotalW) / 2;
   THEMES.forEach((t, i) => {
-    const locked = !themeUnlocked(state.cleared, t);
     const sel = state.ngSel.themeIdx === i;
-    const tx = rx + i * (NG_LAYOUT.themeW + NG_LAYOUT.themeGap);
-    const ty = cy + NG_LAYOUT.themeY;
-    if (hover(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH)) hoverTheme = t;
-    // 色块缩略 (上半) + 中文名 (下半)
-    hudCtx.fillStyle = locked ? '#1a1a24' : '#16161e';
-    hudCtx.fillRect(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH);
-    hudCtx.strokeStyle = sel ? '#ffd64a' : hover(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH) ? '#8a8a96' : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH);
-    hudCtx.fillStyle = locked ? 'rgba(90,90,102,0.35)' : (THEME_COLORS[t] ?? '#334');
-    hudCtx.fillRect(tx + 4, ty + 4, NG_LAYOUT.themeW - 8, 42);
-    hudCtx.fillStyle = sel ? '#ffd64a' : locked ? '#8a8a96' : '#ccc';
-    hudCtx.font = 'bold 13px monospace';
-    hudCtx.fillText(locked ? '未解锁' : (THEME_NAMES[t] ?? t), tx + NG_LAYOUT.themeW / 2, ty + NG_LAYOUT.themeH - 10);
-    rects.push([tx, ty, NG_LAYOUT.themeW, NG_LAYOUT.themeH]);
+    const locked = !themeUnlocked(state.cleared, t);
+    const tx2 = themeX0 + i * themeSpacing;
+    const ty2 = themeY;
+    const tHit = inRect(mx, my, tx2, ty2, themeSpacing, 30);
+    if (sel) {
+      hudCtx.fillStyle = 'rgba(255,214,74,0.18)';
+      hudCtx.fillRect(tx2, ty2, themeSpacing, 30);
+    } else if (tHit && !locked) {
+      hudCtx.fillStyle = 'rgba(102,204,255,0.10)';
+      hudCtx.fillRect(tx2, ty2, themeSpacing, 30);
+    }
+    // 主题色块 (左侧 4px)
+    hudCtx.fillStyle = THEME_COLORS[t] ?? '#334';
+    hudCtx.fillRect(tx2, ty2, 4, 30);
+    hudCtx.fillStyle = sel ? '#ffd64a' : (locked ? '#4a4a55' : (tHit ? '#fff' : '#9aa'));
+    hudCtx.font = 'bold 16px monospace';
+    hudCtx.fillText(THEME_NAMES[t] ?? t, tx2 + themeSpacing / 2, ty2 + 15);
+    if (locked) {
+      hudCtx.fillStyle = '#887';
+      hudCtx.font = '10px monospace';
+      hudCtx.fillText('未解锁', tx2 + themeSpacing / 2, ty2 + 28);
+    }
+    if (!locked) rects.push([tx2, ty2, themeSpacing, 30]);
   });
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#7fe0e0';
-  hudCtx.fillText('模式 [M]', rx + 180, cy + NG_LAYOUT.modeY - 22);
+  hudCtx.fillStyle = '#666';
+  hudCtx.font = '11px monospace';
+  hudCtx.fillText('主题 [←/→]', w / 2, themeY - 16);
+
+  // 横排 模式 (居中)
+  const modeY = cy + 220;
+  const modeSpacing = 160;
+  const modeTotalW = MAP_MODES.length * modeSpacing;
+  const modeX0 = (w - modeTotalW) / 2;
   MAP_MODES.forEach((md, i) => {
     const sel = state.ngSel.modeIdx === i;
-    const myy = cy + NG_LAYOUT.modeY + i * NG_ROW_MODE;
-    hudCtx.fillStyle = sel ? 'rgba(255,204,153,0.18)' : hover(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH) ? 'rgba(255,255,255,0.06)' : 'rgba(20,20,28,0.9)';
-    hudCtx.fillRect(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH);
-    hudCtx.strokeStyle = sel ? '#fc9' : '#3a3a48';
-    hudCtx.lineWidth = sel ? 2 : 1;
-    hudCtx.strokeRect(rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH);
-    hudCtx.fillStyle = sel ? '#ffd64a' : '#99a';
-    hudCtx.font = 'bold 14px monospace';
-    hudCtx.fillText(MAP_MODE_NAMES[md], rx + 12, myy + 15);
-    hudCtx.fillStyle = sel ? '#caa' : '#8a8a96';
-    hudCtx.font = '11px monospace';
-    hudCtx.fillText(MAP_MODE_DESC[md], rx + 12, myy + 33);
-    rects.push([rx, myy, NG_LAYOUT.rightW, NG_LAYOUT.modeH]);
+    const mx2 = modeX0 + i * modeSpacing;
+    const myy = modeY;
+    const mHit = inRect(mx, my, mx2, myy, modeSpacing, 30);
+    if (sel) {
+      hudCtx.fillStyle = 'rgba(255,214,74,0.18)';
+      hudCtx.fillRect(mx2, myy, modeSpacing, 30);
+    } else if (mHit) {
+      hudCtx.fillStyle = 'rgba(102,204,255,0.10)';
+      hudCtx.fillRect(mx2, myy, modeSpacing, 30);
+    }
+    hudCtx.fillStyle = sel ? '#ffd64a' : (mHit ? '#fff' : '#9aa');
+    hudCtx.font = 'bold 16px monospace';
+    hudCtx.fillText(MAP_MODE_NAMES[md], mx2 + modeSpacing / 2, myy + 15);
+    rects.push([mx2, myy, modeSpacing, 30]);
   });
-  // 描述行: 主题 hover 优先 (怪物/Boss 预告), 否则当前模式描述
-  const descY = cy + NG_LAYOUT.modeY + 3 * NG_ROW_MODE + 6;
+  hudCtx.fillStyle = '#666';
+  hudCtx.font = '11px monospace';
+  hudCtx.fillText('模式 [M]', w / 2, modeY - 16);
+
+  // 摘要 (居中, 模式描述)
   hudCtx.fillStyle = '#889';
   hudCtx.font = '12px monospace';
-  if (hoverTheme) {
-    const pool = THEME_MONSTER_POOL[hoverTheme].map(m => MONSTER_DEFS[m]?.name ?? m).join(' / ');
-    const b = THEME_BOSS[hoverTheme];
-    hudCtx.fillText(`${THEME_NAMES[hoverTheme]}: ${pool} · Boss ${MONSTER_DEFS[b]?.name ?? b}`, rx + 180, descY);
-  } else {
-    hudCtx.fillText(MAP_MODE_DESC[selMode], rx + 180, descY);
-  }
+  hudCtx.fillText(MAP_MODE_DESC[selMode], w / 2, modeY + 50);
 
-  // 组合摘要条 (start 上方): 最终确认组合
-  const bx = w / 2 + NG_LAYOUT.startX;
-  const by = h + NG_LAYOUT.startY;
-  const sumY = by - 46;
-  hudCtx.fillStyle = 'rgba(20,20,28,0.92)';
-  hudCtx.fillRect(w / 2 - 220, sumY, 440, 40);
-  hudCtx.strokeStyle = '#3a3a48';
-  hudCtx.lineWidth = 1;
-  hudCtx.strokeRect(w / 2 - 220, sumY, 440, 40);
-  hudCtx.fillStyle = '#ffd64a';
-  hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`▶ ${selClass.name} · ${selDiff} · ${THEME_NAMES[selTheme] ?? selTheme} · ${MAP_MODE_NAMES[selMode]}`, w / 2, sumY + 14);
-  hudCtx.fillStyle = '#889';
-  hudCtx.font = '12px monospace';
-  hudCtx.fillText(`${selClass.desc} · 主属性 ${ATTR_NAMES[selClass.attr] ?? selClass.attr}${creating ? ` · 名字 ${state.charNameInput || '(自动)'}` : ''}`, w / 2, sumY + 31);
+  // 出发/开始按钮 (居中, 大)
+  const startW2 = 360, startH2 = 56;
+  const startX2 = w / 2 - startW2 / 2;
+  const startY2 = h - 130;
+  const startHit = inRect(mx, my, startX2, startY2, startW2, startH2);
+  hudCtx.fillStyle = startHit ? 'rgba(255,214,74,0.25)' : 'rgba(40,34,10,0.85)';
+  hudCtx.fillRect(startX2, startY2, startW2, startH2);
+  hudCtx.strokeStyle = startHit ? '#fff' : '#ffd64a';
+  hudCtx.lineWidth = startHit ? 3 : 2;
+  hudCtx.strokeRect(startX2, startY2, startW2, startH2);
+  hudCtx.fillStyle = startHit ? '#fff' : '#ffd64a';
+  hudCtx.font = 'bold 20px monospace';
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillText(`创建并出发(Enter)`, w / 2, startY2 + startH2 / 2);
+  rects.push([startX2, startY2, startW2, startH2]);
 
-  // 出发/开始
-  const startHit = hover(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  const startDown = startHit && mouse.state().buttons.LMB;
-  if (startHit) {
-    hudCtx.fillStyle = startDown ? 'rgba(201,170,255,0.35)' : 'rgba(201,170,255,0.18)';
-    hudCtx.fillRect(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  }
-  hudCtx.strokeStyle = startDown ? '#fff' : '#c9aaff';
-  hudCtx.lineWidth = startDown ? 3 : 2;
-  hudCtx.strokeRect(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
-  hudCtx.fillStyle = startHit ? '#fff' : '#bbb';
-  hudCtx.font = 'bold 18px monospace';
-  hudCtx.fillText(`[Enter] ${fromTown ? '出发 (新开一局)' : creating ? '创建并出发' : '开始'}`, w / 2, by + NG_LAYOUT.startH / 2);
-  rects.push([bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH]);
-
-  // 底部: 键盘帮助条 (替代单行返回提示) + 右上可见返回按钮
+  // 底部: 键盘帮助条 (去掉 [Esc] 返回文字, 左上角已加"返回主菜单(Esc)"按钮)
   hudCtx.fillStyle = '#889';
   hudCtx.font = '13px monospace';
-  hudCtx.fillText('[1-6] 职业 · [Z/X] 难度 · [←/→] 主题 · [M] 模式 · [Enter] 出发 · [Esc] 返回', w / 2, h - 36);
-  const backR: [number, number, number, number] = [w - 220, 20, 200, 40];
+  hudCtx.fillText('[1-6] 职业 · [Z/X] 难度 · [←/→] 主题 · [M] 模式 · [Enter] 出发', w / 2, h - 36);
+  // 左上角 "返回主菜单(Esc)" 按钮 (统一命名, 与 characters/town/settings 一致)
+  const backR: [number, number, number, number] = [20, 20, 200, 40];
   const bHit = hover(...backR);
-  hudCtx.fillStyle = bHit ? 'rgba(102,204,255,0.14)' : 'rgba(20,20,28,0.9)';
+  hudCtx.fillStyle = bHit ? 'rgba(102,204,255,0.18)' : 'rgba(20,20,28,0.85)';
   hudCtx.fillRect(...backR);
   hudCtx.strokeStyle = bHit ? '#66ccff' : '#3a3a48';
   hudCtx.lineWidth = bHit ? 2 : 1;
   hudCtx.strokeRect(...backR);
-  hudCtx.fillStyle = bHit ? '#fff' : '#9aa';
+  hudCtx.fillStyle = bHit ? '#fff' : '#9cf';
   hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`← 返回${fromTown ? '城镇' : creating ? '角色管理' : '标题'}`, w - 120, 40);
+  hudCtx.textAlign = 'center';
+  hudCtx.textBaseline = 'middle';
+  hudCtx.fillText('返回主菜单(Esc)', 120, 40);
   rects.push(backR);
 
   // 出发过场遮罩 (0.7s: 正在生成地牢…)
@@ -407,18 +453,30 @@ export function startCreateNewgame(state: GameState): void {
   state.ngSel = { classIdx: 0, diffIdx: 0, themeIdx: 0, modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
   state.ngFrom = 'create';
   setNgLaunchT(-1);
+  // 直接展示新建角色界面 (命名 + 难度 + 主题 + 模式), 跳过步骤 1 选职业
+  state.ui.classStep1 = false;
   setNgNaming(true);
   setScreen(state, 'newgame');
   state.ui.titleMsg = '';
-  inf('ui', '新建角色 → 新局选择屏 (输入名字)');
+  inf('ui', '新建角色 → 命名 + 难度 + 主题 + 模式');
 }
 
 /** 新局出发 (键盘 Enter / 鼠标开始 / 命名确认共用): 解锁校验 → 创建模式先建角色 → 0.7s 过场 */
-export function startFromNewgame(state: GameState): void {
+export function startFromNewgame(state: GameState, enterTownFn?: (s: GameState) => void): void {
   const { classId, difficulty, theme, mode } = ngResolve(state.ngSel);
   if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return; }
   if (!themeUnlocked(state.cleared, theme)) { pushToast(state, `主题 ${theme} 未解锁 (通关森林后开放)`, '#f66'); return; }
-  if (state.ngFrom === 'create' && !createCharacterNow(state)) return;  // 创建失败(重名等)留在选择屏
+  // 创建模式: 创建角色后, 默认到城镇 (而非直接开地牢, 让玩家从城镇出发)
+  if (state.ngFrom === 'create') {
+    if (!createCharacterNow(state)) return;  // 创建失败(重名等)留在选择屏
+    saveLastNg(state);
+    setNgLaunchT(-1);
+    setNgNaming(false);
+    if (enterTownFn) enterTownFn(state);
+    else setScreen(state, 'town');
+    inf('ui', `新建角色 → 城镇 (${CLASS_DEFS[classId].name} · ${DIFFICULTY_MODS[difficulty].name})`);
+    return;
+  }
   saveLastNg(state);
   setNgLaunchT(NG_LAUNCH_MS);
   playSfxClient('ui_click');
