@@ -79,27 +79,27 @@ export function handleUiClick(ctx: UiCtx): boolean {
     case 'title': {
       const cx = w / 2, btnW = 320, btnH = 38;
       const hasSave = state.charList.length > 0;
-      // TS-009: 设置齿轮入口
+      // TS-009: 设置齿轮入口 (与 drawTitle 同步: 右下 36×36)
       if (inRect(mx, my, w - 50, h - 50, 36, 36)) { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
-      // TS-003: 右侧最近存档卡片
+      // TS-003: 右侧最近存档卡片 (与 drawTitle 同步: w-380, 400, 300×42)
       const cards = hasSave
         ? [...state.charList].sort((a, b) => (b.last_played ?? 0) - (a.last_played ?? 0)).slice(0, 5)
         : [];
       for (let i = 0; i < cards.length; i++) {
-        if (inRect(mx, my, w - 460, 330 + i * 48, 360, 42)) { ctx.enterTargetCharacter(state, cards[i]); return true; }
+        if (inRect(mx, my, w - 380, 400 + i * 48, 300, 42)) { ctx.enterTargetCharacter(state, cards[i]); return true; }
       }
       const menuY0 = h / 2 - 30;
-      // 继续游戏大按钮 (480×46, 与 drawTitle 一致)
-      if (hasSave && inRect(mx, my, cx - 240, menuY0 - 23, 480, 46)) {
+      // 继续游戏大按钮 (480×56, 与 drawTitle 一致: contY = menuY0 - 45)
+      if (hasSave && inRect(mx, my, cx - 240, menuY0 - 45, 480, 56)) {
         ctx.continueLastSave();
         return true;
       }
       // 设置面板键位条目 (P3-10)
       if (state.ui.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
-      // 菜单项
+      // 菜单项 (与 drawTitle 一致: +52/+104/+156)
       const itemYs: Array<{ y: number; idx: number }> = hasSave
-        ? [{ y: menuY0 + 40, idx: 1 }, { y: menuY0 + 80, idx: 2 }, { y: menuY0 + 120, idx: 3 }]
-        : [{ y: menuY0, idx: 0 }, { y: menuY0 + 40, idx: 1 }, { y: menuY0 + 80, idx: 2 }];
+        ? [{ y: menuY0 + 52, idx: 1 }, { y: menuY0 + 104, idx: 2 }, { y: menuY0 + 156, idx: 3 }]
+        : [{ y: menuY0, idx: 0 }, { y: menuY0 + 52, idx: 1 }, { y: menuY0 + 104, idx: 2 }];
       for (const it of itemYs) {
         if (inRect(mx, my, cx - btnW / 2, it.y - btnH / 2, btnW, btnH)) { ctx.titleAct(it.idx); return true; }
       }
@@ -116,6 +116,11 @@ export function handleUiClick(ctx: UiCtx): boolean {
           ctx.handleTownPanelKey({ key: k } as KeyboardEvent, k);
           return true;
         }
+      }
+      // 城镇右上角"返回主菜单"按钮 (与 drawTownFrame 同步: w-180, 16, 160, 32)
+      if (inRect(mx, my, w - 180, 16, 160, 32)) {
+        ctx.setScreen(state, 'title');
+        return true;
       }
       // v3 NPC 点击
       for (const npc of townNpcs(state.townId)) {
