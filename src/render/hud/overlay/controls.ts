@@ -4,11 +4,12 @@ import type { GameState } from '../../../game/state';
 import { HUD_PAD, type HudBtn, getHudHover } from '../types';
 import { drawIcon } from '../icons';
 import { hudDungeonButtons } from '../buttons';
+import { slotY } from '../geometry';
 
 // 药水/翻滚按钮 + 技能点
 export function drawPotionDodgeButtons(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
   const hoverKey = getHudHover();
-  const sy = vh - 120;
+  const sy = slotY(vh);
   const btn = (b: HudBtn, label: string, col: string) => {
     ctx2d.fillStyle = hoverKey === b.key ? 'rgba(255,255,255,0.14)' : 'rgba(10,10,18,0.78)';
     ctx2d.fillRect(b.x, b.y, b.w, b.h);

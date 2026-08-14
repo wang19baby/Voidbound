@@ -61,7 +61,7 @@ export interface UiCtx {
 /** 鼠标点击主入口 (替代 main.ts 内 handleUiClick 函数) */
 export function handleUiClick(ctx: UiCtx): boolean {
   const { state, w, h, mx, my } = ctx;
-  // 关窗确认 (OPT-002): Y 保存退出 / N 取消
+  // 关窗确认 (OPT-002): Y 退出(不保存) / N 取消
   if (isCloseConfirmOpen()) {
     if (inRect(mx, my, w / 2 - 160, h / 2 + 40, 150, 40)) { ctx.confirmCloseSave(); return true; }
     if (inRect(mx, my, w / 2 + 10, h / 2 + 40, 150, 40)) { ctx.confirmCloseCancel(); return true; }

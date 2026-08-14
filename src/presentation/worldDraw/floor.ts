@@ -37,30 +37,18 @@ export function drawFloor(ctx: DrawCtx): void {
 
   // V1 墙: 32px 墙块 (旧 128px 的 1/4), 贴图 128px 缩放显示
   const wallName = `wall_${state.theme}`;
-  let wallDrawn = 0;
-  let wallSkipped = 0;
   for (const w of state.world.walls) {
     const sp = worldToScreen(state, w.pos);
-    if (sp.x + w.size.w < 0 || sp.x > vw) { wallSkipped++; continue; }
-    if (sp.y + w.size.h < 0 || sp.y > vh) { wallSkipped++; continue; }
-    wallDrawn++;
+    if (sp.x + w.size.w < 0 || sp.x > vw) continue;
+    if (sp.y + w.size.h < 0 || sp.y > vh) continue;
     drawSprite(gl, quad, res, sp, w.size, 'world', wallName, runHue ? { hue: runHue } : undefined);
   }
-  void import('../../util/jslog').then(({ jsLog }) =>
-    jsLog(`[map] wall-phase n=${state.world.walls.length} drawn=${wallDrawn} skipped=${wallSkipped} cam=(${state.camera.x.toFixed(0)},${state.camera.y.toFixed(0)})`),
-  );
   // V1 障碍物装饰: 主题散布草丛/石块 (纯视觉, 无碰撞) — 128px 1:1 (HD 烘焙同规格)
-  let decorDrawn = 0;
-  let decorSkipped = 0;
   for (const d of state.world.decor) {
     const sp = worldToScreen(state, d.pos);
-    if (sp.x + 128 < 0 || sp.x > vw) { decorSkipped++; continue; }
-    if (sp.y + 128 < 0 || sp.y > vh) { decorSkipped++; continue; }
-    decorDrawn++;
+    if (sp.x + 128 < 0 || sp.x > vw) continue;
+    if (sp.y + 128 < 0 || sp.y > vh) continue;
     const dopt: { color?: [number, number, number]; hue?: number } = d.tint ? { color: d.tint, hue: runHue } : { hue: runHue };
     drawSprite(gl, quad, res, sp, { w: 128, h: 128 }, 'world', d.sprite, dopt);
   }
-  void import('../../util/jslog').then(({ jsLog }) =>
-    jsLog(`[map] decor-phase n=${state.world.decor.length} drawn=${decorDrawn} skipped=${decorSkipped}`),
-  );
 }

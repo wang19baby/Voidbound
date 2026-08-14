@@ -151,7 +151,9 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hudCtx.textAlign = 'center';
     hudCtx.textBaseline = 'middle';
-    if (!state.ui.settingsOpen) {
+    if (state.ui.townConfirm) {
+      // 放弃游戏确认框全屏覆盖: 不绘制下层暂停菜单按钮/设置面板, 避免 hover 高亮透传
+    } else if (!state.ui.settingsOpen) {
       // 垂直按钮菜单: [1]继续 [2]设置 [3]城镇 (无主菜单/存档; 几何与 uiDispatch 'pause' 一致)
       hudCtx.fillStyle = '#fff';
       hudCtx.font = 'bold 40px monospace';

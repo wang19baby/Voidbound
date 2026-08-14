@@ -58,7 +58,7 @@ export function installCloseConfirmListeners(): void {
   });
 }
 
-/** 关窗确认 → 保存退出 (实际数据保留由 emit 异步持久化完成); 返回主菜单模式则保存后回标题 */
+/** 关窗确认 → 确认执行; 返回主菜单模式: 保存后回标题; 关窗模式: 直接退出 (不保存, 与暂停"返回城镇"放弃逻辑一致) */
 export function confirmCloseSave(): void {
   if (!lifecycleState) return;
   if (closeConfirmSaving) return;
@@ -78,9 +78,13 @@ export function confirmCloseSave(): void {
       void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().destroy());
     }
   };
-  // 无游戏进度 (首页/新游戏/角色管理/远征配置) 直接退出; 游戏中先持久化再退出
-  if (!isInGameScreen(lifecycleState.screen)) { done(); return; }
-  void persistNowApp(lifecycleState).finally(done);
+  // 返回主菜单模式: 游戏中先持久化再回标题; 关窗模式: 不保存直接退出 (丢弃本次进度)
+  if (isCloseConfirmReturn()) {
+    if (!isInGameScreen(lifecycleState.screen)) { done(); return; }
+    void persistNowApp(lifecycleState).finally(done);
+  } else {
+    done();
+  }
 }
 
 /** 关窗确认 → 取消 */
