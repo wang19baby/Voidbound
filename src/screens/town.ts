@@ -349,14 +349,14 @@ export function drawTownFrame(ctx: TownCtx): void {
     hudCtx.font = 'bold 14px monospace';
     hudCtx.fillText(`E — ${npc.name}`, npc.pos.x, npc.pos.y - 55);
   }
-  // HUD (金/技能点)
-  hudCtx.textAlign = 'left';
+  // HUD (金/技能点) — 右上角
+  hudCtx.textAlign = 'right';
   hudCtx.fillStyle = '#ffd64a';
   hudCtx.font = 'bold 14px monospace';
-  hudCtx.fillText(`金: ${state.player.gold}`, 16, 26);
+  hudCtx.fillText(`金: ${state.player.gold}`, hudCanvas.width - 16, 26);
   hudCtx.fillStyle = '#9cc';
   hudCtx.font = '12px monospace';
-  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}`, 16, 44);
+  hudCtx.fillText(`难度: ${DIFFICULTY_MODS[state.difficulty].name}`, hudCanvas.width - 16, 44);
   // 面板
   if (state.townPanel) {
     const drawPanel = ctx.drawTownPanel ?? drawTownPanel;
@@ -375,8 +375,8 @@ export function drawTownFrame(ctx: TownCtx): void {
   // v3: NPC 圈 hover → pointer (走向/交互提示)
   const tmx = mouse.state().pos;
   const onNpc = npcs.some(n => inRect(tmx.x, tmx.y, n.pos.x - 30, n.pos.y - 30, 60, 60));
-  // 修复: 城镇右上角"返回主菜单"按钮 (玩家无法 Esc 跨过 town → title)
-  const backR: [number, number, number, number] = [hudCanvas.width - 180, 16, 160, 32];
+  // 修复: 城镇左上角"返回主菜单"按钮 (玩家无法 Esc 跨过 town → title)
+  const backR: [number, number, number, number] = [16, 16, 160, 32];
   const backHit = inRect(tmx.x, tmx.y, ...backR);
   hudCtx.fillStyle = backHit ? 'rgba(255,214,74,0.18)' : 'rgba(20,20,28,0.85)';
   hudCtx.fillRect(...backR);
@@ -387,7 +387,7 @@ export function drawTownFrame(ctx: TownCtx): void {
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
   hudCtx.font = 'bold 13px monospace';
-  hudCtx.fillText('返回主菜单(Esc)', hudCanvas.width - 100, 32);
+  hudCtx.fillText('返回主菜单(Esc)', 96, 32);
   hudCtx.textAlign = 'left';
   hudCtx.textBaseline = 'top';
   canvas.style.cursor = (onNpc || backHit) ? 'pointer' : 'default';

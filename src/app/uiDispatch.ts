@@ -117,8 +117,8 @@ export function handleUiClick(ctx: UiCtx): boolean {
           return true;
         }
       }
-      // 城镇右上角"返回主菜单"按钮 (与 drawTownFrame 同步: w-180, 16, 160, 32)
-      if (inRect(mx, my, w - 180, 16, 160, 32)) {
+      // 城镇左上角"返回主菜单"按钮 (与 drawTownFrame 同步: 16, 16, 160, 32)
+      if (inRect(mx, my, 16, 16, 160, 32)) {
         ctx.setScreen(state, 'title');
         return true;
       }

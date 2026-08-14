@@ -219,7 +219,6 @@ pub fn parse(data: &[u8]) -> Result<Atlas> {
             calculated: crc_calc,
         });
     }
-    cur += 4;
 
     Ok(Atlas {
         version,
