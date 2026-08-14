@@ -443,7 +443,7 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
   if (k === '1') {
     if (ds.hardcore) {
       hardcoreWipe(state);
-      ctx.startRun(state, state.theme, state.difficulty);
+      ctx.startRun(state, state.theme, state.difficulty, state.run.mode);
     } else {
       state.player.gold -= deathGoldPenalty(state.player.gold, 'town', false);
       state.player.potions = { hp: 3, mp: 3 };
@@ -458,6 +458,7 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
     if (ds.hardcore) {
       state.ui.dying = false;
       state.deathSummary = null;
+      state.run.rogueSnapshot = null;  // A-W5: 硬核死亡回标题, 局内快照作废 (防残留)
       setScreen(state, 'title');
     } else {
       state.player.gold -= deathGoldPenalty(state.player.gold, 'revive', false);
@@ -470,7 +471,7 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
     return true;
   }
   if (k === '3' && !ds.hardcore) {
-    ctx.startRun(state, state.theme, state.difficulty);
+    ctx.startRun(state, state.theme, state.difficulty, state.run.mode);
     state.ui.dying = false;
     state.deathSummary = null;
     state.ui.deathUndo = 0;
@@ -493,7 +494,7 @@ function handleDeathKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
 function handleVictoryKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
   const k = e.key.toLowerCase();
   if (k === '1') {
-    ctx.startRun(state, state.run.theme, state.difficulty);
+    ctx.startRun(state, state.run.theme, state.difficulty, state.run.mode);
     inf('ui', 'victory → 再来一局');
     return true;
   }

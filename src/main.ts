@@ -771,17 +771,37 @@ function f1(now: number, tag: string): void {
   }
 }
 
-// rAF 心跳统计: 每 5s 汇报给 Rust (区分: 主线程冻结 vs rAF 节流 vs 60fps 正常)
+// rAF 心跳统计: 后台静默，前台连续异常才告警 (区分: 主线程冻结 vs rAF 节流 vs 60fps 正常)
+const RAF_WARN_THRESHOLD = 50;    // 前台时低于此值视为异常
+const CONSECUTIVE_WARN = 2;       // 连续2个周期异常才告警，避免单次抖动误报
 let hbRaf = 0;
 let hbLast = performance.now();
+let consecutiveLowRaf = 0;
 setInterval(() => {
   const now2 = performance.now();
-  const dur = now2 - hbLast;
-  invoke('js_log', { msg: `[hb] t=${Math.round(now2)} raf=${hbRaf} dur=${Math.round(dur)} vis=${document.visibilityState}` }).catch(() => {});
+  const dur = Math.round(now2 - hbLast);
+  const raf = hbRaf;
   hbRaf = 0;
   hbLast = now2;
+
+  // 后台: 完全静默
+  if (document.visibilityState === 'hidden') {
+    consecutiveLowRaf = 0;
+    return;
+  }
+
+  // 前台: 连续异常才告警
+  if (raf < RAF_WARN_THRESHOLD) {
+    consecutiveLowRaf++;
+    if (consecutiveLowRaf >= CONSECUTIVE_WARN) {
+      invoke('js_log', { msg: `[hb] t=${Math.round(now2)} raf=${raf} dur=${dur} [WARN: possible main thread freeze]` }).catch(() => {});
+    }
+  } else {
+    consecutiveLowRaf = 0; // 恢复正常则重置计数
+  }
 }, 5000);
 function loopImpl(now: number) {
+  hbRaf++; // 心跳计数
 
   const dt = Math.min((now - last) / 1000, 0.033);
   last = now;
@@ -990,11 +1010,11 @@ function loopImpl(now: number) {
           ob.hp = Math.round(ob.hp * 3);
           ob.maxHp = ob.hp;
           ob.skill3 = rollBossSkill3();  // A-W3 技能池 (bossLike 触发)
-          // 分置四方向 (外→内)
+          // 分置四方向 (外→内, 锚地图中央出生点 EXTRACT_SPAWN, 不绕玩家)
           const a = (Math.PI / 2) * i;
           ob.pos = {
-            x: state.player.pos.x + Math.cos(a) * 1400 + (Math.random() * 300 - 150),
-            y: state.player.pos.y + Math.sin(a) * 1400 + (Math.random() * 300 - 150),
+            x: EXTRACT_SPAWN.x + Math.cos(a) * 1400 + (Math.random() * 300 - 150),
+            y: EXTRACT_SPAWN.y + Math.sin(a) * 1400 + (Math.random() * 300 - 150),
           };
           state.fx.monsters.push(ob);
           const elemTag = `[${ELEMENT_DEFS[mainElem].name}+${ELEMENT_DEFS[subElem].name}]`;
@@ -1021,8 +1041,8 @@ function loopImpl(now: number) {
         inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
-        // A-W2 设计 §2: linear 主轴右端 (终点) / gauntlet 世界中央 (Boss 区)
-        const anchor = state.run.mode === 'linear'
+        // A-W2/A-W5 设计 §2: linear/rogue 主轴右端 (终点) / gauntlet 世界中央 (Boss 区)
+        const anchor = (state.run.mode === 'linear' || state.run.mode === 'rogue')
           ? { x: WORLD_W - 320, y: WORLD_H / 2 }
           : { x: WORLD_W / 2, y: WORLD_H / 2 };
         const boss = spawnMonster(state, bossType, anchor);

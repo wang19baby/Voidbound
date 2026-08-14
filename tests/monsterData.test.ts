@@ -142,6 +142,20 @@ import { spawnRunPool } from '../src/game/monster';
   const lords = (gs as { fx: { monsters: { lord: boolean }[] } }).fx.monsters.filter(m => m.lord);
   check('gauntlet 池含 ≥4 领主 (四角)', lords.length >= 4);
 }
+// A-W5 肉鸽模式: 地标营地 + 密度带散怪, 不绕玩家 (修复"怪物全围角色")
+{
+  const gs = makeStubState() as never;
+  const r = gs as { run: { mode: string; seed?: number } };
+  r.run.mode = 'rogue';
+  r.run.seed = 1;
+  spawnRunPool(gs as never);
+  const monsters = (gs as { fx: { monsters: { pos: { x: number; y: number } }[] } }).fx.monsters;
+  check('肉鸽池刷满 RUN_POOL_SIZE', monsters.length >= 24);
+  // 玩家出生 (线性左端 ~320,5760); 营地/散怪全图散布 → 至少 1/3 距出生 >2000px
+  const p = { x: 320, y: 5760 };
+  const far = monsters.filter(m => Math.hypot(m.pos.x - p.x, m.pos.y - p.y) > 2000).length;
+  check(`肉鸽散怪不绕玩家 (≥1/3 距出生>2000px, 实际 ${far}/${monsters.length})`, far >= monsters.length / 3);
+}
 
 // === A-W1/A-W4 门结算 (多门数组: 挑战模式 5 门 / 击杀 ≥1 可撤退) ===
 import { portalActive, nearPortal, leaveThroughPortal, PORTAL_INTERACT_RANGE } from '../src/game/portal';

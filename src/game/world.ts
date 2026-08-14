@@ -21,8 +21,8 @@ export function aabbOverlap(
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-/** Mulberry32 种子化 RNG (32-bit 状态) */
-function mulberry32(seed: number): () => number {
+/** Mulberry32 种子化 RNG (32-bit 状态); A-W5 肉鸽: spawnRunPool 布局种子化导出复用 */
+export function mulberry32(seed: number): () => number {
   let s = seed | 0;
   return () => {
     s = (s + 0x6d2b79f5) | 0;
@@ -59,9 +59,32 @@ export function spawnPointForMode(mode: MapMode): { x: number; y: number } {
   return LINEAR_SPAWN;
 }
 
-/** 密度随模式: 线性 18% / 高级 22% (承诺制压力) / 挑战 16% (空间大, 靠营地密度) */
+/** 密度随模式: 线性/肉鸽 18% / 高级 22% (承诺制压力) / 挑战 16% (空间大, 靠营地密度) */
 export function densityForMode(mode: MapMode): number {
   return mode === 'gauntlet' ? 0.22 : mode === 'extract' ? 0.16 : 0.18;
+}
+
+/** chunk 距出生基准的距离 (设计 §2.4 密度梯度; A-W5: 肉鸽同线性 — 左开右密)
+ *  linear/rogue: 距左端 (主轴左→右) / extract: 距中央 / gauntlet: 距最近角落 */
+export function chunkDist(mode: MapMode, cx: number, cy: number): number {
+  const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
+  const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
+  if (mode === 'linear' || mode === 'rogue') {
+    const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
+    return Math.max(cx, Math.abs(cy - refY));
+  }
+  if (mode === 'extract') {
+    const refX = Math.floor((WORLD_W / 2) / CHUNK_SIZE);
+    const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
+    return Math.max(Math.abs(cx - refX), Math.abs(cy - refY));
+  }
+  // gauntlet: 距 4 个角落的最近 Chebyshev 距离
+  return Math.min(
+    Math.max(cx, cy),
+    Math.max(maxCx - cx, cy),
+    Math.max(cx, maxCy - cy),
+    Math.max(maxCx - cx, maxCy - cy),
+  );
 }
 
 /** 把世界坐标 (x, y) 转 chunk 索引 */
@@ -89,28 +112,9 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
 
   // === 密度梯度 (设计 §2.4): 距出生基准点越远墙越密 (近开远密) ===
   // 纯 (cx,cy,mode) 函数 → chunk 缓存确定性
-  // linear: 距左端 (主轴左→右, 左开右密) / extract: 距中央 (中央出生向外, 中开外密)
-  // gauntlet: 距最近角落 (出生角随机四选一, 角开中密 — 角落入口 → 中央 Boss, 外→内递进)
+  // A-W5: 肉鸽复用线性梯度 (左开右密, 主轴走廊 + 分支房间)
   {
-    const maxCx = Math.floor(WORLD_W / CHUNK_SIZE) - 1;
-    const maxCy = Math.floor(WORLD_H / CHUNK_SIZE) - 1;
-    let d: number;
-    if (mode === 'linear') {
-      const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
-      d = Math.max(cx, Math.abs(cy - refY));
-    } else if (mode === 'extract') {
-      const refX = Math.floor((WORLD_W / 2) / CHUNK_SIZE);
-      const refY = Math.floor((WORLD_H / 2) / CHUNK_SIZE);
-      d = Math.max(Math.abs(cx - refX), Math.abs(cy - refY));
-    } else {
-      // gauntlet: 距 4 个角落的最近 Chebyshev 距离
-      d = Math.min(
-        Math.max(cx, cy),
-        Math.max(maxCx - cx, cy),
-        Math.max(cx, maxCy - cy),
-        Math.max(maxCx - cx, maxCy - cy),
-      );
-    }
+    const d = chunkDist(mode, cx, cy);
     density = Math.min(0.5, density * (1 + d * 0.15)); // 每 chunk 距离 +15%, 封顶 0.5
   }
 
@@ -153,7 +157,7 @@ export function generateChunkWalls(cx: number, cy: number, density: number = 0.1
   // 分支: 2-3 条垂直通道 (1 格宽, 喉点) + 末端 2×2 宝藏/营地房间; 分支列不重复且间隔 ≥2
   // 分支布局用独立种子 RNG (branchRand): 撒墙簇主 rand 消费次数随机, 不可重放 →
   // linearBranchRooms 用同一 branchRand 复算 → 房间坐标确定一致 (MM-FIX8)
-  if (mode === 'linear') {
+  if (mode === 'linear' || mode === 'rogue') {
     const MAIN_ROW = 5;
     for (let c = 0; c < G; c++) isWall[MAIN_ROW][c] = false;
 

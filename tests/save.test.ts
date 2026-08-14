@@ -19,6 +19,7 @@ function mkState(): GameState {
     townPanel: { kind: 'merchant' },
     townId: 'greenwing' as TownId,
     player: { pos: { x: 0, y: 0 } },
+    run: {},
   } as unknown as GameState; // 测试桩: 未覆盖字段不会被 resumeFromSave 访问
 }
 
@@ -46,6 +47,14 @@ function mkState(): GameState {
   resumeFromSave(s, {});
   check('无 scene 旧档 → mode=town', s.mode === 'town');
   check('无 scene 旧档 → screen=town', s.screen === 'town');
+}
+
+// A-W5: 读档 = 新会话, 肉鸽局内快照作废 (防残留污染下一个角色)
+{
+  const s = mkState();
+  (s as unknown as { run: { rogueSnapshot: { level: number } } }).run.rogueSnapshot = { level: 40 };
+  resumeFromSave(s, { scene: 'town' });
+  check('读档 → 肉鸽快照已清空 (防残留)', (s as unknown as { run: { rogueSnapshot: unknown } }).run.rogueSnapshot === null);
 }
 
 if (failures > 0) {

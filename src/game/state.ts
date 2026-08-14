@@ -201,6 +201,21 @@ export interface RunState {
   portals: { x: number; y: number; bossType: string; used: boolean }[];
   /** A-W4 挑战模式 Boss 阶段: 0=未召 / 1=四元素外向 Boss 在场 / 2=中央最终 Boss 在场 */
   bossStage: 0 | 1 | 2;
+  /** A-W5 肉鸽: 本局随机种子 (mulberry32; spawnRunPool 地标/散怪布局确定) */
+  seed: number;
+  /** A-W5 肉鸽: 局内临时练级前的持久快照 (level/exp/skillPoints/attr/技能等级); 回城还原 */
+  rogueSnapshot: RogueSnapshot | null;
+}
+
+/** A-W5 肉鸽局内等级快照: 从持久角色拍下, 局内练级只改临时值 */
+export interface RogueSnapshot {
+  level: number;
+  exp: number;
+  skillPoints: number;
+  /** combat.attr (升级 +5×权重, 局内只走临时值) */
+  attr: number;
+  /** 每槽技能等级 */
+  skillLevels: Partial<Record<SkillSlot, number>>;
 }
 
 export type RunPhase = 'clearing' | 'boss' | 'won';
@@ -220,6 +235,8 @@ export function emptyRun(theme: Theme): RunState {
     t0: performance.now(), timeSec: 0, kills: 0, best: {}, collectedLoot: 0,
     portals: [],
     bossStage: 0,
+    seed: 0,
+    rogueSnapshot: null,
   };
 }
 
@@ -272,12 +289,12 @@ export interface GameState {
 export const THEMES = ['forest', 'desert', 'ruin', 'void'] as const;
 export type Theme = (typeof THEMES)[number];
 
-/** 重置 player 状态到本局模式出生点 (A-W2: 线性左 / 高级角落 / 挑战中央) */
+/** 重置 player 状态到本局模式出生点 (A-W2: 线性左 / 高级角落 / 挑战中央; A-W5 肉鸽=线性) */
 export function resetPlayer(state: GameState): void {
   const sp = spawnPointForMode(state.run.mode ?? 'linear');
   state.player.pos = { x: sp.x - 32, y: sp.y - 32 };
-  state.player.hp = 100;
-  state.player.mp = 100;
+  state.player.hp = state.player.hpMax ?? 100;
+  state.player.mp = state.player.mpMax ?? 100;
   state.player.idleT = 0;
   state.player.flipDir = 'N';
 }

@@ -61,6 +61,8 @@ export function hardcoreWipe(state: GameState): void {
     sk.rune = null;
   }
   state.equip.rejectedRunes.length = 0;
+  // A-W5 肉鸽: 硬核死亡 = 永久清档, 局内快照作废 (下次肉鸽以 Lv1 为持久基准)
+  state.run.rogueSnapshot = null;
   inf('game', 'HARDCORE: 永久死亡, 进度已清空');
 }
 

@@ -44,8 +44,8 @@ eq('RUN_POOL_SIZE = 24', RUN_POOL_SIZE, 24);
   eq('mode 默认 linear', r.mode, 'linear');
 }
 
-// === A-W2 三模式出生点 + 密度 ===
-import { spawnPointForMode, densityForMode, LINEAR_SPAWN, EXTRACT_SPAWN } from '../src/game/world';
+// === A-W2 三模式出生点 + 密度 (A-W5 含肉鸽=线性) ===
+import { spawnPointForMode, densityForMode, chunkDist, LINEAR_SPAWN, EXTRACT_SPAWN } from '../src/game/world';
 const sp = spawnPointForMode('linear');
 eq('线性出生 = 左端 (x=320)', sp.x, 320);
 eq('线性出生 y 居中', sp.y, WORLD_H / 2);
@@ -55,6 +55,10 @@ check('高级出生在角落 (320 边距)', [320, WORLD_W - 320].includes(gsp.x)
 check('线性密度 0.18', densityForMode('linear') === 0.18);
 check('高级密度 0.22', densityForMode('gauntlet') === 0.22);
 check('挑战密度 0.16', densityForMode('extract') === 0.16);
+// A-W5 肉鸽 = 线性骨架
+check('肉鸽出生 = 线性左端', JSON.stringify(spawnPointForMode('rogue')) === JSON.stringify(LINEAR_SPAWN));
+check('肉鸽密度 0.18', densityForMode('rogue') === 0.18);
+check('肉鸽梯度 = 线性 (同 chunk 同距)', chunkDist('rogue', 7, 5) === chunkDist('linear', 7, 5));
 
 // === 开放场地+稀疏墙簇生成 (2026-08-13 v3: 密度驱动小墙簇, 外圈全开) ===
 import { generateChunkWalls, CHUNK_SIZE, BLOCK, aabbOverlap, type Wall } from '../src/game/world';
@@ -100,6 +104,12 @@ check('linear 墙量稀疏 0-10 (主轴雕刻后)', genWalls.length <= 10);
 const genGrid = wallsGrid(genWalls);
 const areas = areasOfGrid(genGrid);
 check('最大连通空区 ≥ 52 格 (≥80% 战斗区)', areas[0].size >= 52);
+{
+  const rw = generateChunkWalls(5, 7, 0.18, 'rogue');
+  const rg = wallsGrid(rw);
+  check('肉鸽主轴 row5 全开 (复用线性走廊)', rg[5].every(v => !v));
+  check('肉鸽墙量稀疏 ≤10 (同线性)', rw.length <= 10);
+}
 // 普通模式: 主轴走廊 (row 5 全开) + 分支房间 (设计 §2.1)
 check('linear 主轴 row5 全开 (跨 chunk 左→右走廊)', genGrid[5].every(v => !v));
 check('linear 分支: 非主轴行开放格 ≥ 10 (通道+房间)', (() => {

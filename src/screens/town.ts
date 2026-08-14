@@ -35,6 +35,7 @@ import { inf, wrn } from '../util/log';
 import { SKILL_SLOTS, skillRune, slotDisplay, pickRuneOptions } from '../game/skill';
 import { RUNE_DEFS } from '../game/rune';
 import { PASSIVE_DEFS, PASSIVE_IDS, passiveLevel, assignPassivePoint } from '../game/passive';
+import { endRogue } from '../game/rogue';
 import { inRect } from '../game/uigrid';
 import { CLASS_IDS } from '../game/class';
 import type { MouseHandle } from '../input/mouse';
@@ -67,6 +68,8 @@ export interface TownCtx {
 /** 城镇: 进入 (C-301: 指定镇; 省略时用最近城镇; townReturn 保留地下城还原坐标) */
 export function enterTown(ctx: TownCtx, townId?: TownId): void {
   const state = ctx.state;
+  // A-W5 肉鸽: 回城统一还原局内临时练级 (持久等级/经验/技能点/技能等级), 战利品保留
+  endRogue(state);
   const tid = townId && TOWN_DEFS[townId] ? townId : (TOWN_DEFS[state.townId] ? state.townId : 'greenwing');
   state.townId = tid;
   state.townWalk = null;  // v3 鼠标化: 进/换城镇清走向目标

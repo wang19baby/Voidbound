@@ -17,11 +17,12 @@ import type { MapMode } from '../game/mapmode';
 import { bus } from '../core/eventBus';
 import { bindClass } from '../game/class';
 import { bindSkill } from '../game/skill';
-import { setScreen, THEMES } from '../game/state';
+import { setScreen, THEMES, resetPlayer } from '../game/state';
 import { resetWorldForMode } from '../game/world';
 import { spawnRunPool } from '../game/monsters/spawn';
 import { MONSTER_DEFS } from '../game/monsters/defs';
 import { bindKeybindAction } from '../game/keybind';
+import { beginRogue } from '../game/rogue';
 
 /** 进入新跑局: 重置所有跑局状态 + emit run.started */
 export function startRun(state: GameState, theme: Theme, difficulty: Difficulty, mode: MapMode = 'linear'): void {
@@ -31,6 +32,8 @@ export function startRun(state: GameState, theme: Theme, difficulty: Difficulty,
   state.run.theme = theme;
   state.run.difficulty = difficulty;
   state.run.mode = mode;
+  // A-W5: 本局种子 (mulberry32 布局确定; 0 会退化成线性序列 → 保底 1)
+  state.run.seed = Math.floor(Math.random() * 0x7fffffff) + 1;
   state.run.alive = 0;
   state.run.bossKilled = false;
   state.run.kills = 0;
@@ -41,6 +44,10 @@ export function startRun(state: GameState, theme: Theme, difficulty: Difficulty,
     : null;
   // 角色绑定 (重置技能点 / 技能选择)
   bindClass(state, state.player.classId);
+  // A-W5 肉鸽: 局内临时练级 (快照持久进度 → Lv1 起; 重开不覆盖快照)
+  if (mode === 'rogue') beginRogue(state);
+  // 重置到本局模式出生点 (修复: 此前玩家停在城镇坐标, 怪物全围角色)
+  resetPlayer(state);
   // 重置世界 (chunked 墙 + 装饰)
   resetWorldForMode(mode);
   // 生成怪物池

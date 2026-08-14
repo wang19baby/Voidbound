@@ -28,6 +28,8 @@ export interface SaveCtx {
 
 /** 序列化当前 state 到 SaveData (纯函数; v11 scene + v10 mode + v9 passives + W4 materials) */
 export function buildSavePayload(state: GameState): SaveData {
+  // A-W5 肉鸽: 局内临时练级不写死 — 中途存档写进入时持久快照值 (回城/读档还原持久进度)
+  const rs = state.run.rogueSnapshot;
   return {
     player_x: state.player.pos.x,
     player_y: state.player.pos.y,
@@ -38,7 +40,7 @@ export function buildSavePayload(state: GameState): SaveData {
     score: state.combat.score,
     world_w: state.world.w,
     world_h: state.world.h,
-    level: state.player.level,
+    level: rs ? rs.level : state.player.level,
     owned: getOwned(state).map(eq => ({
       name: eq.name,
       rarity: eq.rarity,
@@ -70,9 +72,11 @@ export function buildSavePayload(state: GameState): SaveData {
     mode: state.run.mode ?? 'linear',
     scene: state.mode,
     play_time: Math.floor(state.player.playTime ?? 0),
-    skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
-    skill_points: state.player.skillPoints ?? 0,
-    exp: state.player.exp ?? 0,
+    skill_levels: rs
+      ? SKILL_SLOTS.map(slot => ({ slot, level: rs.skillLevels[slot] ?? 1 }))
+      : SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
+    skill_points: rs ? rs.skillPoints : state.player.skillPoints ?? 0,
+    exp: rs ? rs.exp : state.player.exp ?? 0,
   };
 }
 
@@ -165,6 +169,8 @@ export function continueLastSave(state: GameState): void {
 export function resumeFromSave(state: GameState, d: { scene?: string }): void {
   state.mode = 'town';
   state.townPanel = null;
+  // A-W5 肉鸽: 读档/切换角色 = 新会话, 局内快照作废 (存档已写持久值; 防残留污染下一个角色)
+  state.run.rogueSnapshot = null;
   state.player.pos = { x: 560, y: 500 };
   setScreen(state, 'town');
   inf('ui', `读档 → 城镇 (${TOWN_DEFS[state.townId]?.name ?? state.townId})`);
@@ -236,6 +242,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
     // 新建但未开局的角色无存档: 以该职业开新局后回城镇 (GAME_FLOW §3: 不直接进地牢)
     const cls = (target.class as ClassId) ?? 'barbarian';
     bindClass(state, cls);
+    state.run.rogueSnapshot = null;  // A-W5: 新角色无旧快照 (防上个角色残留)
     ctx.startRun(state, 'forest', 'normal');
     state.mode = 'town';
     state.townPanel = null;
