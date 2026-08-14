@@ -74,6 +74,8 @@ export interface SaveData {
   mode: string;
   /** 上次场景 (v11): dungeon/town — 读档按此分派 */
   scene: string;
+  /** 累计游玩时长秒 (v12): 角色管理详情展示 */
+  play_time: number;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */
@@ -100,6 +102,8 @@ export interface CharacterSummary {
   last_played: number;
   /** 上次场景 (存档 v11): dungeon/town; 旧档/无档默认 dungeon (TS-003 标题卡片) */
   scene: string;
+  /** 累计游玩时长秒 (存档 v12); 旧档/无档 0 */
+  play_time: number;
 }
 
 export function saveGame(data: SaveData, charId?: string): Promise<string> {

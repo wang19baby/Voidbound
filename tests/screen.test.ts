@@ -20,12 +20,12 @@ function mk(over: Partial<SM> = {}): SM {
 eq('dungeon+Esc → pause', nextScreenOnKey('dungeon', 'Escape'), 'pause');
 eq('dungeon+Tab → equipment', nextScreenOnKey('dungeon', 'Tab'), 'equipment');
 eq('dungeon+W → null', nextScreenOnKey('dungeon', 'w'), null);
-eq('town+Esc → title (返回主菜单按钮绑定)', nextScreenOnKey('town', 'escape'), 'title');
+eq('town+Esc → null (弹确认框, 不切屏)', nextScreenOnKey('town', 'escape'), null);
 eq('town+Tab → null', nextScreenOnKey('town', 'Tab'), null);
 eq('equipment+Esc → dungeon', nextScreenOnKey('equipment', 'Escape'), 'dungeon');
 eq('equipment+Tab → dungeon', nextScreenOnKey('equipment', 'Tab'), 'dungeon');
-eq('pause+3 → title', nextScreenOnKey('pause', '3'), 'title');
-eq('pause+4 → town', nextScreenOnKey('pause', '4'), 'town');
+eq('pause+3 → town (城镇, 先弹放弃确认)', nextScreenOnKey('pause', '3'), 'town');
+eq('pause+4 → null (4 已移除)', nextScreenOnKey('pause', '4'), null);
 eq('pause+Esc → dungeon(默认,handler 用 resumeScreen)', nextScreenOnKey('pause', 'Escape'), 'dungeon');
 eq('pause+1 → dungeon(默认)', nextScreenOnKey('pause', '1'), 'dungeon');
 eq('pause+Tab → null', nextScreenOnKey('pause', 'Tab'), null);

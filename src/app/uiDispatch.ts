@@ -16,6 +16,7 @@ import { DIFFICULTIES, DIFFICULTY_MODS, unlockedDifficulty } from '../game/diffi
 import { MAP_MODES } from '../game/mapmode';
 import { NG_LAYOUT } from '../screens/newgame';
 import { EX_LAYOUT } from '../screens/expedition';
+import { CH_LAYOUT } from '../screens/characters';
 import { themeUnlocked } from '../game/newgame';
 import { THEMES } from '../game/state';
 import { EQUIP_SLOTS, EQUIP_NAMES, RARITY_COLORS, getOwned, equipItem, unequipSlot } from '../game/equipment';
@@ -25,8 +26,8 @@ import { chooseRune } from '../game/skill';
 import { pushToast } from '../game/toast';
 import { playSfxClient } from '../ipc/sfx';
 import { inf, wrn } from '../util/log';
-import { isCloseConfirmOpen, isNgNaming, setNgNaming } from './screenMachine';
-import { persistNowApp } from './save';
+import { isCloseConfirmOpen, isNgNaming, setNgNaming, triggerReturnConfirm } from './screenMachine';
+
 import { deleteCharacter } from '../ipc/save';
 
 /** uiDispatch 依赖注入 — main.ts 拥有实现, 本模块拥有决策 */
@@ -62,8 +63,8 @@ export function handleUiClick(ctx: UiCtx): boolean {
   const { state, w, h, mx, my } = ctx;
   // 关窗确认 (OPT-002): Y 保存退出 / N 取消
   if (isCloseConfirmOpen()) {
-    if (inRect(mx, my, w / 2 - 140, h / 2 + 40, 120, 40)) { ctx.confirmCloseSave(); return true; }
-    if (inRect(mx, my, w / 2 + 20, h / 2 + 40, 120, 40)) { ctx.confirmCloseCancel(); return true; }
+    if (inRect(mx, my, w / 2 - 160, h / 2 + 40, 150, 40)) { ctx.confirmCloseSave(); return true; }
+    if (inRect(mx, my, w / 2 + 10, h / 2 + 40, 150, 40)) { ctx.confirmCloseCancel(); return true; }
     return true;
   }
   // 符文三选一: 3 个符文盒 (覆盖于任何屏)
@@ -110,9 +111,9 @@ export function handleUiClick(ctx: UiCtx): boolean {
           return true;
         }
       }
-      // 城镇左上角"返回主菜单"按钮 (与 drawTownFrame 同步: 16, 16, 160, 32)
+      // 城镇左上角"返回主菜单"按钮 (与 drawTownFrame 同步: 16, 16, 160, 32) → 弹确认框保存后回标题
       if (inRect(mx, my, 16, 16, 160, 32)) {
-        ctx.setScreen(state, 'title');
+        triggerReturnConfirm();
         return true;
       }
       // v3 NPC 点击
@@ -129,19 +130,30 @@ export function handleUiClick(ctx: UiCtx): boolean {
       return true;
     }
     case 'pause': {
+      // 城镇按钮"放弃游戏?"确认对话框 (与 drawFrameToScreen 暂停遮罩同步几何: 200×40, y=h/2+20)
+      if (state.ui.townConfirm) {
+        if (inRect(mx, my, w / 2 - 210, h / 2 + 20, 200, 40)) {
+          state.ui.townConfirm = false;
+          state.ui.settingsOpen = false;
+          ctx.enterTown();
+          return true;
+        }
+        if (inRect(mx, my, w / 2 + 10, h / 2 + 20, 200, 40)) { state.ui.townConfirm = false; return true; }
+        return true;
+      }
       // 设置面板键位条目 (P3-10)
       if (state.ui.settingsOpen && ctx.handleSettingsClick(mx, my)) return true;
-      const totalW = 460, segW = totalW / 4;
-      const x0 = w / 2 - totalW / 2, y0 = h / 2 - 30, segH = 44;
+      // 垂直按钮 (与 drawFrameToScreen 暂停遮罩一致: 220×40, 间距 12, y0=h/2-46)
+      const bw = 220, bh = 40, gap = 12;
+      const x0 = w / 2 - bw / 2, y0 = h / 2 - 46;
       const segs: Array<() => void> = [
         () => ctx.setScreen(state, ctx.resumeScreen(state)),
         () => { state.ui.settingsOpen = !state.ui.settingsOpen; },
-        () => { state.ui.settingsOpen = false; void persistNowApp(state).then(() => pushToast(state, '已保存, 返回主菜单', '#9cf')); ctx.setScreen(state, 'title'); },
-        () => { state.ui.settingsOpen = false; ctx.enterTown(); },
+        () => { state.ui.settingsOpen = false; state.ui.townConfirm = true; },  // 城镇 → 确认放弃
       ];
       if (!state.ui.settingsOpen) {
         for (let i = 0; i < segs.length; i++) {
-          if (inRect(mx, my, x0 + i * segW, y0, segW, segH)) { segs[i](); return true; }
+          if (inRect(mx, my, x0, y0 + i * (bh + gap), bw, bh)) { segs[i](); return true; }
         }
       }
       return true;
@@ -189,22 +201,25 @@ export function handleUiClick(ctx: UiCtx): boolean {
       return true;
     }
     case 'newgame': {
-      const cy = h / 2 + NG_LAYOUT.cy;
-      // 创建模式命名框
-      if (state.ngFrom === 'create' && inRect(mx, my, w / 2 - 180, 148, 360, 40)) {
+      // 创建模式命名框 (职业卡片与难度之间, 与 newgame 屏同步: ny=360)
+      if (state.ngFrom === 'create' && inRect(mx, my, w / 2 - 180, 360, 360, 36)) {
         setNgNaming(true);
         return true;
       }
-      if (state.ngFrom === 'create' && isNgNaming() && !inRect(mx, my, w / 2 - 180, 148, 360, 40)) setNgNaming(false);
-      // 职业列
+      if (state.ngFrom === 'create' && isNgNaming() && !inRect(mx, my, w / 2 - 180, 360, 360, 36)) setNgNaming(false);
+      // 职业横向卡片 (与 newgame 屏同步: 6 张 190×150, gap 14, 行顶 cardY=215)
       if (state.ngFrom !== 'town') {
+        const rowW = CLASS_IDS.length * NG_LAYOUT.cardW + (CLASS_IDS.length - 1) * NG_LAYOUT.gap;
+        const x0 = w / 2 - rowW / 2;
         for (let i = 0; i < CLASS_IDS.length; i++) {
-          if (inRect(mx, my, w / 2 + NG_LAYOUT.classX, cy + i * 60 - 27, NG_LAYOUT.classW, 54)) { state.ngSel.classIdx = i; playSfxClient('ui_click'); return true; }
+          if (inRect(mx, my, x0 + i * (NG_LAYOUT.cardW + NG_LAYOUT.gap), NG_LAYOUT.cardY, NG_LAYOUT.cardW, NG_LAYOUT.cardH)) {
+            state.ngSel.classIdx = i; playSfxClient('ui_click'); return true;
+          }
         }
       }
-      // 难度横排 (与 newgame 屏同步: 120px 卡距, diffY = h/2 + 70, 卡高 44)
+      // 难度横排 (与 newgame 屏同步: 120px 卡距, diffY = h/2 + 88, 卡高 44)
       for (let i = 0; i < DIFFICULTIES.length; i++) {
-        if (inRect(mx, my, (w - DIFFICULTIES.length * 120) / 2 + i * 120, h / 2 + 70, 120, 44)) {
+        if (inRect(mx, my, (w - DIFFICULTIES.length * 120) / 2 + i * 120, h / 2 + 88, 120, 44)) {
           const d = DIFFICULTIES[i];
           if (unlockedDifficulty(state.cleared, d)) { state.ngSel.diffIdx = i; playSfxClient('ui_click'); }
           else pushToast(state, `${DIFFICULTY_MODS[d].name} 未解锁 (通关前置)`, '#f66');
@@ -274,7 +289,7 @@ export function handleUiClick(ctx: UiCtx): boolean {
       }
       if (inRect(mx, my, w - 150, 20, 130, 30)) { state.ui.collectOpen = !state.ui.collectOpen; return true; }
       if (state.charConfirmDel) {
-        if (inRect(mx, my, cx - 200, h / 2 + 20 - 16, 400, 40)) {
+        if (inRect(mx, my, cx - 210, h / 2 + 28, 190, 44)) {
           const target = state.charList[state.charSel];
           if (target) {
             state.charList = state.charList.filter(c => c.id !== target.id);
@@ -287,13 +302,12 @@ export function handleUiClick(ctx: UiCtx): boolean {
           state.charConfirmDel = false;
           return true;
         }
-        if (inRect(mx, my, 20, 20, 200, 40)) { state.charConfirmDel = false; return true; }
+        if (inRect(mx, my, cx + 20, h / 2 + 28, 190, 44)) { state.charConfirmDel = false; return true; }
         return true;
       }
       const rows = Math.min(state.charList.length, 8);
-      const y0 = h / 2 - rows * 26;
       for (let i = 0; i < rows; i++) {
-        if (inRect(mx, my, cx - 320, y0 + i * 52 - 14, 640, 40)) { state.charSel = i; return true; }
+        if (inRect(mx, my, CH_LAYOUT.rowX, CH_LAYOUT.rowY0 + i * CH_LAYOUT.rowH, CH_LAYOUT.rowW, CH_LAYOUT.rowH)) { state.charSel = i; return true; }
       }
       if (inRect(mx, my, cx - 228, h - 64, 300, 36)) {
         const target = state.charList[state.charSel];

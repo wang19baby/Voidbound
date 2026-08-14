@@ -61,11 +61,14 @@ const invoke = tauriInvoke;
 let titleFocus: number | null = null;
 let titleFocusCtx = '';
 let closeConfirmOpen = false;
+let closeConfirmReturn = false;  // 关窗确认: true=返回主菜单模式(保存后回标题), false=关窗模式
 let ngLaunchT = 0;
 let ngNaming = false;
 
 export function getTitleFocus(): number | null { return titleFocus; }
 export function isCloseConfirmOpen(): boolean { return closeConfirmOpen; }
+export function isCloseConfirmReturn(): boolean { return closeConfirmReturn; }
+export function setCloseConfirmReturn(v: boolean): void { closeConfirmReturn = v; }
 export function getNgLaunchT(): number { return ngLaunchT; }
 export function isNgNaming(): boolean { return ngNaming; }
 export function setNgLaunchT(v: number): void { ngLaunchT = v; }
@@ -271,7 +274,7 @@ function handleTitleKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContex
   if (k === '2') { titleAct(1, state, ctx); return true; }
   if (k === '3' && hasSave) { titleAct(2, state, ctx); return true; }
   if (k === 'r') { titleAct(hasSave ? 3 : 2, state, ctx); return true; }
-  if (k === 'o') { ctx.continueLastSave(); return true; }
+  if (k === 'o' && hasSave) { ctx.continueLastSave(); return true; }
   return true;
 }
 
@@ -329,6 +332,16 @@ function handleNewgameKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
   if (mv) {
     state.ngSel.classIdx = (state.ngSel.classIdx + mv[0] + CLASS_IDS.length) % CLASS_IDS.length;
     playSfxClient('ui_click');
+    return true;
+  }
+  // 难度 Z/X (跳过锁定)
+  if (k === 'z' || k === 'x') {
+    const dir = k === 'z' ? -1 : 1;
+    let idx = state.ngSel.diffIdx;
+    for (let step = 0; step < DIFFICULTIES.length; step++) {
+      idx = (idx + dir + DIFFICULTIES.length) % DIFFICULTIES.length;
+      if (unlockedDifficulty(state.cleared, DIFFICULTIES[idx])) { state.ngSel.diffIdx = idx; playSfxClient('ui_click'); break; }
+    }
     return true;
   }
   // 创建模式 步骤 1 → 步骤 2 (←→ 已切职业, Enter 确认进步骤 2 命名+难度+主题+模式)
@@ -494,19 +507,24 @@ function handleVictoryKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyCont
 
 function handlePauseKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext): boolean {
   const k = e.key.toLowerCase();
-  if (k === '1') { setScreen(state, resumeScreen(state)); inf('gl', 'resumed'); return true; }
-  if (k === '2') { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
-  if (k === '3') {
-    state.ui.settingsOpen = false;
-    void ctx.persistNow().then(() => pushToast(state, '已保存, 返回主菜单', '#9cf'));
-    setScreen(state, 'title');
-    inf('ui', '返回主菜单 (已保存)');
+  // 城镇按钮确认对话框: [Y] 放弃游戏 (不保存) / [N]/Esc 取消
+  if (state.ui.townConfirm) {
+    if (k === 'y') {
+      state.ui.townConfirm = false;
+      state.ui.settingsOpen = false;
+      ctx.enterTown(state);
+      inf('ui', '放弃本次进度 (不保存), 进入城镇');
+      return true;
+    }
+    if (k === 'n' || k === 'escape') { state.ui.townConfirm = false; return true; }
     return true;
   }
-  if (k === '4') {
+  if (k === '1' && !state.ui.settingsOpen) { setScreen(state, resumeScreen(state)); inf('gl', 'resumed'); return true; }
+  if (k === '2') { state.ui.settingsOpen = !state.ui.settingsOpen; return true; }
+  if (k === '3' && !state.ui.settingsOpen) {
     state.ui.settingsOpen = false;
-    ctx.enterTown(state);
-    inf('ui', '进入城镇');
+    state.ui.townConfirm = true;  // 城镇 → 确认放弃 (不保存)
+    inf('ui', '城镇 → 确认放弃本次进度');
     return true;
   }
   if (state.ui.settingsOpen) {
@@ -569,8 +587,8 @@ function handleTownKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext
     ctx.handleTownPanelKey(state, e, k);
     return true;
   }
-  // 修复: Esc 键 → 返回主菜单 (与左上角"返回主菜单(Esc)"按钮一致; 面板打开时 Esc 由 handleTownPanelKey 关闭面板)
-  if (k === 'escape') { setScreen(state, 'title'); return true; }
+  // 修复: Esc 键 → 返回主菜单确认框 (保存后回标题; 面板打开时 Esc 由 handleTownPanelKey 关闭面板)
+  if (k === 'escape') { triggerReturnConfirm(); return true; }
   if (keyMatch(e, loadKeybinds().interact)) { ctx.interactTown(state); return true; }
   if (k === '1' || k === '2' || k === '3' || k === '4') return true;
   return true;
@@ -612,5 +630,13 @@ export function handleScreenKey(state: GameState, e: KeyboardEvent, ctx: ScreenK
 
 export function triggerCloseConfirm(): void {
   closeConfirmOpen = true;
+  closeConfirmReturn = false;
   inf('ui', '关闭确认开启');
+}
+
+/** 城镇/游戏中"返回主菜单": 弹出关窗确认 (保存并退出模式: 保存后回标题, 不关窗) */
+export function triggerReturnConfirm(): void {
+  closeConfirmOpen = true;
+  closeConfirmReturn = true;
+  inf('ui', '返回主菜单确认');
 }

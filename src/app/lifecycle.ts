@@ -12,8 +12,8 @@
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import type { GameState, Screen } from '../game/state';
-import { setScreen } from '../game/state';
-import { setCloseConfirmOpen } from './screenMachine';
+import { setScreen, isInGameScreen } from '../game/state';
+import { setCloseConfirmOpen, isCloseConfirmReturn, setCloseConfirmReturn } from './screenMachine';
 import { persistNowApp } from './save';
 import { inf } from '../util/log';
 
@@ -50,6 +50,7 @@ export function installCloseConfirmListeners(): void {
   void import('@tauri-apps/api/event').then(({ listen, emit }) => {
     closeEmit = emit;
     void listen('close-requested', () => {
+      setCloseConfirmReturn(false);
       setCloseConfirmOpen(true);
       closeConfirmSaving = false;
       inf('ui', 'close-requested: 显示退出确认');
@@ -57,25 +58,34 @@ export function installCloseConfirmListeners(): void {
   });
 }
 
-/** 关窗确认 → 保存退出 (实际数据保留由 emit 异步持久化完成) */
+/** 关窗确认 → 保存退出 (实际数据保留由 emit 异步持久化完成); 返回主菜单模式则保存后回标题 */
 export function confirmCloseSave(): void {
   if (!lifecycleState) return;
   if (closeConfirmSaving) return;
   closeConfirmSaving = true;
   const done = (): void => {
+    if (isCloseConfirmReturn()) {
+      // 返回主菜单模式: 保存完成 → 关闭确认框 + 回标题 (不关窗)
+      setCloseConfirmReturn(false);
+      setCloseConfirmOpen(false);
+      closeConfirmSaving = false;
+      setScreen(lifecycleState!, 'title');
+      return;
+    }
     if (closeEmit) { void closeEmit('close-confirmed'); }
     else {
       // 事件模块未就绪的兜底: JS 直接销毁
       void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().destroy());
     }
   };
-  // 标题页无游戏进度, 直接退出; 其余屏先持久化再退出
-  if (lifecycleState.screen === 'title') { done(); return; }
+  // 无游戏进度 (首页/新游戏/角色管理/远征配置) 直接退出; 游戏中先持久化再退出
+  if (!isInGameScreen(lifecycleState.screen)) { done(); return; }
   void persistNowApp(lifecycleState).finally(done);
 }
 
 /** 关窗确认 → 取消 */
 export function confirmCloseCancel(): void {
+  setCloseConfirmReturn(false);
   setCloseConfirmOpen(false);
 }
 

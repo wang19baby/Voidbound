@@ -66,6 +66,8 @@ export interface Player {
   speedMult: number;
   /** A-W3 诅咒 (curse 机制): >0 = 减速 + 禁翻滚短窗 (翻滚/时间清除) */
   curseT: number;
+  /** 累计游玩时长秒 (v12): 每帧 loopImpl 累加, 存档持久化 */
+  playTime: number;
 }
 
 export interface Fireball {
@@ -92,6 +94,11 @@ export type Screen =
   | 'pause'                      // Esc 菜单 (覆盖 dungeon/town 上; settingsOpen 为子状态)
   | 'portal'                     // A-W1 门结算: Boss 死亡位门前 [回城/继续] 面板
   | 'death' | 'victory';         // 结算 (OPT-011/012 接入)
+
+/** 关窗确认是否需要保存: 仅实际游戏中 (有进度) 的屏; 新游戏/首页/角色管理/远征配置等无进度不保存 */
+export function isInGameScreen(s: Screen): boolean {
+  return s === 'dungeon' || s === 'town' || s === 'equipment' || s === 'pause' || s === 'portal' || s === 'death' || s === 'victory';
+}
 
 /** 状态机最小接口 (setScreen 只依赖这些字段; GameState 结构满足) */
 export interface ScreenMachine {
@@ -127,14 +134,14 @@ export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
       if (k === 'tab') return 'equipment';
       return null;
     case 'town':
-      if (k === 'escape') return 'title';
+      // Esc 现弹"返回主菜单?"确认框 (不直接切屏), 故无迁移
       return null;
     case 'equipment':
       if (k === 'escape' || k === 'tab') return 'dungeon';
       return null;
     case 'pause':
-      if (k === '3') return 'title';
-      if (k === '4') return 'town';
+      // 3 城镇 (先弹"放弃游戏?"确认, 最终目的地 town); 4 已移除; 主菜单已从暂停菜单移除
+      if (k === '3') return 'town';
       if (k === 'escape' || k === '1') return 'dungeon';
       return null;
     case 'portal':

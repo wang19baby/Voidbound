@@ -78,8 +78,8 @@ export function drawFrame(ctx: FrameCtx): void {
     } else {
     // 关窗确认优先: Y/N 按钮命中 (防止被攻击分支吞掉)
     const cp = ctx.mouse.state().pos;
-    const yH = ctx.isCloseConfirmOpen() && inRect(cp.x, cp.y, ctx.state.viewport.w / 2 - 140, ctx.state.viewport.h / 2 + 40, 120, 40);
-    const nH = ctx.isCloseConfirmOpen() && inRect(cp.x, cp.y, ctx.state.viewport.w / 2 + 20, ctx.state.viewport.h / 2 + 40, 120, 40);
+    const yH = ctx.isCloseConfirmOpen() && inRect(cp.x, cp.y, ctx.state.viewport.w / 2 - 160, ctx.state.viewport.h / 2 + 40, 150, 40);
+    const nH = ctx.isCloseConfirmOpen() && inRect(cp.x, cp.y, ctx.state.viewport.w / 2 + 10, ctx.state.viewport.h / 2 + 40, 150, 40);
     if (ctx.isCloseConfirmOpen() && ctx.mouse.wasClicked('LMB')) {
       if (yH) ctx.confirmCloseSave();
       else if (nH) ctx.confirmCloseCancel();
@@ -150,22 +150,65 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     hudCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hudCtx.textAlign = 'center';
+    hudCtx.textBaseline = 'middle';
     if (!state.ui.settingsOpen) {
-      // UI-FIX6: 重排 PAUSED/主提示/4 选项/副提示 垂直位置, 消除重叠
-      // PAUSED (h/2-90, 40px), 主提示 16px (h/2-50), 4 选项 [h/2-30, h/2+14], 副提示 (h/2+40)
+      // 垂直按钮菜单: [1]继续 [2]设置 [3]城镇 (无主菜单/存档; 几何与 uiDispatch 'pause' 一致)
       hudCtx.fillStyle = '#fff';
       hudCtx.font = 'bold 40px monospace';
-      hudCtx.textBaseline = 'middle';
-      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 90);
-      hudCtx.font = '16px monospace';
-      hudCtx.fillStyle = '#ddd';
-      hudCtx.fillText('1 继续 · 2 设置 · 3 主菜单 · 4 城镇 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 - 50);
-      hudCtx.fillStyle = '#777';
-      hudCtx.font = '12px monospace';
-      hudCtx.fillText('Ctrl+1..6 分配技能点 · P 存档', hudCanvas.width / 2, hudCanvas.height / 2 + 40);
+      hudCtx.fillText('PAUSED', hudCanvas.width / 2, hudCanvas.height / 2 - 130);
+      const mp = ctx.mouse.state().pos;
+      const bw = 220, bh = 40, gap = 12;
+      const bx = hudCanvas.width / 2 - bw / 2;
+      const y0 = hudCanvas.height / 2 - 46;
+      const labels = ['1 继续', '2 设置', '3 城镇'];
+      for (let i = 0; i < labels.length; i++) {
+        const by = y0 + i * (bh + gap);
+        const hit = inRect(mp.x, mp.y, bx, by, bw, bh);
+        hudCtx.fillStyle = hit ? 'rgba(102,204,255,0.16)' : 'rgba(30,30,42,0.85)';
+        hudCtx.fillRect(bx, by, bw, bh);
+        hudCtx.strokeStyle = hit ? '#ffd64a' : '#4a4a5a';
+        hudCtx.lineWidth = hit ? 2 : 1;
+        hudCtx.strokeRect(bx, by, bw, bh);
+        hudCtx.fillStyle = '#fff';
+        hudCtx.font = 'bold 18px monospace';
+        hudCtx.fillText(labels[i], hudCanvas.width / 2, by + bh / 2);
+      }
     } else {
       // 设置面板 (C8: 与标题共用 drawSettingsPanel, 含滑条/键位自定义)
       ctx.drawSettingsPanel(state, hudCtx, hudCanvas);
+    }
+    // 城镇按钮确认: 放弃本次进度 (不保存) — 画在最上层
+    if (state.ui.townConfirm) {
+      const mp = ctx.mouse.state().pos;
+      hudCtx.fillStyle = 'rgba(0,0,0,0.6)';
+      hudCtx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+      hudCtx.textAlign = 'center';
+      hudCtx.fillStyle = '#ffd';
+      hudCtx.font = 'bold 22px monospace';
+      hudCtx.fillText('放弃游戏?', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+      hudCtx.fillStyle = '#f88';
+      hudCtx.font = '14px monospace';
+      hudCtx.fillText('本次获得的进度/物品不会保存', hudCanvas.width / 2, hudCanvas.height / 2 - 8);
+      const bw = 200, bh = 40;
+      const yR: [number, number, number, number] = [hudCanvas.width / 2 - 210, hudCanvas.height / 2 + 20, bw, bh];
+      const nR: [number, number, number, number] = [hudCanvas.width / 2 + 10, hudCanvas.height / 2 + 20, bw, bh];
+      const yH = inRect(mp.x, mp.y, ...yR);
+      const nH = inRect(mp.x, mp.y, ...nR);
+      hudCtx.fillStyle = yH ? 'rgba(255,106,106,0.25)' : 'rgba(60,20,20,0.9)';
+      hudCtx.fillRect(...yR);
+      hudCtx.strokeStyle = yH ? '#ff6a6a' : '#7a4a4a';
+      hudCtx.lineWidth = yH ? 2 : 1;
+      hudCtx.strokeRect(...yR);
+      hudCtx.fillStyle = '#fff';
+      hudCtx.font = 'bold 16px monospace';
+      hudCtx.fillText('放弃游戏 [Y]', hudCanvas.width / 2 - 110, hudCanvas.height / 2 + 40);
+      hudCtx.fillStyle = nH ? 'rgba(255,255,255,0.14)' : 'rgba(30,30,42,0.9)';
+      hudCtx.fillRect(...nR);
+      hudCtx.strokeStyle = nH ? '#c9aaff' : '#4a4a5a';
+      hudCtx.lineWidth = nH ? 2 : 1;
+      hudCtx.strokeRect(...nR);
+      hudCtx.fillStyle = '#fff';
+      hudCtx.fillText('取消 [N]', hudCanvas.width / 2 + 110, hudCanvas.height / 2 + 40);
     }
     hudCtx.textAlign = 'left';
   }

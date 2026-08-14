@@ -14,6 +14,8 @@ export interface UiState {
   keybindEdit: string | null;
   /** 设置面板展开 (M3 OPT-014): 子状态在 pause 上 */
   settingsOpen: boolean;
+  /** 暂停菜单"城镇"确认: true = 显示"放弃游戏?"对话框 (放弃=不保存本次进度) */
+  townConfirm: boolean;
   /** 死亡结算进入标志 (OPT-011) */
   dying: boolean;
   /** C (死亡撤销): 死亡后 N 秒内可免费撤销, 0 = 已过期 */
@@ -32,6 +34,7 @@ export function createEmptyUiState(): UiState {
     collectOpen: false,
     keybindEdit: null,
     settingsOpen: false,
+    townConfirm: false,
     dying: false,
     deathUndo: 0,
     explored: new Set<string>(),

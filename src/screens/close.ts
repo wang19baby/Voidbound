@@ -6,6 +6,8 @@
 // 依赖: game/uigrid (inRect), input/mouse (MouseHandle)
 
 import type { Screen } from '../game/state';
+import { isInGameScreen } from '../game/state';
+import { isCloseConfirmReturn } from '../app/screenMachine';
 import type { MouseHandle } from '../input/mouse';
 import { inRect } from '../game/uigrid';
 
@@ -17,22 +19,24 @@ export function drawCloseConfirm(
   saving: boolean,
   mouse: MouseHandle,
 ): void {
+  const returning = isCloseConfirmReturn();  // true=返回主菜单模式, false=关窗
   ctx.fillStyle = 'rgba(0,0,0,0.7)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffd';
   ctx.font = 'bold 26px monospace';
-  ctx.fillText('确认退出?', canvas.width / 2, canvas.height / 2 - 40);
+  ctx.fillText(returning ? '返回主菜单?' : '确认退出?', canvas.width / 2, canvas.height / 2 - 40);
   ctx.fillStyle = '#9aa';
   ctx.font = '15px monospace';
-  const inGame = currentScreen !== 'title';
+  const inGame = isInGameScreen(currentScreen);
   ctx.fillText(inGame ? (saving ? '正在保存…' : '当前进度会自动保存') : '未进入游戏, 无需保存', canvas.width / 2, canvas.height / 2);
   if (!saving) {
     const mx = mouse.state().pos.x;
     const my = mouse.state().pos.y;
-    const yR: [number, number, number, number] = [canvas.width / 2 - 140, canvas.height / 2 + 40, 120, 40];
-    const nR: [number, number, number, number] = [canvas.width / 2 + 20, canvas.height / 2 + 40, 120, 40];
+    // 150px 宽: "保存并退出" 5 个 CJK + "[Y] " 在 bold 18px 下约 128px, 120px 会截字
+    const yR: [number, number, number, number] = [canvas.width / 2 - 160, canvas.height / 2 + 40, 150, 40];
+    const nR: [number, number, number, number] = [canvas.width / 2 + 10, canvas.height / 2 + 40, 150, 40];
     const yH = inRect(mx, my, ...yR);
     const nH = inRect(mx, my, ...nR);
     ctx.fillStyle = yH ? '#2a3a2a' : '#1c2a1c';
@@ -42,14 +46,14 @@ export function drawCloseConfirm(
     ctx.strokeRect(...yR);
     ctx.fillStyle = '#8f8';
     ctx.font = 'bold 18px monospace';
-    ctx.fillText(inGame ? '[Y] 保存并退出' : '[Y] 退出', canvas.width / 2 - 80, canvas.height / 2 + 60);
+    ctx.fillText(inGame ? '[Y] 保存并退出' : '[Y] 退出', canvas.width / 2 - 85, canvas.height / 2 + 60);
     ctx.fillStyle = nH ? '#3a2a2a' : '#221c1c';
     ctx.fillRect(...nR);
     ctx.strokeStyle = nH ? '#fff' : '#a55';
     ctx.lineWidth = nH ? 2 : 1;
     ctx.strokeRect(...nR);
     ctx.fillStyle = '#f88';
-    ctx.fillText('[N] 取消', canvas.width / 2 + 80, canvas.height / 2 + 60);
+    ctx.fillText('[N] 取消', canvas.width / 2 + 85, canvas.height / 2 + 60);
   }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';

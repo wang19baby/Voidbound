@@ -40,7 +40,7 @@ import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
 import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor, drawTitleScreen, type TitleCtx } from './screens/title';
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
-import { NG_LAYOUT, NG_ROW_CLASS, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
+import { NG_LAYOUT, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
 import { drawExpedition as drawExpeditionScreen, type ExpeditionCtx } from './screens/expedition';
 import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPanel, type TownCtx } from './screens/town';
 import { drawCharacters, type CharactersCtx } from './screens/characters';
@@ -203,6 +203,7 @@ const state = {
     mpRegen: 0,
     speedMult: 1,
     curseT: 0,
+    playTime: 0,
   },
   viewport: { w: VW, h: VH },
   world: {
@@ -284,6 +285,7 @@ const collectionCtx: CollectionCtx = {
 };
 const charactersCtx: CharactersCtx = {
   state, hudCtx, hudCanvas, mouse,
+  drawUiPortrait: (classId, x, y, w, h, noClear) => { drawUiPortrait(gl, quad, res, classId, x, y, w, h, noClear); },
   drawCollectionPanel: (ctx) => drawCollectionPanel(ctx),
   uiCursor: (rects) => uiCursor(canvas, mouse, rects),
 };
@@ -548,6 +550,7 @@ if (e.key === 'o' || e.key === 'O') {
       state.player.skillPoints = d.skill_points ?? 0;
       state.player.exp = d.exp ?? 0;
       bindClass(state, (d.class as ClassId) ?? 'barbarian');  // M5 C-104: 读档还原职业
+      state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
       if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
       restoreMaterialsApp(state, d);  // M5 W4 C-401
       restorePassivesApp(state, d);  // v9 被动技能树
@@ -784,6 +787,8 @@ function loopImpl(now: number) {
   last = now;
   const nowSec = now / 1000;
   frameCount++;
+  // v12: 累计游玩时长 (loopImpl 只在游戏屏运行 → 只计实际游玩时间)
+  state.player.playTime += dt;
 
   // v4 首局引导: 本次运行首次进入 dungeon 激活 3 气泡; 计时自动推进
   if (state.screen === 'dungeon' && !state.tutorShown) {

@@ -32,14 +32,14 @@ export const THEME_NAMES: Record<string, string> = { forest: '森林', desert: '
 export const ATTR_NAMES: Record<string, string> = { str: '力量', dex: '敏捷', vit: '体力', int: '智力', fai: '信仰', cha: '魅力' };
 
 /** 新局屏布局 (绘制与鼠标命中共用): x 相对 w/2, y 相对 cy=h/2-110
- *  MM-UG1: 主题/模式/start 相关字段移到 expedition.ts; 难度改为下半部横排 (常量在本函数内) */
+ *  MM-UG1: 主题/模式/start 相关字段移到 expedition.ts; 难度改为下半部横排 (常量在本函数内)
+ *  UI: 职业改为横向卡片 (贴图+介绍), cardY 为卡片行绝对顶坐标 */
 export const NG_LAYOUT = {
   cy: -110,
-  classX: -600, classW: 300, classH: 54,   // 左列职业卡 (多人行副标)
+  cardW: 190, cardH: 210, gap: 14, cardY: 135,   // 职业横排卡片 (6 张, ←→/A D/点击切换)
   startX: -200, startY: -92, startW: 400, startH: 48,
 };
 
-export const NG_ROW_CLASS = 60;   // 职业行距
 export const NG_LAUNCH_MS = 700;  // 启动过场时长
 
 /** 主题色块 (远征屏复用) */
@@ -56,7 +56,7 @@ export interface NewgameCtx {
   hudCtx: CanvasRenderingContext2D;
   hudCanvas: HTMLCanvasElement;
   mouse: MouseHandle;
-  drawUiPortrait: (classId: ClassId, x: number, y: number, w: number, h: number) => void;
+  drawUiPortrait: (classId: ClassId, x: number, y: number, w: number, h: number, noClear?: boolean) => void;
   isNgNaming: () => boolean;
   getNgLaunchT: () => number;
   uiCursor: (rects: Array<[number, number, number, number]>) => void;
@@ -69,23 +69,23 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   const w = hudCanvas.width;
   const h = hudCanvas.height;
   const creating = state.ngFrom === 'create';
-  const cy = h / 2 + NG_LAYOUT.cy;
   const selClass = CLASS_DEFS[CLASS_IDS[state.ngSel.classIdx]];
   const selDiff = DIFFICULTY_MODS[DIFFICULTIES[state.ngSel.diffIdx]].name;
   const mx = mouse.state().pos.x;
   const my = mouse.state().pos.y;
   const hover = (x: number, y: number, ww: number, hh: number) => inRect(mx, my, x, y, ww, hh);
 
-  // GL 立绘 (左上, 2D 层挖孔)
-  const px = w / 2 - 620, py = 56, pw = 150, ph = 150;
-  drawUiPortrait(selClass.id, px, py, pw, ph);
+  // GL 立绘: 6 张职业卡贴图 (首张清 GL, 其余 noClear 连画)
+  const pSize = 112, pOffY = 12;
+  const cardW = NG_LAYOUT.cardW, cardH = NG_LAYOUT.cardH, gap = NG_LAYOUT.gap;
+  const rowW = CLASS_IDS.length * cardW + (CLASS_IDS.length - 1) * gap;
+  const cardX0 = w / 2 - rowW / 2;
+  const cardY = NG_LAYOUT.cardY;
+  const holeX = (i: number): number => cardX0 + i * (cardW + gap) + (cardW - pSize) / 2;
+  CLASS_IDS.forEach((id, i) => drawUiPortrait(id, holeX(i), cardY + pOffY, pSize, pSize, i > 0));
   hudCtx.clearRect(0, 0, w, h);
   hudCtx.fillStyle = '#0b0b12';
   hudCtx.fillRect(0, 0, w, h);
-  hudCtx.clearRect(px, py, pw, ph);
-  hudCtx.strokeStyle = '#8a8a96';
-  hudCtx.lineWidth = 2;
-  hudCtx.strokeRect(px - 4, py - 4, pw + 8, ph + 8);
 
   hudCtx.textAlign = 'center';
   hudCtx.textBaseline = 'middle';
@@ -97,25 +97,28 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   hudCtx.fillText(creating ? '输入角色名, 选择职业与难度, 然后出发去城镇'
     : '确认角色名 · 选择职业 · 选择难度 (主题与模式在城镇传送门)', w / 2, 110);
 
-  // 创建模式: 命名框 (点击聚焦, Enter 出发)
-  if (creating) {
-    const nx = w / 2 - 180, ny = 148, nw = 360, nh = 40;
+  // 命名框 (职业卡片与难度之间; 创建模式可编辑, 否则只读显示当前角色)
+  {
+    const nx = w / 2 - 180, ny = 360, nw = 360, nh = 36;
+    const focused = creating && isNgNaming();
     const nHit = hover(nx, ny, nw, nh);
-    hudCtx.fillStyle = isNgNaming() ? 'rgba(255,214,74,0.10)' : nHit ? 'rgba(255,255,255,0.07)' : 'rgba(20,20,28,0.92)';
+    hudCtx.fillStyle = focused ? 'rgba(255,214,74,0.10)' : nHit ? 'rgba(255,255,255,0.07)' : 'rgba(20,20,28,0.92)';
     hudCtx.fillRect(nx, ny, nw, nh);
-    hudCtx.strokeStyle = isNgNaming() ? '#ffd64a' : nHit ? '#66ccff' : '#3a3a48';
-    hudCtx.lineWidth = isNgNaming() ? 2 : 1;
+    hudCtx.strokeStyle = focused ? '#ffd64a' : nHit ? '#66ccff' : '#3a3a48';
+    hudCtx.lineWidth = focused ? 2 : 1;
     hudCtx.strokeRect(nx, ny, nw, nh);
     hudCtx.textAlign = 'left';
     hudCtx.fillStyle = '#889';
     hudCtx.font = '13px monospace';
-    hudCtx.fillText('角色名', nx + 12, ny + nh / 2);
+    hudCtx.fillText(creating ? '角色名' : '当前角色', nx + 12, ny + nh / 2);
     hudCtx.fillStyle = '#fff';
     hudCtx.font = 'bold 18px monospace';
-    const shown = (state.charNameInput + (isNgNaming() ? '▏' : '')).slice(0, 25);
-    hudCtx.fillText(shown || 'char_N (自动)', nx + 74, ny + nh / 2);
+    const shown = creating
+      ? (state.charNameInput + (focused ? '▏' : '')).slice(0, 25) || 'char_N (自动)'
+      : state.currentChar;
+    hudCtx.fillText(shown, nx + 74, ny + nh / 2);
     hudCtx.textAlign = 'center';
-    if (isNgNaming()) {
+    if (focused) {
       hudCtx.fillStyle = '#997';
       hudCtx.font = '11px monospace';
       hudCtx.fillText('字母/数字/下划线 · Enter 确认出发 · Esc 取消命名', nx + nw / 2, ny + nh + 14);
@@ -123,36 +126,37 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
     rects.push([nx, ny, nw, nh]);
   }
 
-  // 左列: 职业
-  const cx = w / 2 + NG_LAYOUT.classX;
-  hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillStyle = '#9cf';
-  hudCtx.fillText('职业 [1-6]', cx + 140, cy - 40);
+  // 职业横向卡片: 贴图 + 名称 + 副标 + 介绍 + 技能 (←→/A D/点击切换)
   CLASS_IDS.forEach((id, i) => {
+    const cxx = cardX0 + i * (cardW + gap);
     const def = CLASS_DEFS[id];
     const sel = state.ngSel.classIdx === i;
-    const ry = cy + i * NG_ROW_CLASS - NG_LAYOUT.classH / 2;
-    if (hover(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH)) {
-      hudCtx.fillStyle = 'rgba(255,255,255,0.06)';
-      hudCtx.fillRect(cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH);
-    }
-    hudCtx.font = 'bold 18px monospace';
+    const hov = hover(cxx, cardY, cardW, cardH);
+    hudCtx.fillStyle = sel ? 'rgba(201,170,255,0.14)' : hov ? 'rgba(255,255,255,0.06)' : 'rgba(20,20,28,0.9)';
+    hudCtx.fillRect(cxx, cardY, cardW, cardH);
+    hudCtx.strokeStyle = sel ? '#c9aaff' : hov ? '#6a6a7a' : '#3a3a48';
+    hudCtx.lineWidth = sel ? 2 : 1;
+    hudCtx.strokeRect(cxx, cardY, cardW, cardH);
+    hudCtx.clearRect(holeX(i), cardY + pOffY, pSize, pSize);
+    hudCtx.font = 'bold 15px monospace';
     hudCtx.fillStyle = sel ? def.color : '#8a8a96';
-    hudCtx.fillText(`${i + 1} ${sel ? '▶ ' : '  '}${def.name}${sel ? ' ◀' : ''}`, cx + 150, cy + i * NG_ROW_CLASS);
-    hudCtx.font = '12px monospace';
+    hudCtx.fillText(`${sel ? '▶ ' : '  '}${def.name}`, cxx + cardW / 2, cardY + 136);
+    hudCtx.font = '11px monospace';
     hudCtx.fillStyle = sel ? '#bbb' : '#8a8a96';
-    hudCtx.fillText(def.title, cx + 150, cy + i * NG_ROW_CLASS + 18);
+    hudCtx.fillText(def.title, cxx + cardW / 2, cardY + 158);
+    hudCtx.fillStyle = sel ? '#ddd' : '#889';
+    hudCtx.fillText(def.desc, cxx + cardW / 2, cardY + 176);
     const slots = def.skillSlots;
     const skillLine = ['Q', 'W', 'E', 'R'].map(s => SKILL_SPECS[slots[s as keyof typeof slots]]?.name ?? '').filter(Boolean).join('/');
-    hudCtx.fillStyle = sel ? '#9aa' : '#8a8a96';
-    hudCtx.font = '11px monospace';
-    hudCtx.fillText(`${skillLine} · ${ATTR_NAMES[def.attr] ?? def.attr}`, cx + 150, cy + i * NG_ROW_CLASS + 36);
-    rects.push([cx, ry, NG_LAYOUT.classW, NG_LAYOUT.classH]);
+    hudCtx.fillStyle = sel ? '#9cf' : '#6a6a7a';
+    hudCtx.font = '10px monospace';
+    hudCtx.fillText(`${ATTR_NAMES[def.attr] ?? def.attr} · ${skillLine}`, cxx + cardW / 2, cardY + 194);
+    rects.push([cxx, cardY, cardW, cardH]);
   });
 
-  // 难度横排 (下半部): 与远征屏同款 120px 卡间距, 居中跨 w/2±300 (避开左列职业)
+  // 难度横排 (下半部): 与远征屏同款 120px 卡间距, 居中跨 w/2±300
   const diffSpacing = 120, diffCardH = 44;
-  const diffY = h / 2 + 70;
+  const diffY = h / 2 + 88;
   const diffX0 = (w - DIFFICULTIES.length * diffSpacing) / 2;
   hudCtx.fillStyle = '#ffb0a0';
   hudCtx.font = 'bold 15px monospace';
@@ -212,13 +216,13 @@ export function drawNewgame(ctx: NewgameCtx, rects: Array<[number, number, numbe
   hudCtx.strokeRect(bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH);
   hudCtx.fillStyle = startHit ? '#fff' : '#bbb';
   hudCtx.font = 'bold 18px monospace';
-  hudCtx.fillText(`[Enter] ${creating ? '创建并出发(Enter)' : '出发(Enter)'}`, w / 2, by + NG_LAYOUT.startH / 2);
+  hudCtx.fillText(` ${creating ? '创建并出发[Enter]' : '出发[Enter]'}`, w / 2, by + NG_LAYOUT.startH / 2);
   rects.push([bx, by, NG_LAYOUT.startW, NG_LAYOUT.startH]);
 
   // 底部: 键盘帮助条 (主题/模式移到远征屏)
   hudCtx.fillStyle = '#889';
   hudCtx.font = '13px monospace';
-  hudCtx.fillText('[1-6] 职业 · [Z/X] 难度 · [Enter] 出发 · [Esc] 返回', w / 2, h - 36);
+  hudCtx.fillText('[←/→] 职业 · [Z/X] 难度 · [Enter] 出发 · [Esc] 返回', w / 2, h - 36);
   // 左上角"返回主菜单(Esc)"按钮 (与城镇屏同款)
   const backMenuR: [number, number, number, number] = [16, 16, 160, 32];
   const mHit = hover(...backMenuR);
@@ -292,7 +296,7 @@ export function createCharacterNow(state: GameState): boolean {
   state.currentChar = name;
   state.charList = [...state.charList, {
     id: name, class: classId, level: 1, difficulty, theme: 'forest',
-    last_played: Math.floor(Date.now() / 1000),
+    last_played: Math.floor(Date.now() / 1000), scene: 'dungeon', play_time: 0,
   }];
   state.charNameInput = '';
   pushToast(state, `新建角色: ${name} (${DIFFICULTY_MODS[difficulty].name})`, '#9cf');
@@ -317,6 +321,7 @@ export function startCreateNewgame(state: GameState): void {
 export function startFromNewgame(state: GameState, enterTownFn?: (s: GameState) => void): void {
   const { classId, difficulty } = ngResolve(state.ngSel);
   if (!unlockedDifficulty(state.cleared, difficulty)) { pushToast(state, `${DIFFICULTY_MODS[difficulty].name} 未解锁`, '#f66'); return; }
+  bindClass(state, classId);  // 先绑定职业: createCharacterNow 内 persistNowApp 存档职业才正确
   if (state.ngFrom === 'create' && !createCharacterNow(state)) return;
   saveLastNg(state);
   setNgLaunchT(-1);   // 不进地牢过场; 进城镇直接显示

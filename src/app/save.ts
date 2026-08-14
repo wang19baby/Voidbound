@@ -69,6 +69,7 @@ export function buildSavePayload(state: GameState): SaveData {
     passives: PASSIVE_IDS.filter(id => (state.player.passives[id] ?? 0) > 0).map(id => [id, state.player.passives[id] ?? 0]),
     mode: state.run.mode ?? 'linear',
     scene: state.mode,
+    play_time: Math.floor(state.player.playTime ?? 0),
     skill_levels: SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: state.player.skillPoints ?? 0,
     exp: state.player.exp ?? 0,
@@ -94,6 +95,11 @@ export function restorePassivesApp(state: GameState, d: { passives?: Array<[stri
 
 /** 异步保存 (OPT-002/029): 角色档 + 账号层双写; 失败 toast 提示, 不阻塞 */
 export function persistNowApp(state: GameState): Promise<void> {
+  // 角色列表为空 (全部删除后): 无角色可存, 跳过, 避免把 currentChar=char_0 复活成幽灵档
+  if (state.charList.length === 0) {
+    inf('save', 'persistNowApp skipped: 无角色');
+    return Promise.resolve();
+  }
   const chars = state.charList.map(c => c.id);
   if (!chars.includes(state.currentChar)) chars.push(state.currentChar);
   const acc: SaveAccount = {
@@ -128,6 +134,7 @@ export function continueLastSave(state: GameState): void {
   }).then(d => {
     loadedD = d;
     bindClass(state, (d.class as ClassId) ?? 'barbarian');
+    state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
     if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
     restoreMaterialsApp(state, d);  // M5 W4 C-401
     restorePassivesApp(state, d);  // v9 被动技能树
@@ -179,6 +186,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
   state.currentChar = target.id;
   loadGame(target.id).then(d => {
     bindClass(state, (d.class as ClassId) ?? 'barbarian');
+    state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
     state.player.pos.x = d.player_x; state.player.pos.y = d.player_y;
     state.player.hp = d.player_hp; state.player.mp = d.player_mp;
     state.player.facing.x = d.facing_x; state.player.facing.y = d.facing_y;

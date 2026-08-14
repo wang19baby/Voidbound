@@ -204,20 +204,22 @@ export function keyHintSkills(): string {
   return keyHintSkillsText(loadKeybinds());
 }
 
-/** 新游戏 → 新局选择屏 (职业/难度/主题预填当前) — ctx callback */
+/** 新游戏 → 新建角色选择屏 (命名框可编辑, 职业/难度预填当前) — ctx callback */
 export function startNewgameFromTitle(state: GameState): void {
-  state.ngSel = { classIdx: CLASS_IDS.indexOf(state.player.classId), diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
-  state.ngFrom = 'title';
+  state.ngSel = { classIdx: 0, diffIdx: DIFFICULTIES.indexOf(state.difficulty), themeIdx: THEMES.indexOf(state.theme), modeIdx: MAP_MODES.indexOf(state.run.mode ?? 'linear') };
+  state.ngFrom = 'create';
+  state.charNameInput = '';
   setNgLaunchT(-1);
-  setNgNaming(false);
+  setNgNaming(true);
   setScreen(state, 'newgame');
   state.ui.titleMsg = '';
-  inf('ui', '新游戏 → 选择屏');
+  inf('ui', '新游戏 → 创建角色选择屏 (输入名字)');
 }
 
 /** 角色管理列表 (拉取后进屏) — ctx callback */
 export function openCharactersList(state: GameState): void {
   listCharacters().then(list => {
+    list.sort((a, b) => b.last_played - a.last_played);  // 最近游玩在前
     state.charList = list;
     state.charSel = Math.max(0, list.findIndex(c => c.id === state.currentChar));
     state.charConfirmDel = false;
@@ -402,9 +404,12 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   }
   gl.clearColor(0.043, 0.043, 0.071, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  // 脚下光环 (城镇 NPC 同类画法: ui/slide_horizontal_color additive)
-  drawSprite(gl, quad, res, { x: px + 24, y: py + ph - 24 }, { w: 132, h: 22 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1], blend: 'add' });
-  drawSprite(gl, quad, res, { x: px, y: py }, { w: pw, h: ph }, 'characters', CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian, {});
+  // 无存档时无当前角色: 不画左下角立绘/光环 (只画菜单图标)
+  if (curChar) {
+    // 脚下光环 (城镇 NPC 同类画法: ui/slide_horizontal_color additive)
+    drawSprite(gl, quad, res, { x: px + 24, y: py + ph - 24 }, { w: 132, h: 22 }, 'ui', 'slide_horizontal_color', { color: [0.85, 0.4, 1], blend: 'add' });
+    drawSprite(gl, quad, res, { x: px, y: py }, { w: pw, h: ph }, 'characters', CLASS_SPRITES[portraitClass] ?? CLASS_SPRITES.barbarian, {});
+  }
   for (const ip of iconSprites) {
     drawSprite(gl, quad, res, { x: ip.x, y: ip.y }, { w: 20, h: 20 }, ip.atlas, ip.name, {});
   }
@@ -412,7 +417,7 @@ export function drawTitleScreen(ctx: TitleCtx): void {
   // ---- 2D 层 ----
   drawTitleBackground(hudCtx, hudCanvas);  // TS-002: 基色 + 径向渐变 + 微尘 (委托 screens/title.ts)
   // 挖孔露出 GL: 立绘+光环 / 菜单 GL 图标
-  hudCtx.clearRect(px - 8, py - 8, pw + 16, ph + 36);
+  if (curChar) hudCtx.clearRect(px - 8, py - 8, pw + 16, ph + 36);
   for (const ip of iconSprites) hudCtx.clearRect(ip.x - 2, ip.y - 2, 24, 24);
 
   // TS-005: 标题外发光 + 副标字距 + 玩家向文案
