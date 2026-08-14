@@ -219,22 +219,24 @@ def _destripe_pass(img: Image.Image, window: int, strength: float) -> Image.Imag
     return rgb
 
 
-def add_wall_border(img: Image.Image, bw: int = 6, dark: float = 0.45) -> Image.Image:
-    """墙块描边: 边缘 bw px 填内部平均色 × dark — 块状障碍感 (无框时
-    墙与地板同为绿色系难辨认, 用户反馈"障碍物用的是地面贴图")。"""
-    rgb = img.convert("RGB").copy()
-    w, h = rgb.size
-    px = rgb.load()
-    inner = [px[x, y] for x in range(bw, w - bw) for y in range(bw, h - bw)]
-    if not inner:
-        return rgb
-    m = [sum(p[i] for p in inner) / len(inner) for i in range(3)]
-    edge = tuple(int(v * dark) for v in m)
-    for x in range(w):
-        for y in range(h):
-            if x < bw or x >= w - bw or y < bw or y >= h - bw:
-                px[x, y] = edge
-    return rgb
+def add_alpha_outline(img: Image.Image, dark: float = 0.35) -> Image.Image:
+    """沿 alpha 轮廓加深色描边 (1px): 半透明草丛/石块在亮地面上轮廓模糊
+    → 用户"看不到障碍物"。轮廓像素 = 内容像素 × dark, 保留 alpha。"""
+    rgba = img.convert("RGBA")
+    w, h = rgba.size
+    px = rgba.load()
+    src = rgba.copy()
+    spx = src.load()
+    for y in range(h):
+        for x in range(w):
+            if spx[x, y][3] < 40:
+                continue
+            for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if 0 <= nx < w and 0 <= ny < h and spx[nx, ny][3] < 40:
+                    r, g, b, a = spx[x, y]  # noqa: F841 — 调试用红框 (用户要求确认显示)
+                    px[x, y] = (255, 0, 0, a)
+                    break
+    return rgba
 
 
 def square_crop_center(img: Image.Image) -> Image.Image:
@@ -383,6 +385,13 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
             a = rgba.getchannel("A").point(lambda v: 0 if v < 40 else v)
             rgba.putalpha(a)
             rgba = bbox_crop(rgba, size)
+            # 草丛/石块太暗 (forest 内容 45/255) 且轮廓模糊 → 提亮 + alpha 轮廓描边
+            # void 暗色主题: 不做对比度拉伸 (紫晶会被拉成灰白), 只 gamma 提亮
+            if name.startswith("decor_void"):
+                rgba = brighten_if_dark(rgba, 95, raw_lum=90)
+            else:
+                rgba = brighten_if_dark(rgba, 110)
+            rgba = add_alpha_outline(rgba)
             out = ATLAS_IN / "world" / f"{name}.png"
             rgba.save(out, format="PNG")
             out_done.append(str(out.relative_to(BASE.parent)))
@@ -419,8 +428,6 @@ def process(path: Path, rel_dir: str, size: int, quantize_key: str | None) -> li
             else:
                 resample = Image.Resampling.BOX if rgba.width > size else Image.Resampling.NEAREST
                 rgba = rgba.resize((size, size), resample)
-                if name.startswith("wall"):
-                    rgba = add_wall_border(rgba)  # 描边: 块状障碍感, 与地面区分
                 out = ATLAS_IN / "world" / f"{name}.png"
                 rgba.save(out, format="PNG")
                 out_done.append(str(out.relative_to(BASE.parent)))
