@@ -40,7 +40,7 @@ import { drawKeycap, drawGearIcon, drawSceneIcon } from './ui/keycap';
 import { initTitleDust, drawTitleBackground, drawTitleWordmark, drawInfoBand, relTime, keyHintMain, keyHintSkills, startNewgameFromTitle, openCharactersList, settingsKeyRects, handleSettingsClick, drawSettingsPanel, drawUiPortrait, uiCursor, drawTitleScreen, type TitleCtx } from './screens/title';
 import { drawCloseConfirm as drawCloseConfirmScreen } from './screens/close';
 import { drawTeleportTransition as drawTeleportTransitionScreen } from './screens/teleport';
-import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startCreateNewgame, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
+import { NG_LAYOUT, NG_ROW_CLASS, NG_ROW_DIFF, NG_ROW_MODE, NG_LAUNCH_MS, THEME_COLORS, THEME_NAMES, drawNewgame as drawNewgameScreen, saveLastNg, loadLastNg, createCharacterNow, startFromNewgame, doLaunchRun, type NewgameCtx } from './screens/newgame';
 import { drawExpedition as drawExpeditionScreen, type ExpeditionCtx } from './screens/expedition';
 import { enterTown, interactTown, handleTownPanelKey, drawTownFrame, drawTownPanel, type TownCtx } from './screens/town';
 import { drawCharacters, type CharactersCtx } from './screens/characters';
@@ -379,7 +379,6 @@ const uiCallbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'> = {
   handleSettingsClick: (mx: number, my: number) => handleSettingsClick(state, hudCanvas, mx, my),
   handleTownPanelKey: (e, k) => handleTownPanelKeyWrap(state, e, k),
   startFromNewgame: () => startFromNewgame(state, (s) => enterTownWrap(s)),
-  startCreateNewgame: () => startCreateNewgame(state),
   startExpeditionRun: () => startExpeditionRun(),
   enterTown: () => enterTownWrap(state),
   startRun: () => startRun(state, state.theme, state.difficulty, state.run.mode),

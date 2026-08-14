@@ -26,7 +26,7 @@
 // 设计 (本次最小切片):
 // - 模块级状态从 main.ts 搬出: titleFocus, closeConfirmOpen, ngLaunchT, ngNaming
 // - 纯函数 inline (syncTitleFocus, moveTitleFocus, titleAct, startNewgameFromTitle,
-//   restoreMaterials, restorePassives, requestDifficulty, startCreateNewgame, startFromNewgame)
+//   restoreMaterials, restorePassives, requestDifficulty, startFromNewgame)
 // - 19 个 main.ts-only 副作用函数走 ctx callback (见 ScreenKeyContext)
 // - 不重写键位语义, 零行为变更
 // - 后续 US-024-b / US-025 / US-027 可继续搬各屏 render/state-machine, 渐进式
@@ -302,15 +302,8 @@ function handleCharactersKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyC
   if (k === 'arrowdown' || k === 's') { state.charSel = Math.min(state.charList.length - 1, state.charSel + 1); return true; }
   if (k === 'enter') {
     const target = state.charList[state.charSel];
-    if (!target) { state.ui.titleMsg = '没有可选角色 (按 N 新建)'; return true; }
+    if (!target) { state.ui.titleMsg = '没有可选角色 (返回首页用 [新游戏] 创建)'; return true; }
     ctx.enterTargetCharacter(target);
-    return true;
-  }
-  if (k === 'n') {
-    state.ngFrom = 'create';
-    state.charNameInput = '';
-    ngNaming = true;
-    setScreen(state, 'newgame');
     return true;
   }
   if (k === 'd') { if (state.charList.length > 0) state.charConfirmDel = true; return true; }

@@ -45,7 +45,6 @@ export interface UiCtx {
   handleSettingsClick: (mx: number, my: number) => boolean;
   handleTownPanelKey: (e: KeyboardEvent, k: string) => void;
   startFromNewgame: () => void;
-  startCreateNewgame: () => void;
   startExpeditionRun: () => void;
   enterTown: () => void;
   startRun: () => void;
@@ -322,9 +321,6 @@ export function handleUiClick(ctx: UiCtx): boolean {
         const target = state.charList[state.charSel];
         if (target) ctx.enterTargetCharacter(state, target);
         return true;
-      }
-      if (inRect(mx, my, cx - 300, h - 60, 200, 40)) {
-        ctx.startCreateNewgame(); return true;
       }
       if (inRect(mx, my, cx + 100, h - 60, 200, 40)) {
         if (state.charList.length > 0) state.charConfirmDel = true;
