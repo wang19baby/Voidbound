@@ -365,7 +365,7 @@ loadAccount().then(a => {
 
 // === US-026 screenKeyCtx: 屏路由集中器的依赖注入 (19 个 main.ts 副作用函数) ===
 // 函数声明被 JS hoisting, 此处引用安全
-const saveCtx: SaveCtx = { ensureDungeonRun: (s) => ensureDungeonRun(s), startRun: (s, theme, difficulty, mode) => startRun(s, theme, difficulty, mode) };
+const saveCtx: SaveCtx = { startRun: (s, theme, difficulty, mode) => startRun(s, theme, difficulty, mode) };
 // PR-007: 城镇相关 5 个函数原搬 main.ts, 现委托给 screens/town.ts; 通过 townCtx 注入
 const enterTownWrap = (state: GameState, townId?: string): void => enterTown(townCtx, townId as TownId);
 const interactTownWrap = (state: GameState): void => interactTown(townCtx);

@@ -569,8 +569,8 @@ function handleTownKey(state: GameState, e: KeyboardEvent, ctx: ScreenKeyContext
     ctx.handleTownPanelKey(state, e, k);
     return true;
   }
-  // 修复: Backspace / B 键 → 返回主菜单 (玩家困在城镇的出口)
-  if (k === 'backspace' || k === 'b') { setScreen(state, 'title'); return true; }
+  // 修复: Esc 键 → 返回主菜单 (与左上角"返回主菜单(Esc)"按钮一致; 面板打开时 Esc 由 handleTownPanelKey 关闭面板)
+  if (k === 'escape') { setScreen(state, 'title'); return true; }
   if (keyMatch(e, loadKeybinds().interact)) { ctx.interactTown(state); return true; }
   if (k === '1' || k === '2' || k === '3' || k === '4') return true;
   return true;

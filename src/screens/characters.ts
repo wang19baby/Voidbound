@@ -115,9 +115,27 @@ export function drawCharacters(ctx: CharactersCtx): void {
       hudCtx.fillText(`${def.name} · Lv${c.level} · ${DIFFICULTY_MODS[c.difficulty]?.name ?? c.difficulty} · ${c.theme}`, cx + 60, y0 + i * 52);
     });
   }
+  // 底部操作按钮 (与 uiDispatch 'characters' 命中区同步: 进入 cx-228,h-64,300,36 / 删除 cx+88,h-64,140,36)
+  const btnY = hudCanvas.height - 64;
+  const enterR: [number, number, number, number] = [cx - 228, btnY, 300, 36];
+  const delR: [number, number, number, number] = [cx + 88, btnY, 140, 36];
+  const enterHit = inRect(mp.x, mp.y, ...enterR);
+  const delHit = inRect(mp.x, mp.y, ...delR);
+  hudCtx.fillStyle = enterHit ? 'rgba(201,170,255,0.18)' : 'rgba(30,30,42,0.9)';
+  hudCtx.fillRect(...enterR);
+  hudCtx.strokeStyle = enterHit ? '#c9aaff' : '#4a4a5a';
+  hudCtx.lineWidth = enterHit ? 2 : 1;
+  hudCtx.strokeRect(...enterR);
   hudCtx.fillStyle = '#fff';
   hudCtx.font = 'bold 15px monospace';
-  hudCtx.fillText(' 进入 [Enter]/切换 [↑/↓] · 删除 [D] · 返回 [Esc]', cx, hudCanvas.height - 46);
+  hudCtx.fillText('进入 [Enter]/切换 [↑/↓]', cx - 78, btnY + 18);
+  hudCtx.fillStyle = delHit ? 'rgba(255,106,106,0.18)' : 'rgba(30,30,42,0.9)';
+  hudCtx.strokeStyle = delHit ? '#ff6a6a' : '#4a4a5a';
+  hudCtx.lineWidth = delHit ? 2 : 1;
+  hudCtx.strokeRect(...delR);
+  hudCtx.fillRect(...delR);
+  hudCtx.fillStyle = '#fff';
+  hudCtx.fillText('删除 [D]', cx + 158, btnY + 18);
   if (state.ui.titleMsg) {
     hudCtx.fillStyle = '#ffd64a';
     hudCtx.font = '14px monospace';

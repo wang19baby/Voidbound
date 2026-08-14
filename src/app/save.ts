@@ -2,7 +2,7 @@
 //
 // 本次拆分: buildSavePayload (纯函数) + persistNow/restoreMaterials/restorePassives (state 首参)
 // 本次 US-027-b 追加: continueLastSave/resumeFromSave/enterTargetCharacter (跨异步链 + 读档回城镇)
-//   - enterTargetCharacter 需要 main.ts-only 函数 (startRun/ensureDungeonRun), 通过 SaveCtx 注入
+//   - enterTargetCharacter 需要 main.ts-only 函数 (startRun), 通过 SaveCtx 注入
 //
 // 依赖: game/* 领域模块 (只读 state, 不引入循环依赖)
 
@@ -23,7 +23,6 @@ import { validMapMode, type MapMode } from '../game/mapmode';
 
 /** SaveCtx: main.ts-only 副作用函数 (注入而非闭包) */
 export interface SaveCtx {
-  ensureDungeonRun: (state: GameState) => void;
   startRun: (state: GameState, theme: Theme, difficulty: Difficulty, mode?: MapMode) => void;
 }
 
@@ -170,16 +169,10 @@ export function resumeFromSave(state: GameState, d: { scene?: string }): void {
 /** 进入/切换角色 (v4 复用: 列表 Enter / 大按钮 / 最近 3 快捷卡) */
 export function enterTargetCharacter(state: GameState, target: CharacterSummary, ctx: SaveCtx): void {
   if (target.id === state.currentChar) {
-    // 同一角色: 按内存场景直接回位 (城镇整理 / 地牢继续)
-    if (state.mode === 'town') {
-      state.townPanel = null;
-      setScreen(state, 'town');
-    } else {
-      ctx.ensureDungeonRun(state);
-      setScreen(state, 'dungeon');
-    }
+    // 进入/切换一律回城镇 (GAME_FLOW §3: 继续 → 城镇 → 传送门/地牢入口出发)
+    resumeFromSave(state, { scene: 'town' });
     state.ui.titleMsg = '';
-    inf('ui', `继续角色 ${target.id}`);
+    inf('ui', `继续角色 ${target.id} → 城镇`);
     return;
   }
   // 切换角色: 先存当前, 再读目标
@@ -232,13 +225,16 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
     void persistNowApp(state);  // 更新 last_char
     inf('save', `切换到角色 ${target.id} (Lv${d.level ?? 1} ${d.class ?? 'barbarian'})`);
   }).catch((err: unknown) => {
-    // 新建但未开局的角色无存档: 直接以该职业开新局 (normal/forest)
+    // 新建但未开局的角色无存档: 以该职业开新局后回城镇 (GAME_FLOW §3: 不直接进地牢)
     const cls = (target.class as ClassId) ?? 'barbarian';
     bindClass(state, cls);
     ctx.startRun(state, 'forest', 'normal');
-    setScreen(state, 'dungeon');
+    state.mode = 'town';
+    state.townPanel = null;
+    state.player.pos = { x: 560, y: 500 };
+    setScreen(state, 'town');
     state.ui.titleMsg = '';
     void persistNowApp(state);
-    inf('save', `角色 ${target.id} 无存档, 以 ${CLASS_DEFS[cls].name} 开新局 (${String(err)})`);
+    inf('save', `角色 ${target.id} 无存档, 以 ${CLASS_DEFS[cls].name} 开新局, 已回城镇 (${String(err)})`);
   });
 }

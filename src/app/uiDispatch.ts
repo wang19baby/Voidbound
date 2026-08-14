@@ -295,12 +295,12 @@ export function handleUiClick(ctx: UiCtx): boolean {
       for (let i = 0; i < rows; i++) {
         if (inRect(mx, my, cx - 320, y0 + i * 52 - 14, 640, 40)) { state.charSel = i; return true; }
       }
-      if (inRect(mx, my, cx - 300, h - 100, 600, 40)) {
+      if (inRect(mx, my, cx - 228, h - 64, 300, 36)) {
         const target = state.charList[state.charSel];
-        if (target) ctx.enterTargetCharacter(state, target);
+        if (target) ctx.enterTargetCharacter(target);
         return true;
       }
-      if (inRect(mx, my, cx + 100, h - 60, 200, 40)) {
+      if (inRect(mx, my, cx + 88, h - 64, 140, 36)) {
         if (state.charList.length > 0) state.charConfirmDel = true;
         return true;
       }

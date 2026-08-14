@@ -20,7 +20,7 @@ function mk(over: Partial<SM> = {}): SM {
 eq('dungeon+Esc → pause', nextScreenOnKey('dungeon', 'Escape'), 'pause');
 eq('dungeon+Tab → equipment', nextScreenOnKey('dungeon', 'Tab'), 'equipment');
 eq('dungeon+W → null', nextScreenOnKey('dungeon', 'w'), null);
-eq('town+Esc → pause', nextScreenOnKey('town', 'escape'), 'pause');
+eq('town+Esc → title (返回主菜单按钮绑定)', nextScreenOnKey('town', 'escape'), 'title');
 eq('town+Tab → null', nextScreenOnKey('town', 'Tab'), null);
 eq('equipment+Esc → dungeon', nextScreenOnKey('equipment', 'Escape'), 'dungeon');
 eq('equipment+Tab → dungeon', nextScreenOnKey('equipment', 'Tab'), 'dungeon');

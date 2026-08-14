@@ -127,7 +127,7 @@ export function nextScreenOnKey(screen: Screen, key: string): Screen | null {
       if (k === 'tab') return 'equipment';
       return null;
     case 'town':
-      if (k === 'escape') return 'pause';
+      if (k === 'escape') return 'title';
       return null;
     case 'equipment':
       if (k === 'escape' || k === 'tab') return 'dungeon';
