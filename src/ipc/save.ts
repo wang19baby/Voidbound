@@ -76,6 +76,11 @@ export interface SaveData {
   scene: string;
   /** 累计游玩时长秒 (v12): 角色管理详情展示 */
   play_time: number;
+  /** 升级属性点 combat.attr (v13): 仅升级产生, recomputeCombat 会清零, 读档必须回写 */
+  attr: number;
+  /** 药水瓶 (v13): hp/mp 计数 (击杀 12% 掉落, 上限 3) */
+  potions_hp: number;
+  potions_mp: number;
 }
 
 /** 账号层 (OPT-029): 跨角色永久进度, 独立文件 account.json */

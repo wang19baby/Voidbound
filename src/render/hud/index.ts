@@ -1,21 +1,20 @@
 // HUD 渲染主入口 (GAME_FLOW §9.1 分区布局)
-//   左上: HP/MP/EXP 条 + 等级
-//   右上: 金币 / 积分 / 击杀 / 难度 (右对齐)
-//   左下: 技能槽 Q/F/E/R (图标+等级+符文) + 药水/翻滚/技能点
+//   左上: HP/MP 条 + 右侧技能槽 Q/F/E/R (图标+等级+符文) + EXP 条 + 药水/翻滚/技能点
+//   右上: 小地图 (墙壁/怪物/玩家/传送门 + 探索%)
+//   左下: 金币 / 积分 / 击杀 / 难度 (信息面板)
 //   右下: 日志面板 (半透明底)
 //   顶部中央: 拾取 toast / COMBO
 // 文本用 Canvas2D overlay 绘制, sprite 用 WebGL2
 
 import type { GameState } from '../../game/state';
-import { MAX_HP, MAX_MP } from '../../game/player';
 import { drawSprite } from '../draw';
 import type { QuadResources } from '../gl/resources';
 import { getSkillCooldowns, getSkill } from '../../game/skill';
 import { HUD_PAD, BAR_HEIGHT, BAR_WIDTH, SLOT_SIZE, SLOT_GAP, getMouseX, getMouseY } from './types';
-import { slotY } from './geometry';
+import { slotY, slotX } from './geometry';
 import { SKILL_KEYS, KEY_TO_SLOT, SKILL_ICON_BY_ID } from './icons';
 import {
-  drawHpMpOutline, drawExpBar, drawTopRightStats, drawMinimap,
+  drawHpMpOutline, drawExpBar, drawStatsPanel, drawMinimap,
   drawLowHpVignette, drawEliteNames, drawBossHpBar,
 } from './bars';
 import { drawSkillBarOverlay, drawSkillCooldownOverlay } from './skills';
@@ -39,17 +38,14 @@ export function drawHud(
   state: GameState,
 ): void {
   const nowSec = performance.now() / 1000;
-  const hpFrac = Math.max(0, state.player.hp) / MAX_HP;
-  const mpFrac = Math.max(0, state.player.mp) / MAX_MP;
-  drawSprite(gl, q, state.resources, { x: HUD_PAD, y: HUD_PAD }, { w: BAR_WIDTH * hpFrac, h: BAR_HEIGHT }, 'ui', 'slide_horizontal_color');
-  drawSprite(gl, q, state.resources, { x: HUD_PAD, y: HUD_PAD + BAR_HEIGHT + 4 }, { w: BAR_WIDTH * mpFrac, h: BAR_HEIGHT }, 'ui', 'slide_horizontal_color_section_wide');
 
-  // 技能槽 (左下)
+  // 技能槽 (HP/MP 区域右侧)
   const sy = slotY(state.viewport.h);
+  const sx0 = slotX();
   // 槽位→条索引 (SKILL_KEYS = Q/F/E/R, 对应 SkillSlot Q/W/E/R)
   const SLOT_FLASH_IDX: Record<string, number> = { Q: 0, W: 1, E: 2, R: 3 };
   for (let i = 0; i < SKILL_KEYS.length; i++) {
-    const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
+    const x = sx0 + i * (SLOT_SIZE + SLOT_GAP);
     const slot = KEY_TO_SLOT[SKILL_KEYS[i]];
     const sk = getSkill(slot);
     drawSprite(gl, q, state.resources, { x, y: sy }, { w: SLOT_SIZE, h: SLOT_SIZE }, 'icons', SKILL_ICON_BY_ID[sk.id] ?? 'buttonA');
@@ -85,10 +81,10 @@ export function drawHudOverlay(
   drawHpMpOutline(ctx2d, state);
   drawExpBar(ctx2d, state);
 
-  // === 右上: 金币/积分/击杀/难度 + 跑局进度 ===
-  drawTopRightStats(ctx2d, state, vw);
-  // 小地图 (OPT-024): 右下角, 现有 walls/monsters 降采样
+  // === 右上: 小地图 (OPT-024): 现有 walls/monsters 降采样 ===
   drawMinimap(ctx2d, state, vw, vh);
+  // === 左下: 金币/积分/击杀/难度 + 跑局进度 ===
+  drawStatsPanel(ctx2d, state, vw, vh);
   // 低血量红晕 (OPT-026): HP < 25% 时边缘渐红
   drawLowHpVignette(ctx2d, state, vw, vh);
   // 精英名牌 (内容扩充)
@@ -111,9 +107,6 @@ export function drawHudOverlay(
   // COMBO (顶部中央, toast 下方)
   drawCombo(ctx2d, state, vw);
 
-  // 符文三选一 overlay (D-01)
-  drawRuneChoice(ctx2d, state, vw, vh);
-
   // 地面装备标签 (US-018)
   drawGroundLabels(ctx2d, state, vw, vh);
 
@@ -128,4 +121,7 @@ export function drawHudOverlay(
 
   // 角色信息面板 (C 键): 左属性 + 中主动技能 + 右被动技能(加点)
   drawCharacterPanel(ctx2d, state, vw);
+
+  // 符文三选一 overlay (D-01): 最后绘制 → 置顶 (角色/装备面板打开时不被遮挡)
+  drawRuneChoice(ctx2d, state, vw, vh);
 }

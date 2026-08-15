@@ -8,15 +8,31 @@ import { worldToScreen } from '../../game/state';
 import { formatHudTime } from './format';
 import { HUD_PAD, BAR_WIDTH, BAR_HEIGHT } from './types';
 
-// 左上 HP/MP 边框 + 数值
+// 左上 HP/MP 边框 + 数值 (实际上限 hpMax/mpMax, 纯色填充: HP 标准红 / MP 标准蓝)
 export function drawHpMpOutline(ctx2d: CanvasRenderingContext2D, state: GameState): void {
+  const hpMax = state.player.hpMax ?? MAX_HP;
+  const mpMax = state.player.mpMax ?? MAX_MP;
+  const hpFrac = Math.max(0, Math.min(1, state.player.hp / hpMax));
+  const mpFrac = Math.max(0, Math.min(1, state.player.mp / mpMax));
+  // 底色 (空槽)
+  ctx2d.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx2d.fillRect(HUD_PAD, HUD_PAD, BAR_WIDTH, BAR_HEIGHT);
+  ctx2d.fillRect(HUD_PAD, HUD_PAD + BAR_HEIGHT + 4, BAR_WIDTH, BAR_HEIGHT);
+  // 填充 (纯色, 无渐变): HP 红 / MP 蓝
+  ctx2d.fillStyle = '#d63030';
+  if (hpFrac > 0) ctx2d.fillRect(HUD_PAD, HUD_PAD, BAR_WIDTH * hpFrac, BAR_HEIGHT);
+  ctx2d.fillStyle = '#3a6fd4';
+  if (mpFrac > 0) ctx2d.fillRect(HUD_PAD, HUD_PAD + BAR_HEIGHT + 4, BAR_WIDTH * mpFrac, BAR_HEIGHT);
+  // 外框
   ctx2d.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx2d.lineWidth = 1;
   ctx2d.strokeRect(HUD_PAD, HUD_PAD, BAR_WIDTH, BAR_HEIGHT);
   ctx2d.strokeRect(HUD_PAD, HUD_PAD + BAR_HEIGHT + 4, BAR_WIDTH, BAR_HEIGHT);
-  ctx2d.fillStyle = '#fff';
   ctx2d.font = 'bold 11px monospace';
-  ctx2d.fillText(`HP ${Math.round(state.player.hp)}/${MAX_HP}`, HUD_PAD + 6, HUD_PAD + 2);
-  ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${MAX_MP}`, HUD_PAD + 6, HUD_PAD + BAR_HEIGHT + 6);
+  ctx2d.fillStyle = '#f66';
+  ctx2d.fillText(`HP ${Math.round(state.player.hp)}/${Math.round(hpMax)}`, HUD_PAD + 6, HUD_PAD + 2);
+  ctx2d.fillStyle = '#6cf';
+  ctx2d.fillText(`MP ${Math.round(state.player.mp)}/${Math.round(mpMax)}`, HUD_PAD + 6, HUD_PAD + BAR_HEIGHT + 6);
 }
 
 // 经验条 + 等级
@@ -33,37 +49,48 @@ export function drawExpBar(ctx2d: CanvasRenderingContext2D, state: GameState): v
   ctx2d.fillText(`Lv ${state.player.level}   EXP ${state.player.exp ?? 0}/${need}`, HUD_PAD, expY + 10);
 }
 
-// 右上: 金币/积分/击杀/难度 + 跑局进度 (右对齐)
+// 左下: 金币/积分/击杀/难度 + 跑局进度 (左对齐)
 // 2026-08-15: 加半透明深色面板垫底 + 提亮文字色 → 明亮地牢场景上可读
-export function drawTopRightStats(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number): void {
-  const rx = vw - HUD_PAD;
+// 2026-08-15: 由右下移入左下角 (面板底对齐 vh-HUD_PAD), 文字左留边距
+export function drawStatsPanel(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
   const panelW = 178;
-  const panelY = HUD_PAD - 6;
   const panelH = 104;
+  const px = HUD_PAD;
+  const py = vh - HUD_PAD - panelH;
+  const tx = px + 10; // 文字左边距 10px
   ctx2d.fillStyle = 'rgba(8, 8, 16, 0.62)';
-  ctx2d.fillRect(rx - panelW, panelY, panelW, panelH);
+  ctx2d.fillRect(px, py, panelW, panelH);
   ctx2d.strokeStyle = 'rgba(255,255,255,0.22)';
   ctx2d.lineWidth = 1;
-  ctx2d.strokeRect(rx - panelW, panelY, panelW, panelH);
-  ctx2d.textAlign = 'right';
+  ctx2d.strokeRect(px, py, panelW, panelH);
+  ctx2d.textAlign = 'left';
+  const t0 = py + 12;
+  // 第一行: 难度
   ctx2d.fillStyle = '#ffd64a';
   ctx2d.font = 'bold 14px monospace';
-  ctx2d.fillText(`金 ${state.player.gold ?? 0}`, rx, HUD_PAD + 2);
+  ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, tx, t0);
+  // 第二行: 金 + 积分
   ctx2d.font = '12px monospace';
+  ctx2d.fillStyle = '#ffd64a';
+  ctx2d.fillText(`金 ${state.player.gold ?? 0}`, tx, t0 + 24);
   ctx2d.fillStyle = '#fff';
-  ctx2d.fillText(`积分 ${state.combat.score}`, rx, HUD_PAD + 22);
+  ctx2d.fillText(`积分 ${state.combat.score}`, tx + 92, t0 + 24);
+  // 第三行: 击杀 + 剩余怪
   ctx2d.fillStyle = '#e8e8e8';
-  ctx2d.fillText(`击杀 ${state.combat.killsTotal ?? 0}`, rx, HUD_PAD + 42);
-  ctx2d.fillStyle = '#9ff';
-  ctx2d.fillText(`难度 ${DIFFICULTY_MODS[state.difficulty].name}`, rx, HUD_PAD + 62);
+  ctx2d.fillText(`击杀 ${state.combat.killsTotal ?? 0}`, tx, t0 + 48);
   if (state.screen === 'dungeon') {
-    ctx2d.fillStyle = '#cdf';
-    ctx2d.fillText(`剩余 ${state.run.alive} 怪 · ${formatHudTime(state.run.timeSec)}`, rx, HUD_PAD + 82);
+    ctx2d.fillStyle = '#9ff';
+    ctx2d.fillText(`剩余 ${state.run.alive} 怪`, tx + 84, t0 + 48);
+  }
+  // 第四行 (独立成行): 计时
+  if (state.screen === 'dungeon') {
+    ctx2d.fillStyle = '#fff';
+    ctx2d.fillText(`用时 ${formatHudTime(state.run.timeSec)}`, tx, t0 + 72);
   }
   ctx2d.textAlign = 'left';
 }
 
-// 小地图 (OPT-024): 右下角 (2026-08-15 由右上移入)
+// 小地图 (OPT-024): 右上角 (2026-08-15 由右下与信息面板对调移入)
 // 设计: 已探索灰底持久显示 + 墙 (仅已探索区) + 怪物红点 (仅已探索区, 反透视) + 玩家朝向三角 + 传送门标记
 export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
   if (state.screen !== 'dungeon') return;
@@ -71,17 +98,20 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
   const mh = Math.round((mw * state.world.h) / state.world.w);
   const rx = vw - HUD_PAD;
   const mx = rx - mw;
-  const my = vh - HUD_PAD - mh - 24; // 地图底部留 24px 给"探索%"标签 (面板底对齐 vh-HUD_PAD)
+  // 标题置顶, 地图在其下 (右上角)
+  const titleY = HUD_PAD - 4;
+  const my = titleY + 16;
+  const panelBottom = my + mh + 6 + 11 + 4;
   // 面板 + 标题
   ctx2d.fillStyle = 'rgba(10,10,20,0.72)';
-  ctx2d.fillRect(mx - 8, my - 20, mw + 16, mh + 24);
+  ctx2d.fillRect(mx - 8, titleY - 4, mw + 16, panelBottom - (titleY - 4));
   ctx2d.strokeStyle = 'rgba(255,255,255,0.25)';
   ctx2d.lineWidth = 1;
-  ctx2d.strokeRect(mx - 8, my - 20, mw + 16, mh + 24);
+  ctx2d.strokeRect(mx - 8, titleY - 4, mw + 16, panelBottom - (titleY - 4));
   ctx2d.fillStyle = 'rgba(255,255,255,0.75)';
   ctx2d.font = '11px monospace';
   ctx2d.textAlign = 'right';
-  ctx2d.fillText('小地图', rx, my - 16);
+  ctx2d.fillText('小地图', rx, titleY);
   ctx2d.textAlign = 'left';
   const sx = mw / state.world.w;
   const sy = mh / state.world.h;
@@ -107,13 +137,35 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
     ctx2d.fillStyle = '#6a6a7a';
     ctx2d.fillRect(mx + w.pos.x * sx, my + w.pos.y * sy, Math.max(1, w.size.w * sx), Math.max(1, w.size.h * sy));
   }
-  // 怪物: 3×3 红点 (Boss 4×4 橙), 仅已探索区 (战争迷雾反透视)
+  // 怪物: 分档标记 (普通红 / 高级橙 / 精英金 / 领主紫 / Boss 亮红+白框)
+  // 探索门控: 仅 Boss 无视迷雾始终显示; 其余仅已探索块 (未探索迷雾区不暴露位置)
   for (const m of state.fx.monsters) {
-    const bl = Math.floor(m.pos.x / 64) + ',' + Math.floor(m.pos.y / 64);
-    if (!state.ui.explored.has(bl)) continue;
-    const boss = MONSTER_DEFS[m.type].boss;
-    ctx2d.fillStyle = boss ? '#f80' : '#f55';
-    ctx2d.fillRect(mx + m.pos.x * sx - 1, my + m.pos.y * sy - 1, boss ? 4 : 3, boss ? 4 : 3);
+    const isBoss = !!MONSTER_DEFS[m.type].boss;
+    if (!isBoss) {
+      const bl = Math.floor(m.pos.x / 64) + ',' + Math.floor(m.pos.y / 64);
+      if (!state.ui.explored.has(bl)) continue;
+    }
+    const x = mx + m.pos.x * sx;
+    const y = my + m.pos.y * sy;
+    if (isBoss) {
+      ctx2d.fillStyle = '#ff3b30';
+      ctx2d.fillRect(x - 2, y - 2, 5, 5);
+      ctx2d.strokeStyle = '#fff';
+      ctx2d.lineWidth = 1;
+      ctx2d.strokeRect(x - 2, y - 2, 5, 5);
+    } else if (m.lord) {
+      ctx2d.fillStyle = '#f0f';
+      ctx2d.fillRect(x - 1.5, y - 1.5, 4, 4);
+    } else if (m.elite) {
+      ctx2d.fillStyle = '#ffd64a';
+      ctx2d.fillRect(x - 1.5, y - 1.5, 4, 4);
+    } else if (m.enhanced) {
+      ctx2d.fillStyle = '#fa0';
+      ctx2d.fillRect(x - 1, y - 1, 3, 3);
+    } else {
+      ctx2d.fillStyle = '#e55';
+      ctx2d.fillRect(x - 1, y - 1, 3, 3);
+    }
   }
   // 传送门 (Boss 死亡位, A-W1): 紫色标记 — 出口/终点标记 (OPT-024)
   for (const p of state.run.portals) {
@@ -145,7 +197,7 @@ export function drawMinimap(ctx2d: CanvasRenderingContext2D, state: GameState, v
 // 低血量红晕 (OPT-026)
 export function drawLowHpVignette(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
   if (state.screen !== 'dungeon') return;
-  if (state.player.hp / MAX_HP >= 0.25) return;
+  if (state.player.hp / (state.player.hpMax ?? MAX_HP) >= 0.25) return;
   const g = ctx2d.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.3, vw / 2, vh / 2, Math.max(vw, vh) * 0.7);
   g.addColorStop(0, 'rgba(180, 0, 0, 0)');
   g.addColorStop(1, 'rgba(180, 0, 0, 0.35)');

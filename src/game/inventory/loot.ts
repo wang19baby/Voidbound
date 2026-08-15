@@ -10,8 +10,8 @@ import { getOwned, recomputeCombat } from './equipment';
 /** hp/mp 词条即时生效 (拾取/穿戴时) — 复用 equipment.ts 内部 applyInstant 的相同逻辑 */
 function applyInstant(state: EquipState, eq: Equipment): void {
   for (const a of eq.affixes) {
-    if (a.stat === 'hp') state.player.hp = Math.min(100, state.player.hp + a.value);
-    else if (a.stat === 'mp') state.player.mp = Math.min(100, state.player.mp + a.value);
+    if (a.stat === 'hp') state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + a.value);
+    else if (a.stat === 'mp') state.player.mp = Math.min(state.player.mpMax ?? 100, state.player.mp + a.value);
   }
 }
 

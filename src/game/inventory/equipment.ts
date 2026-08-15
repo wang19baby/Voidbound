@@ -82,8 +82,8 @@ export function recomputeCombat(state: EquipState): void {
 /** hp/mp 词条即时生效 (拾取/穿戴时) */
 function applyInstant(state: EquipState, eq: Equipment): void {
   for (const a of eq.affixes) {
-    if (a.stat === 'hp') state.player.hp = Math.min(100, state.player.hp + a.value);
-    else if (a.stat === 'mp') state.player.mp = Math.min(100, state.player.mp + a.value);
+    if (a.stat === 'hp') state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + a.value);
+    else if (a.stat === 'mp') state.player.mp = Math.min(state.player.mpMax ?? 100, state.player.mp + a.value);
   }
 }
 
@@ -125,6 +125,15 @@ export function unequipSlot(state: EquipState, slot: EquipType): boolean {
   const eq = state.player.equipped[slot];
   if (!eq) return false;
   return unequipItem(state, eq);
+}
+
+/** 丢弃: 从背包移除 (面板右键/丢弃按钮); 返回被丢弃物品 */
+export function discardItem(state: EquipState, idx: number): Equipment | null {
+  const inv = getOwned(state);
+  if (idx < 0 || idx >= inv.length) return null;
+  const eq = inv[idx];
+  inv.splice(idx, 1);
+  return eq;
 }
 
 /** 入库 (商店购买/读档重建共用): push owned + 重算 combat; 背包满返回 false */

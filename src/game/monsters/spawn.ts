@@ -8,7 +8,7 @@
 import type { GameState } from '../state';
 import type { Monster, MonsterType } from './types';
 import { THEME_MONSTER_POOL, RUN_POOL_SIZE, AURA_TYPES } from './defs';
-import { getActiveWalls, buildLinearLayout, linearBranchRooms, linearBranchRoomsAll, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN, BLOCK } from '../world';
+import { getActiveWalls, buildLinearLayout, linearBranchRooms, linearBranchRoomsAll, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN, BLOCK, isOnRoomFloor, nearestRoomFloorPoint, type RoomLayout } from '../world';
 import { randomElement } from '../element';
 import { inf } from '../../util/log';
 import { spawnMonster } from '../monster';
@@ -19,6 +19,18 @@ import type { MapMode } from '../mapmode';
 export function spawnThemeMonster(state: GameState): Monster {
   const pool = THEME_MONSTER_POOL[state.theme];
   return spawnMonster(state, pool[Math.floor(Math.random() * pool.length)]);
+}
+
+/** A-W6 房内生成防御: 怪物中心必须在地板上 (房间内部或门洞); 落虚空/墙 → 拉回最近地板点 */
+function guardInRoom(m: Monster, layout: RoomLayout): void {
+  const cx = m.pos.x + m.size.w / 2;
+  const cy = m.pos.y + m.size.h / 2;
+  if (!isOnRoomFloor(layout, cx, cy)) {
+    const p = nearestRoomFloorPoint(layout, cx, cy);
+    m.pos.x = p.x - m.size.w / 2;
+    m.pos.y = p.y - m.size.h / 2;
+    inf('world', 'spawn guard: 怪物落点非地板(虚空/墙), 拉回最近地板点');
+  }
 }
 
 /** 地标营地锚点 (A-W2/A-W5 设计 §4/§5): 营地一律按地图规则放置, 不绕玩家
@@ -113,6 +125,12 @@ export function spawnRunPool(state: GameState): void {
     // Review (地图审查 P2): 营地/补散怪出生避墙需要当前局墙 — 先按出生点生成
     state.world.walls = getActiveWalls(state, 2);
     const last = layout.rooms.length - 1;
+    // A-W6 房内防御: 包装 spawnMonster → 落点必须在地板上, 否则拉回最近地板点
+    const spawnInRoom = (at: { x: number; y: number }): Monster => {
+      const m = spawnMonster(state, pick(), at);
+      guardInRoom(m, layout);
+      return m;
+    };
     for (let i = 0; i < layout.rooms.length; i++) {
       const room = layout.rooms[i];
       const cx = room.x + room.w / 2;
@@ -123,17 +141,20 @@ export function spawnRunPool(state: GameState): void {
         for (let k = 0; k < 3; k++) dropLoot(state, cx, cy);
         if (!isLast) {
           const ex = layout.doors[i];
-          for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnMonster(state, pick(), { x: ex.ax, y: ex.ay }));
+          for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnInRoom({ x: ex.ax, y: ex.ay }));
         }
       } else {
         // 营地 (聚簇 6 只) + 出口守卫 (门口内侧 3 只) — 进房 1-2 屏必遇敌
         const members = spawnCamp(state, { x: cx, y: cy, type: CAMP_TYPES[i % CAMP_TYPES.length] }, pick);
-        for (const m of members) state.fx.monsters.push(m);
+        for (const m of members) {
+          guardInRoom(m, layout);
+          state.fx.monsters.push(m);
+        }
         const ex = layout.doors[i];
-        for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnMonster(state, pick(), { x: ex.ax, y: ex.ay }));
+        for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnInRoom({ x: ex.ax, y: ex.ay }));
       }
       // 游荡者 (随机房内一点)
-      state.fx.monsters.push(spawnMonster(state, pick(), {
+      state.fx.monsters.push(spawnInRoom({
         x: room.x + 4 * BLOCK + rand() * (room.w - 8 * BLOCK),
         y: room.y + 4 * BLOCK + rand() * (room.h - 8 * BLOCK),
       }));

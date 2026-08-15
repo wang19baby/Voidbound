@@ -6,7 +6,7 @@
 //
 // 包含: 选中装备索引/装备面板页/符文三选一/拒绝变异的槽/材料
 
-import type { Equipment, MaterialId } from '../equipment';
+import type { Equipment, EquipType, MaterialId } from '../equipment';
 import type { RuneId } from '../rune';
 import type { SkillSlot } from '../skill';
 
@@ -20,6 +20,8 @@ export interface RuneChoice {
 export interface EquipState {
   /** 装备面板: 选中背包索引 */
   sel: number;
+  /** 装备面板: 选中的穿戴槽 (单击槽显示详情; 双击槽卸下) */
+  selEquipped: EquipType | null;
   /** 装备面板: 当前页 (C-502 网格分页) */
   page: number;
   /** 活跃的符文三选一 (10 级触发) */
@@ -34,6 +36,7 @@ export interface EquipState {
 export function createEmptyEquipState(): EquipState {
   return {
     sel: 0,
+    selEquipped: null,
     page: 0,
     runeChoice: null,
     rejectedRunes: [],

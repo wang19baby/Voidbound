@@ -4,8 +4,8 @@ import type { GameState } from '../../game/state';
 import { getSkillCooldowns, getSkill, skillLevel, skillRune, slotDisplay } from '../../game/skill';
 import { RUNE_DEFS, RUNE_FAMILIES, slotFamily } from '../../game/rune';
 import { loadKeybinds, keyLabel } from '../../game/keybind';
-import { HUD_PAD, SLOT_SIZE, SLOT_GAP, getHudHover } from './types';
-import { slotY } from './geometry';
+import { SLOT_SIZE, SLOT_GAP, getHudHover } from './types';
+import { slotY, slotX } from './geometry';
 import { SKILL_KEYS, KEY_TO_SLOT } from './icons';
 
 // 左下技能簇: 键位/等级/符文 + hover 框 + 符文变异预览
@@ -17,7 +17,7 @@ export function drawSkillBarOverlay(ctx2d: CanvasRenderingContext2D, state: Game
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const key = SKILL_KEYS[i];
     const slot = KEY_TO_SLOT[key];
-    const x = HUD_PAD + i * (SLOT_SIZE + SLOT_GAP);
+    const x = slotX() + i * (SLOT_SIZE + SLOT_GAP);
     if (hoverKey === `skill${i}`) {
       ctx2d.strokeStyle = '#ffd64a';
       ctx2d.lineWidth = 2;
@@ -36,7 +36,7 @@ export function drawSkillBarOverlay(ctx2d: CanvasRenderingContext2D, state: Game
     }
   }
   // C (P2-9): 技能槽 hover → 技能信息 + 符文变异预览 (仅 Lv10 未绑定且未拒绝时)
-  // 位置: 槽下方 (2026-08-14 用户反馈: 原上方被血瓶/蓝瓶行遮挡, 改为槽下方)
+  // 位置: 槽右侧 (槽移入 HP/MP 右侧后, 下方是药水行, 改为槽右侧展示)
   const hoverIdx = SKILL_KEYS.findIndex((_, i) => hoverKey === `skill${i}`);
   if (hoverIdx >= 0) {
     const hSlot = KEY_TO_SLOT[SKILL_KEYS[hoverIdx]];
@@ -59,9 +59,9 @@ export function drawSkillBarOverlay(ctx2d: CanvasRenderingContext2D, state: Game
       for (const r of pool) lines.push(` · ${RUNE_DEFS[r].name}: ${RUNE_DEFS[r].desc}`);
     }
     const th = lines.length * 14 + 10;
-    const tx = HUD_PAD + hoverIdx * (SLOT_SIZE + SLOT_GAP);
-    // 槽下方; 过高时上收确保不出屏
-    const ty = Math.min(sy + SLOT_SIZE + 18, vh - th - 6);
+    // 槽行右侧; 过宽/过高时左/上收确保不出屏
+    const tx = Math.min(slotX() + SKILL_KEYS.length * (SLOT_SIZE + SLOT_GAP) + 8, state.viewport.w - 400 - 8);
+    const ty = Math.min(sy, vh - th - 6);
     ctx2d.fillStyle = 'rgba(8,8,16,0.93)';
     ctx2d.fillRect(tx, ty, 400, th);
     ctx2d.strokeStyle = '#c9aaff';
@@ -99,7 +99,7 @@ export function drawSkillCooldownOverlay(ctx2d: CanvasRenderingContext2D, state:
   for (let i = 0; i < SKILL_KEYS.length; i++) {
     const cdLeft = cds[KEY_TO_SLOT[SKILL_KEYS[i]]] ?? 0;
     if (cdLeft > 0.05) {
-      ctx2d.fillText(cdLeft.toFixed(1), HUD_PAD + i * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2, sy + SLOT_SIZE / 2);
+      ctx2d.fillText(cdLeft.toFixed(1), slotX() + i * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2, sy + SLOT_SIZE / 2);
     }
   }
   ctx2d.textAlign = 'left';

@@ -1,5 +1,6 @@
 // 角色存档: bincode 序列化到 saves/char_0.bin (US-003 + OPT-014/015/003/029 + M5 + A-W1)
-// 格式: 首字节 = SAVE_FORMAT_VERSION (12), 其后 bincode(SaveData)
+// 格式: 首字节 = SAVE_FORMAT_VERSION (13), 其后 bincode(SaveData)
+// v13 [读档完整性]: + attr (升级属性点 combat.attr) + potions_hp/potions_mp (药水瓶计数)
 // v12 [UI 优化]: + play_time (累计游玩时长秒, 角色管理详情展示)
 // v11 [界面优化]: + scene (上次场景, 读档分派)
 // v10 [A-W1]: + mode (布局模式 linear/gauntlet/extract, 迁移默认 linear)
@@ -17,7 +18,7 @@ use std::fs;
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-pub const SAVE_FORMAT_VERSION: u8 = 12;
+pub const SAVE_FORMAT_VERSION: u8 = 13;
 
 /// 当前角色 ID (OPT-029: 多角色 UI 前固定单角色)
 const CURRENT_CHAR: &str = "char_0";
@@ -198,6 +199,42 @@ pub struct SaveData {
     pub scene: String,
     // v12 (UI 优化): 累计游玩时长秒 (角色管理详情展示)
     pub play_time: u64,
+    // v13 (读档完整性): 升级属性点 combat.attr (recomputeCombat 聚合清零, 必须显式保存)
+    pub attr: u32,
+    // v13 (读档完整性): 药水瓶计数 (击杀掉落, 上限 3)
+    pub potions_hp: u32,
+    pub potions_mp: u32,
+}
+
+/// v12 兼容结构 (无 attr / potions_hp / potions_mp 字段)
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+struct SaveDataV12 {
+    pub player_x: f32,
+    pub player_y: f32,
+    pub player_hp: f32,
+    pub player_mp: f32,
+    pub facing_x: f32,
+    pub facing_y: f32,
+    pub score: u32,
+    pub world_w: f32,
+    pub world_h: f32,
+    pub level: u32,
+    pub owned: Vec<OwnedItem>,
+    pub gold: u32,
+    pub runes: Vec<RuneSlot>,
+    pub theme: String,
+    pub difficulty: String,
+    pub equipped: Vec<EquippedItem>,
+    pub skill_levels: Vec<SkillLevel>,
+    pub skill_points: u32,
+    pub exp: u32,
+    pub class: String,
+    pub town: String,
+    pub materials: Vec<(String, u32)>,
+    pub passives: Vec<(String, u32)>,
+    pub mode: String,
+    pub scene: String,
+    pub play_time: u64,
 }
 
 /// v11 兼容结构 (无 play_time 字段)
@@ -288,6 +325,9 @@ fn migrate_v10(v10: SaveDataV10) -> SaveData {
         mode: v10.mode,
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -320,6 +360,44 @@ fn migrate_v11(v11: SaveDataV11) -> SaveData {
         mode: v11.mode,
         scene: v11.scene,
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
+    }
+}
+
+/// v12 → v13: 补 attr/potions 默认 (旧档读档后丢失属性点, 属已知迁移取舍)
+fn migrate_v12(v12: SaveDataV12) -> SaveData {
+    SaveData {
+        player_x: v12.player_x,
+        player_y: v12.player_y,
+        player_hp: v12.player_hp,
+        player_mp: v12.player_mp,
+        facing_x: v12.facing_x,
+        facing_y: v12.facing_y,
+        score: v12.score,
+        world_w: v12.world_w,
+        world_h: v12.world_h,
+        level: v12.level,
+        owned: v12.owned,
+        gold: v12.gold,
+        runes: v12.runes,
+        theme: v12.theme,
+        difficulty: v12.difficulty,
+        equipped: v12.equipped,
+        skill_levels: v12.skill_levels,
+        skill_points: v12.skill_points,
+        exp: v12.exp,
+        class: v12.class,
+        town: v12.town,
+        materials: v12.materials,
+        passives: v12.passives,
+        mode: v12.mode,
+        scene: v12.scene,
+        play_time: v12.play_time,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -528,6 +606,9 @@ fn migrate_v1(v1: SaveDataV1) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -559,6 +640,9 @@ fn migrate_v2(v2: SaveDataV2) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -590,6 +674,9 @@ fn migrate_v3(v3: SaveDataV3) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -624,6 +711,9 @@ fn migrate_v5(v5: SaveDataV5) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -655,6 +745,9 @@ fn migrate_v4(v4: SaveDataV4) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -687,6 +780,9 @@ fn migrate_v6(v6: SaveDataV6) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -719,6 +815,9 @@ fn migrate_v7(v7: SaveDataV7) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -751,6 +850,9 @@ fn migrate_v8(v8: SaveDataV8) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -783,6 +885,9 @@ fn migrate_v9(v9: SaveDataV9) -> SaveData {
         mode: "linear".into(),
         scene: "dungeon".into(),
         play_time: 0,
+        attr: 0,
+        potions_hp: 0,
+        potions_mp: 0,
     }
 }
 
@@ -990,9 +1095,13 @@ fn decode_save(bytes: &[u8]) -> Result<(SaveData, Option<crate::account::Account
     match bytes[0] {
         SAVE_FORMAT_VERSION => {
             let data: SaveData = bincode::deserialize(&bytes[1..])
-                .map_err(|e| format!("v12 deserialize failed: {e}"))?;
+                .map_err(|e| format!("v13 deserialize failed: {e}"))?;
             Ok((data, None))
         }
+        12 => match bincode::deserialize::<SaveDataV12>(&bytes[1..]) {
+            Ok(v12) => Ok((migrate_v12(v12), None)),
+            Err(e) => Err(format!("v12 deserialize failed: {e}")),
+        },
         11 => match bincode::deserialize::<SaveDataV11>(&bytes[1..]) {
             Ok(v11) => Ok((migrate_v11(v11), None)),
             Err(e) => Err(format!("v11 deserialize failed: {e}")),
@@ -1104,6 +1213,9 @@ mod tests {
             mode: "linear".into(),
             scene: "dungeon".into(),
             play_time: 3600,
+            attr: 20,
+            potions_hp: 2,
+            potions_mp: 1,
         }
     }
 
@@ -1139,7 +1251,7 @@ mod tests {
         let data = sample_v5();
         let mut bytes = vec![SAVE_FORMAT_VERSION];
         bytes.extend(bincode::serialize(&data).expect("serialize"));
-        assert_eq!(bytes[0], SAVE_FORMAT_VERSION, "版本头必须为 11");
+        assert_eq!(bytes[0], SAVE_FORMAT_VERSION, "版本头必须为 13");
         let back: SaveData = bincode::deserialize(&bytes[1..]).expect("deserialize");
         assert_eq!(data, back);
         assert_eq!(back.skill_levels[0].level, 12);
@@ -1151,6 +1263,9 @@ mod tests {
         assert_eq!(back.passives[0], ("critRate".into(), 4), "被动字段 v9 往返");
         assert_eq!(back.mode, "linear", "模式字段 v10 往返");
         assert_eq!(back.play_time, 3600, "游玩时长字段 v12 往返");
+        assert_eq!(back.attr, 20, "属性点字段 v13 往返");
+        assert_eq!(back.potions_hp, 2, "药水瓶 hp 字段 v13 往返");
+        assert_eq!(back.potions_mp, 1, "药水瓶 mp 字段 v13 往返");
     }
 
     #[test]
@@ -1360,6 +1475,47 @@ mod tests {
         let (out, account) = decode_save(&v11_bytes).unwrap();
         assert_eq!(out.scene, "dungeon", "v11 → v12 保留场景");
         assert_eq!(out.play_time, 0, "v11 → v12 游玩时长默认 0");
+        assert!(account.is_none());
+    }
+
+    #[test]
+    fn migrate_v12_to_v13_defaults_attr_potions() {
+        let v13 = sample_v5();
+        let v12 = SaveDataV12 {
+            player_x: v13.player_x,
+            player_y: v13.player_y,
+            player_hp: v13.player_hp,
+            player_mp: v13.player_mp,
+            facing_x: v13.facing_x,
+            facing_y: v13.facing_y,
+            score: v13.score,
+            world_w: v13.world_w,
+            world_h: v13.world_h,
+            level: v13.level,
+            owned: v13.owned,
+            gold: v13.gold,
+            runes: v13.runes,
+            theme: v13.theme,
+            difficulty: v13.difficulty,
+            equipped: v13.equipped,
+            skill_levels: v13.skill_levels,
+            skill_points: v13.skill_points,
+            exp: v13.exp,
+            class: v13.class,
+            town: v13.town,
+            materials: v13.materials,
+            passives: v13.passives,
+            mode: v13.mode,
+            scene: v13.scene,
+            play_time: v13.play_time,
+        };
+        let mut v12_bytes = vec![12u8];
+        v12_bytes.extend(bincode::serialize(&v12).unwrap());
+        let (out, account) = decode_save(&v12_bytes).unwrap();
+        assert_eq!(out.play_time, 3600, "v12 → v13 保留游玩时长");
+        assert_eq!(out.attr, 0, "v12 → v13 属性点默认 0 (旧档迁移取舍)");
+        assert_eq!(out.potions_hp, 0, "v12 → v13 药水默认 0");
+        assert_eq!(out.potions_mp, 0, "v12 → v13 药水默认 0");
         assert!(account.is_none());
     }
 

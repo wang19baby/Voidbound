@@ -24,6 +24,7 @@ import { drawLoot } from '../presentation/worldDraw/loot';
 import { drawPlayer } from '../presentation/worldDraw/player';
 import { inRect } from '../game/uigrid';
 import { portalActive, nearPortal, nearestPortal } from '../game/portal';
+import { keyLabel, loadKeybinds } from '../game/keybind';
 import { diag } from '../util/diag';
 
 export interface FrameCtx {
@@ -48,7 +49,7 @@ export interface FrameCtx {
   handleHudClick: (state: GameState, key: string, aim: { x: number; y: number }, nowSec: number) => void;
   tryCastSlot: (slot: 'LMB' | 'RMB', state: GameState, aim: { x: number; y: number }, nowSec: number) => boolean;
   notifyCastFail: (state: GameState, slot: 'LMB' | 'RMB') => void;
-  handleUiClick: (ctx: { state: GameState; mx: number; my: number }) => boolean;
+  handleUiClick: (ctx: { state: GameState; mx: number; my: number; btn?: 'LMB' | 'RMB' }) => boolean;
   // 渲染层函数
   setMouseReticle: (x: number, y: number) => void;
   drawHud: (gl: WebGL2RenderingContext, quad: QuadResources, state: GameState) => void;
@@ -68,8 +69,21 @@ export function drawFrame(ctx: FrameCtx): void {
 
   // 鼠标技能: LMB/RMB 立即触发 (方向 = 鼠标位置)
   const aimDir = ctx.mouseAimDirection(ctx.state, ctx.mouse.state());
+  // 符文三选一模态 (E-03): 悬停符文盒 → pointer 光标
+  if (ctx.state.equip.runeChoice) {
+    const vw = ctx.state.viewport.w, vh = ctx.state.viewport.h;
+    const boxW = 260, boxGap = 20, totalW = boxW * 3 + boxGap * 2;
+    const x0 = (vw - totalW) / 2, y0 = vh / 2 - 70;
+    const mp = ctx.mouse.state().pos;
+    let over = false;
+    for (let i = 0; i < ctx.state.equip.runeChoice.options.length; i++) {
+      if (inRect(mp.x, mp.y, x0 + i * (boxW + boxGap), y0, boxW, 84)) { over = true; break; }
+    }
+    ctx.canvas.style.cursor = over ? 'pointer' : 'default';
+  }
   // 仅 dungeon 接受鼠标技能点击; 其余屏 LMB = UI 点击 (C-501)
-  if (ctx.state.screen === 'dungeon') {
+  // 符文三选一激活时 (可能 screen==='dungeon', 如战斗内 Ctrl+1..6 加点触发): LMB 改走 UI 分发
+  if (ctx.state.screen === 'dungeon' && !ctx.state.equip.runeChoice) {
     if (ctx.state.tutorStep >= 0 && ctx.state.tutorStep < 3) {
       // v4 引导期间: 点击仅跳过气泡, 不触发攻击/技能
       if (ctx.mouse.wasClicked('LMB')) { ctx.state.tutorStep++; ctx.state.tutorT = 0; }
@@ -105,8 +119,9 @@ export function drawFrame(ctx: FrameCtx): void {
       }
     }
     }
-  } else if (ctx.mouse.wasClicked('LMB')) {
-    ctx.handleUiClick({ state: ctx.state, mx: ctx.mouse.state().pos.x, my: ctx.mouse.state().pos.y });
+  } else if (ctx.mouse.wasClicked('LMB') || ctx.mouse.wasClicked('RMB')) {
+    const btn = ctx.mouse.wasClicked('LMB') ? 'LMB' : 'RMB';
+    ctx.handleUiClick({ state: ctx.state, mx: ctx.mouse.state().pos.x, my: ctx.mouse.state().pos.y, btn });
   }
   // MMB 预留: 符文切换已移除 (US-004: 10 级三选一绑定)
 
@@ -342,13 +357,13 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
     }
   }
 
-  // dungeon HUD: 门前提示 (V 交互); Boss 死后未交互 → 持续引导到门
+  // dungeon HUD: 门前提示 (交互键); Boss 死后未交互 → 持续引导到门 (2026-08-15: 加背景框更醒目)
   if (state.screen === 'dungeon' && portalActive(state)) {
-    hudCtx.textAlign = 'center';
-    hudCtx.fillStyle = '#ffd64a';
-    hudCtx.font = 'bold 15px monospace';
+    let hintText: string | null;
+    let hintCol: string;
     if (nearPortal(state)) {
-      hudCtx.fillText('[V] 打开传送门', hudCanvas.width / 2, hudCanvas.height - 60);
+      hintText = `[${keyLabel(loadKeybinds().interact)}] 打开传送门`;
+      hintCol = '#ffd64a';
     } else {
       const np = nearestPortal(state);
       if (np) {
@@ -356,11 +371,28 @@ export function drawFrameToScreen(ctx: FrameCtx): void {
         const dy = np.y - (state.player.pos.y + state.player.size.h / 2);
         const dist = Math.hypot(dx, dy);
         const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? '→' : '←') : (dy > 0 ? '↓' : '↑');
-        hudCtx.fillStyle = '#ccaaff';
-        hudCtx.fillText(`传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`, hudCanvas.width / 2, hudCanvas.height - 60);
+        hintText = `传送门 ${dir} (${Math.round(dist / 40)}格) — 前往回城结算`;
+        hintCol = '#ccaaff';
+      } else {
+        hintText = null;
+        hintCol = '#ccaaff';
       }
     }
-    hudCtx.textAlign = 'left';
+    if (hintText) {
+      hudCtx.font = 'bold 15px monospace';
+      const tw = hudCtx.measureText(hintText).width;
+      const bw = tw + 44, bh = 36;
+      const bx = hudCanvas.width / 2 - bw / 2, by = hudCanvas.height - 60 - 14;
+      hudCtx.fillStyle = 'rgba(10, 10, 20, 0.85)';
+      hudCtx.fillRect(bx, by, bw, bh);
+      hudCtx.strokeStyle = hintCol === '#ffd64a' ? 'rgba(255, 214, 74, 0.65)' : 'rgba(204, 170, 255, 0.65)';
+      hudCtx.lineWidth = 2;
+      hudCtx.strokeRect(bx, by, bw, bh);
+      hudCtx.textAlign = 'center';
+      hudCtx.fillStyle = hintCol;
+      hudCtx.fillText(hintText, hudCanvas.width / 2, hudCanvas.height - 60);
+      hudCtx.textAlign = 'left';
+    }
   }
 
   // v4 首局引导: 3 步气泡 (底部中央; 按键/点击/4s 自动跳)

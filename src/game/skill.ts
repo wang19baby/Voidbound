@@ -165,8 +165,13 @@ function castMelee(state: GameState, dir: { x: number; y: number }, slot: SkillS
   if (rune === 'cleave') width = Math.round(width * 1.6);
   const cx = state.player.pos.x + state.player.size.w / 2;
   const cy = state.player.pos.y + state.player.size.h / 2;
-  const scx = cx + dx * (state.player.size.w / 2 + reach / 2);
-  const scy = cy + dy * (state.player.size.h / 2 + reach / 2);
+  // 挥击盒中心距离: 基准 = 玩家半宽 + reach/2; 瞄准点更近时收拢 (盒远边缘不越过目标)
+  const halfW = state.player.size.w / 2;
+  const baseDist = halfW + reach / 2;
+  const aimDist = Math.hypot(dir.x, dir.y);
+  const dist = aimDist > 0 ? Math.max(halfW, Math.min(baseDist, aimDist - width / 2)) : baseDist;
+  const scx = cx + dx * dist;
+  const scy = cy + dy * dist;
 
   const swing: MeleeSwing = {
     pos: { x: scx - width / 2, y: scy - width / 2 },
@@ -175,6 +180,7 @@ function castMelee(state: GameState, dir: { x: number; y: number }, slot: SkillS
     level: skillLevel(slot),
     rune,
     mult,
+    dir: { x: dx, y: dy },
   };
   (state as GameState & { fx?: { swings?: MeleeSwing[] } }).fx = (state as GameState & { fx?: { swings?: MeleeSwing[] } }).fx ?? { swings: [] } as { swings?: MeleeSwing[] };
   state.fx.swings = state.fx.swings ?? [];
@@ -262,7 +268,7 @@ export const SKILL_SPECS: Record<SkillId, SkillSpec> = {
   holy_bolt:  { name: '圣光弹', cooldown: 0.6, mpCost: 8, cast: (s, d, slot) => castProjectile(s, d, slot, 'holy', 30) },
   poison_dart:{ name: '毒镖', cooldown: 0.7, mpCost: 6, cast: (s, d, slot) => castProjectile(s, d, slot, 'poison', 20) },
   heal:       { name: '回血', cooldown: 5.0, mpCost: 25, cast: (s) => {
-    s.player.hp = Math.min(100, s.player.hp + 40);
+    s.player.hp = Math.min(s.player.hpMax ?? 100, s.player.hp + 40);
     // VFX (UX_REVIEW §8.3): 治愈光辉 + 上升粒子
     const hx = s.player.pos.x + s.player.size.w / 2;
     const hy = s.player.pos.y + s.player.size.h / 2;
@@ -297,6 +303,8 @@ export interface MeleeSwing {
   rune: RuneId | null;
   /** 伤害倍率 (melee 1 / thrust 1.2 / bash 1.6) */
   mult: number;
+  /** 挥击方向 (单位向量, 用于 slash 弧线朝向) */
+  dir: { x: number; y: number };
 }
 
 export function updateSwings(state: GameState, dt: number): void {

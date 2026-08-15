@@ -12,12 +12,12 @@ export function pageCount(total: number): number {
 
 /** 全局索引 → 所在页 */
 export function pageOf(index: number): number {
-  return Math.floor(index / GRID_PAGE_SIZE);
+  return Math.max(0, Math.floor(index / GRID_PAGE_SIZE));
 }
 
 /** 页内 (col,row) → 全局索引; 越界(含负)或 >= total 返回 null */
 export function cellIndex(col: number, row: number, page: number, total: number): number | null {
-  if (col < 0 || row < 0 || col >= GRID_COLS || row >= GRID_ROWS) return null;
+  if (col < 0 || row < 0 || page < 0 || col >= GRID_COLS || row >= GRID_ROWS) return null;
   const idx = page * GRID_PAGE_SIZE + row * GRID_COLS + col;
   return idx < total ? idx : null;
 }
@@ -27,8 +27,9 @@ export type GridDir = 'up' | 'down' | 'left' | 'right';
 /** 方向键移动选中: 页内移动, 边界 clamp (不跨页) */
 export function moveGridSel(sel: number, dir: GridDir, total: number): number {
   if (total <= 0) return 0;
-  const col = sel % GRID_COLS;
-  const row = Math.floor(sel / GRID_COLS);
+  const s = Math.max(0, sel); // 负数 (无选中) → 视作 0
+  const col = s % GRID_COLS;
+  const row = Math.floor(s / GRID_COLS);
   let nc = col;
   let nr = row;
   if (dir === 'left') nc = Math.max(0, col - 1);
@@ -63,24 +64,24 @@ export const EQ_LAYOUT = {
   titleX: 130, // 避开左上关闭按钮 (btnClose 20..116)
   // 左: 穿戴 4 槽 (2×2 网格, 2026-08-15 重设计)
   slotX: 40,
-  slotY: 84,
+  slotY: 99,
   slotSize: 60,
   slotGap: 18,
   // 选中装备信息面板 (穿戴区下方, 不碰中列背包网格)
-  tipX: 40,
-  tipY: 268,
-  tipW: 260,
-  // 中: 背包网格 (10×10, 500×500, 右下 ≈ (800, 584), 不碰右列统计)
+  tipX: 28,
+  tipY: 283,
+  tipW: 220,
+  // 中: 背包网格 (10×10, 500×500, 右下 ≈ (800, 599), 不碰右列统计)
   gridX: 300,
-  gridY: 84,
+  gridY: 99,
   cellSize: 44,
   cellGap: 6,
   // 底部按钮
-  btnY: 620,
-  btnEquip: { x: 300, y: 620, w: 110, h: 32 },
-  btnUnequip: { x: 430, y: 620, w: 110, h: 32 },
-  btnPrev: { x: 570, y: 620, w: 96, h: 32 },
-  btnNext: { x: 700, y: 620, w: 96, h: 32 },
+  btnY: 635,
+  btnEquip: { x: 300, y: 635, w: 110, h: 32 },
+  btnUnequip: { x: 430, y: 635, w: 110, h: 32 },
+  btnPrev: { x: 570, y: 635, w: 96, h: 32 },
+  btnNext: { x: 700, y: 635, w: 96, h: 32 },
   // 右上关闭 (鼠标路径)
   btnClose: { x: 20, y: 20, w: 96, h: 34 },
 };
@@ -110,6 +111,25 @@ export function cellRects(): Array<{ x: number; y: number; col: number; row: num
     }
   }
   return out;
+}
+
+/** 背包网格总宽/总高 (命中整片区域用) */
+export function gridBounds(): { w: number; h: number } {
+  return {
+    w: GRID_COLS * (EQ_LAYOUT.cellSize + EQ_LAYOUT.cellGap) - EQ_LAYOUT.cellGap,
+    h: GRID_ROWS * (EQ_LAYOUT.cellSize + EQ_LAYOUT.cellGap) - EQ_LAYOUT.cellGap,
+  };
+}
+
+/** 装备详情面板高 (选中: 标题+战力+词条+提示行+余量; 未选中: 空态) */
+export function tipPanelH(affixCount: number, selected: boolean): number {
+  return selected ? 34 + affixCount * 16 + 35 : 30;
+}
+
+/** 丢弃按钮 (选中详情面板下方; tipH 与详情面板同公式) */
+export function discardBtnRect(affixCount: number): { x: number; y: number; w: number; h: number } {
+  const tipH = tipPanelH(affixCount, true);
+  return { x: EQ_LAYOUT.tipX, y: EQ_LAYOUT.tipY + tipH + 12, w: 90, h: 28 };
 }
 
 // === 角色信息面板几何 (C 角色屏, draw 与 hit-test 共用) ===

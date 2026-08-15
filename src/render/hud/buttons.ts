@@ -1,16 +1,17 @@
 // HUD 可点击按钮布局 + 命中测试 + hover 状态写入
 
 import { HUD_PAD, SLOT_SIZE, SLOT_GAP, type HudBtn, getHudHover, setHudHoverKey } from './types';
-import { slotY } from './geometry';
+import { slotY, slotX, potionRowY } from './geometry';
 import { SKILL_KEYS } from './icons';
 
 export function hudDungeonButtons(vw: number, vh: number): HudBtn[] {
   const sy = slotY(vh);
+  const sx0 = slotX();
   const btns: HudBtn[] = [];
   for (let i = 0; i < SKILL_KEYS.length; i++) {
-    btns.push({ key: `skill${i}`, x: HUD_PAD + i * (SLOT_SIZE + SLOT_GAP) - 2, y: sy - 2, w: SLOT_SIZE + 4, h: SLOT_SIZE + 4 });
+    btns.push({ key: `skill${i}`, x: sx0 + i * (SLOT_SIZE + SLOT_GAP) - 2, y: sy - 2, w: SLOT_SIZE + 4, h: SLOT_SIZE + 4 });
   }
-  const py = sy - 46;
+  const py = potionRowY();
   const ph = 30;
   btns.push({ key: 'potionHp', x: HUD_PAD, y: py, w: 104, h: ph });
   btns.push({ key: 'potionMp', x: HUD_PAD + 108, y: py, w: 104, h: ph });

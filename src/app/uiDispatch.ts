@@ -10,7 +10,7 @@
 import type { GameState } from '../game/state';
 import type { Screen } from '../game/state';
 import { inRect } from '../game/uigrid';
-import { slotRects, pageCount, pageOf, cellRects, cellIndex, flipPage, pageStart, EQ_LAYOUT, CHAR_LAYOUT, charSkillRects, charPassiveRects } from '../game/uigrid';
+import { slotRects, pageCount, pageOf, cellRects, cellIndex, flipPage, pageStart, gridBounds, discardBtnRect, tipPanelH, EQ_LAYOUT, CHAR_LAYOUT, charSkillRects, charPassiveRects } from '../game/uigrid';
 import { CLASS_IDS } from '../game/class';
 import { DIFFICULTIES, DIFFICULTY_MODS, unlockedDifficulty } from '../game/difficulty';
 import { MAP_MODES } from '../game/mapmode';
@@ -19,7 +19,7 @@ import { EX_LAYOUT } from '../screens/expedition';
 import { CH_LAYOUT } from '../screens/characters';
 import { themeUnlocked } from '../game/newgame';
 import { THEMES } from '../game/state';
-import { EQUIP_SLOTS, EQUIP_NAMES, RARITY_COLORS, getOwned, equipItem, unequipSlot } from '../game/equipment';
+import { EQUIP_SLOTS, EQUIP_NAMES, RARITY_COLORS, getOwned, equipItem, unequipSlot, discardItem } from '../game/equipment';
 import { townNpcs } from '../game/town';
 import type { CharacterSummary } from '../ipc/save';
 import { chooseRune, getSkill } from '../game/skill';
@@ -31,6 +31,12 @@ import { isCloseConfirmOpen, isNgNaming, setNgNaming, triggerReturnConfirm } fro
 
 import { deleteCharacter } from '../ipc/save';
 
+// 背包双击穿戴: 350ms 内两次点击同一格 → 视为双击 (与"装备"按钮同逻辑)
+let lastBagClick = { idx: -1, t: 0 };
+// 穿戴槽双击卸下: 350ms 内两次点击同一槽 → 双击卸下 (单击仅选中看详情)
+let lastSlotClick = { idx: -1, t: 0 };
+const DOUBLE_CLICK_MS = 350;
+
 /** uiDispatch 依赖注入 — main.ts 拥有实现, 本模块拥有决策 */
 export interface UiCtx {
   state: GameState;
@@ -38,6 +44,8 @@ export interface UiCtx {
   h: number;
   mx: number;
   my: number;
+  /** 触发按钮 (LMB=普通点击; RMB=装备面板丢弃) */
+  btn?: 'LMB' | 'RMB';
   // 副作用回调 (跨模块)
   confirmCloseSave: () => void;
   confirmCloseCancel: () => void;
@@ -354,16 +362,51 @@ export function handleUiClick(ctx: UiCtx): boolean {
       return true;
     }
     case 'portal': {
-      if (inRect(mx, my, w / 2 - 210, h / 2 + 58, 200, 44)) { ctx.leaveThroughPortal(state); return true; }
+      if (inRect(mx, my, w / 2 - 210, h / 2 + 58, 200, 44)) { ctx.leaveThroughPortal(state); ctx.setScreen(state, 'victory'); return true; }
       if (inRect(mx, my, w / 2 + 10, h / 2 + 58, 200, 44)) { ctx.setScreen(state, 'dungeon'); return true; }
       return true;
     }
     case 'equipment': {
+      const selEqNow = getOwned(state)[state.equip.sel];
+      const gb = gridBounds();
+      const inTip = selEqNow ? inRect(mx, my, EQ_LAYOUT.tipX, EQ_LAYOUT.tipY, EQ_LAYOUT.tipW, tipPanelH(selEqNow.affixes.length, true)) : false;
+      const inGrid = inRect(mx, my, EQ_LAYOUT.gridX, EQ_LAYOUT.gridY, gb.w, gb.h);
+      const dr = selEqNow ? discardBtnRect(selEqNow.affixes.length) : null;
+      // RMB: 背包网格/详情面板/丢弃按钮 内右键 → 丢弃选中
+      if (ctx.btn === 'RMB') {
+        if (selEqNow && (inGrid || inTip || (dr && inRect(mx, my, dr.x, dr.y, dr.w, dr.h)))) {
+          discardItem(state, state.equip.sel);
+          state.equip.sel = Math.max(0, Math.min(getOwned(state).length - 1, state.equip.sel));
+          pushToast(state, `已丢弃 ${selEqNow.name}`, '#f88');
+          playSfxClient('ui_click');
+        }
+        return true;
+      }
+      // 丢弃按钮 (LMB)
+      if (selEqNow && dr && inRect(mx, my, dr.x, dr.y, dr.w, dr.h)) {
+        discardItem(state, state.equip.sel);
+        state.equip.sel = Math.max(0, Math.min(getOwned(state).length - 1, state.equip.sel));
+        pushToast(state, `已丢弃 ${selEqNow.name}`, '#f88');
+        playSfxClient('ui_click');
+        return true;
+      }
       const slots = slotRects();
       for (let i = 0; i < EQUIP_SLOTS.length; i++) {
         const s = slots[i];
         if (inRect(mx, my, s.x, s.y, EQ_LAYOUT.slotSize, EQ_LAYOUT.slotSize)) {
-          if (unequipSlot(state, EQUIP_SLOTS[i])) { pushToast(state, `已卸下: ${EQUIP_NAMES[EQUIP_SLOTS[i]]}`, '#9cf'); playSfxClient('ui_click'); }
+          const now = performance.now();
+          // 单击 → 选中该槽 (显示详情); 双击同槽 → 卸下
+          if (i === lastSlotClick.idx && now - lastSlotClick.t <= DOUBLE_CLICK_MS) {
+            if (unequipSlot(state, EQUIP_SLOTS[i])) {
+              pushToast(state, `已卸下: ${EQUIP_NAMES[EQUIP_SLOTS[i]]}`, '#9cf');
+              playSfxClient('ui_click');
+            }
+            state.equip.selEquipped = null;
+            lastSlotClick.idx = -1;
+          } else {
+            state.equip.selEquipped = state.player.equipped[EQUIP_SLOTS[i]] ? EQUIP_SLOTS[i] : null;
+            lastSlotClick = { idx: i, t: now };
+          }
           return true;
         }
       }
@@ -373,7 +416,23 @@ export function handleUiClick(ctx: UiCtx): boolean {
       for (const c of cellRects()) {
         if (inRect(mx, my, c.x, c.y, EQ_LAYOUT.cellSize, EQ_LAYOUT.cellSize)) {
           const idx = cellIndex(c.col, c.row, curPage, total);
-          if (idx !== null) state.equip.sel = idx;
+          if (idx !== null) {
+            const now = performance.now();
+            state.equip.sel = idx;
+            state.equip.selEquipped = null;
+            // 双击同格 → 穿戴 (与"装备"按钮同逻辑)
+            if (idx === lastBagClick.idx && now - lastBagClick.t <= DOUBLE_CLICK_MS) {
+              const eq = getOwned(state)[idx];
+              if (eq && equipItem(state, eq)) {
+                const col = RARITY_COLORS[eq.rarity].map(c2 => Math.round(c2 * 255).toString(16).padStart(2, '0')).join('');
+                pushToast(state, `已穿戴 ${eq.name}`, `#${col}`);
+                playSfxClient('ui_click');
+              }
+              lastBagClick.idx = -1;
+            } else {
+              lastBagClick = { idx, t: now };
+            }
+          }
           return true;
         }
       }
@@ -387,9 +446,12 @@ export function handleUiClick(ctx: UiCtx): boolean {
         return true;
       }
       if (inRect(mx, my, EQ_LAYOUT.btnUnequip.x, EQ_LAYOUT.btnUnequip.y, EQ_LAYOUT.btnUnequip.w, EQ_LAYOUT.btnUnequip.h)) {
-        const eq = getOwned(state)[state.equip.sel];
-        const slot = eq ? eq.type : undefined;
-        if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
+        const selE = state.equip.selEquipped;
+        const slot = selE ?? (() => { const eq = getOwned(state)[state.equip.sel]; return eq ? eq.type : undefined; })();
+        if (slot && unequipSlot(state, slot)) {
+          pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
+          state.equip.selEquipped = null;
+        }
         return true;
       }
       // 关闭 (回来源: 从城镇打开则回 town)
@@ -449,6 +511,7 @@ export function buildUiCtx(
   mx: number,
   my: number,
   callbacks: Omit<UiCtx, 'state' | 'w' | 'h' | 'mx' | 'my'>,
+  btn: 'LMB' | 'RMB' = 'LMB',
 ): UiCtx {
   return {
     ...callbacks,
@@ -457,5 +520,6 @@ export function buildUiCtx(
     h: state.viewport.h,
     mx,
     my,
+    btn,
   };
 }

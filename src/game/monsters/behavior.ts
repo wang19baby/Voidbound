@@ -43,7 +43,7 @@ export function damageMonster(
   // 吸血 (OPT-020 unique 独占): 命中回复 damage×lifesteal%
   const ls = state.player.combat?.lifesteal ?? 0;
   if (ls > 0 && damage > 0) {
-    state.player.hp = Math.min(100, state.player.hp + Math.max(1, Math.round(damage * ls / 100)));
+    state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + Math.max(1, Math.round(damage * ls / 100)));
   }
   const cx = m.pos.x + m.size.w / 2;
   const cy = m.pos.y + m.size.h / 2;
@@ -94,11 +94,11 @@ export function resolveFireballHits(state: GameState): number {
         if (r.damage > 0 && (f.dmgType === 'fire' || f.dmgType === 'poison')) { m.burnT = 3; m.burnDps = 3; }
         // 嗜血: 命中回 5 HP
         if (f.rune === 'vampire' && r.damage > 0) {
-          state.player.hp = Math.min(100, state.player.hp + 5);
+          state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + 5);
         }
         // 圣光 (M5): 命中回 3 HP
         if (f.dmgType === 'holy' && r.damage > 0) {
-          state.player.hp = Math.min(100, state.player.hp + 3);
+          state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + 3);
         }
         // nova (内容扩充): 命中爆炸, 溅射周围 80px 内其他怪 60% 伤害
         if (f.rune === 'nova' && r.damage > 0) {
@@ -133,8 +133,8 @@ export function resolveMeleeHits(state: GameState): number {
         const r = damageMonster(state, m, { base, type: 'physical', knockback: 40 });
         // 近战符文 (OPT-023): steal 回魔 / vampire 回血 (火球系 vamp 在 resolveFireballHits)
         if (r.damage > 0) {
-          if (s.rune === 'steal') state.player.mp = Math.min(100, state.player.mp + 4);
-          else if (s.rune === 'vampire') state.player.hp = Math.min(100, state.player.hp + 5);
+          if (s.rune === 'steal') state.player.mp = Math.min(state.player.mpMax ?? 100, state.player.mp + 4);
+          else if (s.rune === 'vampire') state.player.hp = Math.min(state.player.hpMax ?? 100, state.player.hp + 5);
           // A-W3 荆棘: 近战反伤 20% 伤害 + 固定 5 (远程免疫 → 换技能/换目标反制)
           if (m.mech === 'thorns') {
             const reflect = Math.max(1, Math.round(r.damage * THORNS_REFLECT) + THORNS_FLAT);

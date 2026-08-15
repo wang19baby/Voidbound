@@ -49,6 +49,40 @@ for (let i = 0; i < 20; i++) {
   check(`火球池选项 ∈ 火球家族: ${fbOpts.join(',')}`, fbOpts.every(r => RUNE_FAMILIES.fireball.includes(r)));
 }
 
+// === E-03 符文三选一鼠标点击: 任何屏 (含 screen==='dungeon', 战斗内 Ctrl+1..6 加点触发) 都应可选 ===
+// 回归: frame.ts drawFrame 在 runeChoice 激活时把 LMB 路由到 handleUiClick (不再当攻击)
+import { handleUiClick, buildUiCtx } from '../src/app/uiDispatch';
+import { createEmptyEquipState } from '../src/game/state/equip';
+import { getSkill } from '../src/game/skill';
+{
+  const st = {
+    player: { pos: { x: 0, y: 0 }, size: { w: 32, h: 32 }, level: 1, skillPoints: 1 } as never,
+    world: { w: 1000, h: 1000, walls: [] } as never,
+    viewport: { w: 1280, h: 720 },
+    camera: { x: 0, y: 0 },
+    screen: 'dungeon' as const,
+    mode: 'linear' as const,
+    theme: 'forest' as const,
+    difficulty: 'normal' as const,
+    equip: createEmptyEquipState(),
+    fx: { vfx: [], monsters: [], dmgNums: [] } as never,
+    ui: {} as never,
+    run: {} as never,
+  } as never;
+  st.equip.runeChoice = { slot: 'Q', options: ['split', 'pierce', 'nova'] as never };
+  const vw = st.viewport.w, vh = st.viewport.h;
+  const boxW = 260, gap = 20, totalW = boxW * 3 + gap * 2;
+  const x0 = (vw - totalW) / 2, y0 = vh / 2 - 70;
+  // 模拟 frame.ts: runeChoice 激活时 LMB → handleUiClick, 而非攻击
+  const isDungeon = st.screen === 'dungeon' && !st.equip.runeChoice;
+  check('E-03 screen=dungeon + runeChoice → 不走攻击分支', isDungeon === false);
+  const ctx = buildUiCtx(st, x0 + boxW / 2, y0 + 42, {} as never);
+  const handled = handleUiClick(ctx);
+  check('E-03 点符文盒1 → 已处理', handled === true);
+  check('E-03 点符文盒1 → runeChoice 清空', st.equip.runeChoice === null);
+  check('E-03 点符文盒1 → 符文已绑定', getSkill('Q').rune === 'split');
+}
+
 if (failures > 0) {
   console.error(`\n${failures} FAILED`);
   process.exit(1);

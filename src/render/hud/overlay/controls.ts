@@ -4,12 +4,11 @@ import type { GameState } from '../../../game/state';
 import { HUD_PAD, type HudBtn, getHudHover } from '../types';
 import { drawIcon } from '../icons';
 import { hudDungeonButtons } from '../buttons';
-import { slotY } from '../geometry';
+import { potionRowY } from '../geometry';
 
 // 药水/翻滚按钮 + 技能点
 export function drawPotionDodgeButtons(ctx2d: CanvasRenderingContext2D, state: GameState, vw: number, vh: number): void {
   const hoverKey = getHudHover();
-  const sy = slotY(vh);
   const btn = (b: HudBtn, label: string, col: string) => {
     ctx2d.fillStyle = hoverKey === b.key ? 'rgba(255,255,255,0.14)' : 'rgba(10,10,18,0.78)';
     ctx2d.fillRect(b.x, b.y, b.w, b.h);
@@ -39,5 +38,5 @@ export function drawPotionDodgeButtons(ctx2d: CanvasRenderingContext2D, state: G
   btn(hudBtns[6], `翻滚${dodgeCd > 0 ? ` ${dodgeCd.toFixed(1)}s` : ' ✓'}`, dodgeCd > 0 ? '#887' : '#8f8');
   ctx2d.fillStyle = '#ffd';
   ctx2d.font = '12px monospace';
-  ctx2d.fillText(`技能点 ${state.player.skillPoints ?? 0}`, HUD_PAD + 356, sy - 46 + 9);
+  ctx2d.fillText(`技能点 ${state.player.skillPoints ?? 0}`, HUD_PAD + 356, potionRowY() + 9);
 }

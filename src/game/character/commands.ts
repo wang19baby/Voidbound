@@ -28,7 +28,7 @@ export function gainExp(state: GameState, amount: number): number {
     p.level++;
     p.skillPoints += 5;
     p.combat.attr += Math.round(EXP_PER_LEVEL_ATTR * classAttrWeight(p.classId));  // C-105 按职业权重
-    p.hp = MAX_HP;
+    p.hp = p.hpMax ?? MAX_HP;
     ups++;
   }
   if (ups > 0) {
@@ -46,8 +46,8 @@ export function usePotion(state: GameState, stat: 'hp' | 'mp'): boolean {
   if (p.potionCd > 0) return false;
   if (p.potions[stat] <= 0) return false;
   p.potions[stat]--;
-  if (stat === 'hp') p.hp = Math.min(MAX_HP, p.hp + POTION_HP_HEAL);
-  else p.mp = Math.min(MAX_MP, p.mp + POTION_MP_HEAL);
+  if (stat === 'hp') p.hp = Math.min(p.hpMax ?? MAX_HP, p.hp + POTION_HP_HEAL);
+  else p.mp = Math.min(p.mpMax ?? MAX_MP, p.mp + POTION_MP_HEAL);
   // VFX (UX_REVIEW P3): 喝药闪光 (红/蓝按药水)
   const px = p.pos.x + (p.size?.w ?? 0) / 2;
   const py = p.pos.y + (p.size?.h ?? 0) / 2;

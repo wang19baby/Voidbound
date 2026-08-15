@@ -28,6 +28,8 @@ eq('200 件 2 页', pageCount(200), 2);
 eq('201 件 3 页', pageCount(201), 3);
 eq('索引 99 → 页 0', pageOf(99), 0);
 eq('索引 100 → 页 1', pageOf(100), 1);
+eq('索引 -1 → 页 0 (sel=-1 无选中, 网格仍渲染)', pageOf(-1), 0);
+eq('索引 -100 → 页 0', pageOf(-100), 0);
 eq('pageStart 页 1 = 100', pageStart(1, 150), 100);
 eq('pageStart 越界 clamp', pageStart(9, 150), 100);
 eq('pageStart 空 = 0', pageStart(0, 0), 0);
@@ -41,6 +43,7 @@ eq('cell(0,0,1) = 100', cellIndex(0, 0, 1, 130), 100);
 eq('超出 total → null', cellIndex(2, 2, 1, 21), null);
 eq('负数 col → null', cellIndex(-1, 0, 0, 130), null);
 eq('col 越界 → null', cellIndex(10, 0, 0, 130), null);
+eq('负数页 → null (防 -1 页渲染空背包)', cellIndex(0, 0, -1, 130), null);
 
 // === 方向键选格 ===
 eq('0 左 clamp', moveGridSel(0, 'left', 20), 0);
@@ -54,6 +57,8 @@ eq('3 左 → 2', moveGridSel(3, 'left', 20), 2);
 eq('15 下 → 25 (clamp 19)', moveGridSel(15, 'down', 20), 19);
 eq('尾部 clamp (total=5, 4 下)', moveGridSel(4, 'down', 5), 4);
 eq('空 total → 0', moveGridSel(7, 'down', 0), 0);
+eq('sel=-1 视为 0 (下 → 10)', moveGridSel(-1, 'down', 20), 10);
+eq('sel=-1 视为 0 (右 → 1)', moveGridSel(-1, 'right', 20), 1);
 
 // === 翻页 (每页 100 格, 用 150 件验证多页) ===
 eq('flipPage 0→1', flipPage(0, 1, 150), 1);

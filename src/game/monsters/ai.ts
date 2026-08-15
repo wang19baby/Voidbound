@@ -18,7 +18,7 @@ import { rollMech, SHIELD_UP_T, SHIELD_DOWN_T, EXPLODE_HP_THRESHOLD, EXPLODE_DMG
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT } from '../moveai';
 import { DIFFICULTY_MODS } from '../difficulty';
 import { AURA_TYPES, THEME_MONSTER_POOL } from './defs';
-import { aabbOverlap, worldToChunk, getChunkWalls, densityForMode } from '../world';
+import { aabbOverlap, worldToChunk, getChunkWalls, densityForMode, getActiveLayout, isOnRoomFloor, nearestRoomFloorPoint } from '../world';
 import { spawnRing, spawnBurst, spawnPlayerHitFx } from '../fx/vfx';
 import { spawnDamageNum } from '../fx/damageNum';
 import { spawnDeathFx } from '../fx/deathFx';
@@ -152,11 +152,30 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     }
     return m;
   }
-  // 兜底: 中心北 800 (落点校验, 防卡墙); 尊重层级挂载 (forceLord camp 兜底不丢领主)
+  // 兜底: 锚点附近确定性环形扫描, 取最近无墙落点 (防卡墙; 不再抛 800px 北 → 房间外/墙外)
+  let fx = Math.max(64, Math.min(state.world.w - 64, center.x));
+  let fy = Math.max(64, Math.min(state.world.h - 64, center.y));
+  let placed = false;
+  for (let r = 0; r <= 600 && !placed; r += 100) {
+    for (let a = 0; a < 12; a++) {
+      const th = (a / 12) * Math.PI * 2;
+      const x = center.x + Math.cos(th) * r;
+      const y = center.y + Math.sin(th) * r;
+      if (x < 64 || y < 64 || x > state.world.w - 64 || y > state.world.h - 64) continue;
+      let blocked = false;
+      for (const w of checkWalls) {
+        if (aabbOverlap(x, y, def.size.w * sizeScale, def.size.h * sizeScale, w.pos.x, w.pos.y, w.size.w, w.size.h)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) { fx = x; fy = y; placed = true; break; }
+    }
+  }
   const fb: Monster = {
     id: nextMonsterId++,
     type,
-    pos: { x: center.x, y: center.y - 800 },
+    pos: { x: fx, y: fy },
     vel: { x: 0, y: 0 },
     hp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : elite ? ELITE_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1)),
     maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : elite ? ELITE_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1)),
@@ -199,6 +218,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
 }
 
 export function pickWanderTarget(state: GameState, x: number, y: number, radius: number): { x: number; y: number } {
+  const layout = (state.run.mode === 'linear' || state.run.mode === 'rogue') ? getActiveLayout() : null;
   for (let i = 0; i < 6; i++) {
     const a = Math.random() * Math.PI * 2;
     const r = Math.random() * radius;
@@ -206,7 +226,10 @@ export function pickWanderTarget(state: GameState, x: number, y: number, radius:
     const ty = y + Math.sin(a) * r;
     if (tx >= 0 && ty >= 0 && tx < state.world.w && ty < state.world.h) {
       // 目标不落在墙内 (防贴墙磨 / 卡墙角)
-      if (!overlapsWalls(state, tx - 16, ty - 16, 32, 32)) return { x: tx, y: ty };
+      if (overlapsWalls(state, tx - 16, ty - 16, 32, 32)) continue;
+      // 房间化: 目标须在地板上, 否则重掷 (防远怪无墙数据时走进虚空)
+      if (layout && !isOnRoomFloor(layout, tx, ty)) continue;
+      return { x: tx, y: ty };
     }
   }
   return { x, y };
@@ -296,6 +319,8 @@ function auraActive(state: GameState, m: Monster, aura: AuraType): boolean {
 export function updateMonsters(state: GameState, dt: number): void {
   const p = state.player.pos;
   const walls = state.world.walls;
+  // 房间化模式 (linear/rogue): 每帧约束怪物中心必须在地板上 (防远怪无墙数据漂进虚空/墙)
+  const layout = (state.run.mode === 'linear' || state.run.mode === 'rogue') ? getActiveLayout() : null;
   for (const m of state.fx.monsters) {
     if (m.hp <= 0) continue;
     const def = MONSTER_DEFS[m.type];
@@ -618,6 +643,16 @@ export function updateMonsters(state: GameState, dt: number): void {
     const slid = slideAxis({ x: m.pos.x, y: m.pos.y, w: m.size.w, h: m.size.h }, walls);
     m.pos.x = slid.x;
     m.pos.y = slid.y;
+    // 房间化: 中心落非地板 (虚空/墙, 含门洞外共享墙带) → 拉回最近地板点
+    if (layout) {
+      const cx = m.pos.x + m.size.w / 2;
+      const cy = m.pos.y + m.size.h / 2;
+      if (!isOnRoomFloor(layout, cx, cy)) {
+        const fp = nearestRoomFloorPoint(layout, cx, cy);
+        m.pos.x = fp.x - m.size.w / 2;
+        m.pos.y = fp.y - m.size.h / 2;
+      }
+    }
   }
 }
 

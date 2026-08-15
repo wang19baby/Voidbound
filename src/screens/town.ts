@@ -78,6 +78,9 @@ export function enterTown(ctx: TownCtx, townId?: TownId): void {
   if (!state.townReturn) state.townReturn = { x: state.player.pos.x, y: state.player.pos.y };
   clearGroundLoot(state);  // M5 实测修复: 回城清理地上物品
   state.mode = 'town';
+  // 城镇无墙 (纯屏幕场景): 清掉残留的地牢墙缓存, 否则 updatePlayer 撞到隐形地牢墙 → 回城区域不可达
+  state.world.walls = [];
+  state.world.decor = [];
   setScreen(state, 'town');
   state.townPanel = null;
   state.townStock = null;

@@ -122,6 +122,30 @@ let activeLayout: RoomLayout | null = null;
 
 export function getActiveLayout(): RoomLayout | null { return activeLayout; }
 
+/** 房间化模式 (linear/rogue): 点 (怪物中心) 是否在地板上 — 房间内部或门洞; 排除虚空与墙 */
+export function isOnRoomFloor(layout: RoomLayout, x: number, y: number): boolean {
+  for (const r of layout.rooms) {
+    if (x >= r.x + BLOCK && x < r.x + r.w - BLOCK && y >= r.y + BLOCK && y < r.y + r.h - BLOCK) return true;
+  }
+  for (const d of layout.doors) {
+    const g = d.gap;
+    if (x >= g.x && x < g.x + g.w && y >= g.y && y < g.y + g.h) return true;
+  }
+  return false;
+}
+
+/** 房间化模式: 拉回最近地板点 (最近房间内部, 包围盒夹取) */
+export function nearestRoomFloorPoint(layout: RoomLayout, x: number, y: number): { x: number; y: number } {
+  let bx = x, by = y, bd = Infinity;
+  for (const r of layout.rooms) {
+    const cx = Math.max(r.x + BLOCK, Math.min(x, r.x + r.w - BLOCK));
+    const cy = Math.max(r.y + BLOCK, Math.min(y, r.y + r.h - BLOCK));
+    const d = (cx - x) ** 2 + (cy - y) ** 2;
+    if (d < bd) { bd = d; bx = cx; by = cy; }
+  }
+  return { x: bx, y: by };
+}
+
 /** 蛇形房间链: 首行左→右, 换行右→左; 相邻房共享 1 格单墙 (128px), 墙上凿门洞连通。
  *  2026-08-15: 去规整 — 每房宽度随机 (1280..1664 块对齐), 高度固定 → 共享墙/门洞机制不变;
  *  摆放: 行0 x 累加左→右, 弯折房 (第 COLS-1→COLS 房) 共享列, 行1 从弯折房向左递减。

@@ -61,12 +61,14 @@ export function drawParticles(ctx: DrawCtx): void {
   }
   flushGroup(envColor);
 
-  // 近战挥击 (slash)
+  // 近战挥击 (slash): 弧线缺口朝玩家侧, 随挥击方向旋转
+  // slash_01 默认缺口朝上; 缺口应指向 (-dir) → rot = atan2(-dx, dy) (Y 向下 CW 旋转)
   const slashUv = instUv('slash_01');
   for (const s of getSwings(state)) {
     const sp = worldToScreen(state, s.pos);
     if (sp.x + s.size.w < 0 || sp.x > vw) continue;
-    addInst(slashUv, sp, s.size.w, s.size.h);
+    const rot = Math.atan2(-s.dir.x, s.dir.y);
+    addInst(slashUv, sp, s.size.w, s.size.h, rot);
   }
   flushGroup([1, 1, 1]);
 

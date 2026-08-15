@@ -1,11 +1,11 @@
 // HUD overlay: 装备面板 (OPT-014, A1) — 左穿戴槽 + 中背包(滚动/选择/对比) + 右聚合属性
 
 import type { GameState } from '../../../game/state';
-import { getOwned, EQUIP_SLOTS, EQUIP_NAMES, BACKPACK_CAP, RARITY_COLORS, itemPower, itemPowerDelta, describeAffix } from '../../../game/equipment';
+import { getOwned, EQUIP_SLOTS, EQUIP_NAMES, BACKPACK_CAP, RARITY_COLORS, itemPower, itemPowerDelta, describeAffix, ELEM_NAMES } from '../../../game/equipment';
 import { getSkill, SKILL_SLOTS, slotDisplay } from '../../../game/skill';
 import { RUNE_DEFS } from '../../../game/rune';
 import { DAMAGE_TYPES } from '../../../game/combat';
-import { pageCount, pageOf, cellIndex, cellRects, slotRects, inRect, EQ_LAYOUT } from '../../../game/uigrid';
+import { pageCount, pageOf, cellIndex, cellRects, slotRects, inRect, EQ_LAYOUT, discardBtnRect, tipPanelH } from '../../../game/uigrid';
 import { getMouseX, getMouseY } from '../types';
 
 // 装备面板 (OPT-014, A1)
@@ -24,16 +24,17 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   // 左: 穿戴 4 槽 (2×2, 2026-08-15 重设计 — 信息面板移到下方)
   ctx2d.font = 'bold 14px monospace';
   ctx2d.fillStyle = '#ffd';
-  ctx2d.fillText('穿戴', EQ_LAYOUT.slotX, EQ_LAYOUT.slotY - 12);
+  ctx2d.fillText('穿戴', EQ_LAYOUT.slotX, EQ_LAYOUT.slotY - 32);
   const slotR = slotRects();
   for (let i = 0; i < EQUIP_SLOTS.length; i++) {
     const t = EQUIP_SLOTS[i];
     const s = slotR[i];
     const eq = state.player.equipped[t];
+    const slotSel = state.equip.selEquipped === t;
     const col = eq ? RARITY_COLORS[eq.rarity] : null;
     ctx2d.setLineDash(col ? [] : [4, 3]);
-    ctx2d.strokeStyle = col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556';
-    ctx2d.lineWidth = col ? 3 : 1.5;
+    ctx2d.strokeStyle = slotSel ? '#ffd64a' : (col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556');
+    ctx2d.lineWidth = slotSel ? 3 : (col ? 3 : 1.5);
     ctx2d.strokeRect(s.x, s.y, EQ_LAYOUT.slotSize, EQ_LAYOUT.slotSize);
     ctx2d.setLineDash([]);
     ctx2d.fillStyle = col ? `rgb(${col.map(v => Math.round(v * 255 * 0.35)).join(',')})` : '#232330';
@@ -47,10 +48,11 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   ctx2d.textAlign = 'left';
   ctx2d.textBaseline = 'top';
 
-  // 选中装备详情 (穿戴区下方, 2026-08-15: 原底部 tooltip 移此, 词条逐行)
-  const selEq = owned[state.equip.sel];
+  // 选中装备详情 (穿戴区下方, 2026-08-15: 原底部 tooltip 移此, 词条逐行; 单击穿戴槽也可选中查看)
+  const equippedSel = state.equip.selEquipped != null ? state.player.equipped[state.equip.selEquipped] : undefined;
+  const selEq = equippedSel ?? owned[state.equip.sel];
   const tipX = EQ_LAYOUT.tipX, tipY = EQ_LAYOUT.tipY, tipW = EQ_LAYOUT.tipW;
-  const tipH = selEq ? 34 + selEq.affixes.length * 16 + 20 : 30;
+  const tipH = tipPanelH(selEq ? selEq.affixes.length : 0, !!selEq);
   ctx2d.fillStyle = '#10141c';
   ctx2d.fillRect(tipX, tipY, tipW, tipH);
   ctx2d.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -61,14 +63,19 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.fillStyle = col;
     ctx2d.font = 'bold 13px monospace';
     ctx2d.fillText(selEq.name, tipX + 8, tipY + 16);
-    const old = state.player.equipped[selEq.type];
-    const delta = old ? itemPowerDelta(selEq, old) : 0;
-    ctx2d.fillStyle = old ? (delta > 0 ? '#4f4' : delta < 0 ? '#f66' : '#aaa') : '#89a';
     ctx2d.font = '12px monospace';
-    ctx2d.fillText(
-      old ? `战力+${itemPower(selEq)} vs ${old.name} ${delta > 0 ? '+' : ''}${delta}` : `战力+${itemPower(selEq)}`,
-      tipX + 8, tipY + 32,
-    );
+    if (equippedSel) {
+      ctx2d.fillStyle = '#89a';
+      ctx2d.fillText(`已穿戴 · 战力+${itemPower(selEq)}`, tipX + 8, tipY + 32);
+    } else {
+      const old = state.player.equipped[selEq.type];
+      const delta = old ? itemPowerDelta(selEq, old) : 0;
+      ctx2d.fillStyle = old ? (delta > 0 ? '#4f4' : delta < 0 ? '#f66' : '#aaa') : '#89a';
+      ctx2d.fillText(
+        old ? `战力+${itemPower(selEq)} vs ${old.name} ${delta > 0 ? '+' : ''}${delta}` : `战力+${itemPower(selEq)}`,
+        tipX + 8, tipY + 32,
+      );
+    }
     ctx2d.fillStyle = '#bbb';
     ctx2d.font = '12px monospace';
     let ay = tipY + 50;
@@ -78,7 +85,28 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     }
     ctx2d.fillStyle = '#678';
     ctx2d.font = '11px monospace';
-    ctx2d.fillText('[A] 装备  [U] 卸下', tipX + 8, tipY + tipH - 12);
+    if (equippedSel) {
+      ctx2d.fillText('[U] 卸下 (双击槽也可)', tipX + 8, tipY + tipH - 12);
+    } else {
+      ctx2d.fillText('[A] 装备  [U] 卸下', tipX + 8, tipY + tipH - 12);
+    }
+    // 丢弃按钮 (仅背包选中显示; 下方; 与 uiDispatch 命中几何一致)
+    if (!equippedSel) {
+      const dr = discardBtnRect(selEq.affixes.length);
+      const hvDisc = inRect(mx, my, dr.x, dr.y, dr.w, dr.h);
+      ctx2d.fillStyle = hvDisc ? '#c97' : '#5a3232';
+      ctx2d.fillRect(dr.x, dr.y, dr.w, dr.h);
+      ctx2d.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx2d.lineWidth = 1;
+      ctx2d.strokeRect(dr.x, dr.y, dr.w, dr.h);
+      ctx2d.fillStyle = '#fff';
+      ctx2d.font = 'bold 13px monospace';
+      ctx2d.textAlign = 'center';
+      ctx2d.textBaseline = 'middle';
+      ctx2d.fillText('[右键] 丢弃', dr.x + dr.w / 2, dr.y + dr.h / 2 + 1);
+      ctx2d.textAlign = 'left';
+      ctx2d.textBaseline = 'top';
+    }
   } else {
     ctx2d.fillStyle = '#556';
     ctx2d.font = '12px monospace';
@@ -88,7 +116,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   // 中: 背包 10×10 网格 + 分页
   ctx2d.font = 'bold 14px monospace';
   ctx2d.fillStyle = '#ffd';
-  ctx2d.fillText('背包', EQ_LAYOUT.gridX, EQ_LAYOUT.gridY - 12);
+  ctx2d.fillText('背包 (双击穿戴)', EQ_LAYOUT.gridX, EQ_LAYOUT.gridY - 32);
   const pc = pageCount(owned.length);
   const curPage = Math.min(pageOf(state.equip.sel), pc - 1);
   const cells = cellRects();
@@ -138,7 +166,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   const rx = vw - 360;
   ctx2d.fillStyle = '#ffd';
   ctx2d.font = 'bold 14px monospace';
-  ctx2d.fillText('战斗属性 (D-04 聚合)', rx, EQ_LAYOUT.gridY - 12);
+  ctx2d.fillText('战斗属性 (D-04 聚合)', rx, EQ_LAYOUT.gridY - 32);
   ctx2d.font = '13px monospace';
   const rows: [string, string][] = [
     ['等级', `${state.player.level}`],
@@ -149,22 +177,24 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ['暴击伤害', `+${c.critBonus}%`],
     ['减抗', `${c.shred}`],
     ['易伤', `+${Math.round(c.vuln)}%`],
-    ['抗性', DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(' ')],
   ];
   let ry = EQ_LAYOUT.gridY;
   for (const [k, v] of rows) {
     ctx2d.fillStyle = '#aaa';
     ctx2d.fillText(k, rx, ry);
     ctx2d.fillStyle = '#eee';
-    if (k === '抗性') {
-      // UI-FIX4: 抗性行用 11px 字号 + 逗号分隔, 防止 350 px 文字溢出右边界 120 px
-      ctx2d.save();
-      ctx2d.font = '11px monospace';
-      ctx2d.fillText(DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(', '), rx + 130, ry);
-      ctx2d.restore();
-    } else {
-      ctx2d.fillText(v, rx + 130, ry);
-    }
+    ctx2d.fillText(v, rx + 130, ry);
+    ry += 20;
+  }
+  // 抗性: 每类型一行, 类型名汉化 (2026-08-15)
+  ctx2d.fillStyle = '#aaa';
+  ctx2d.fillText('抗性', rx, ry);
+  ry += 20;
+  for (const t of DAMAGE_TYPES) {
+    ctx2d.fillStyle = '#999';
+    ctx2d.fillText(ELEM_NAMES[t], rx + 16, ry);
+    ctx2d.fillStyle = '#eee';
+    ctx2d.fillText(`${c.res[t]}%`, rx + 130, ry);
     ry += 20;
   }
   ctx2d.fillStyle = '#888';

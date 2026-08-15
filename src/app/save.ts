@@ -77,6 +77,9 @@ export function buildSavePayload(state: GameState): SaveData {
       : SKILL_SLOTS.map(slot => ({ slot, level: skillLevel(slot) })),
     skill_points: rs ? rs.skillPoints : state.player.skillPoints ?? 0,
     exp: rs ? rs.exp : state.player.exp ?? 0,
+    attr: rs ? rs.attr : state.player.combat.attr ?? 0,  // v13 升级属性点 (A-W5 肉鸽写持久快照值; recomputeCombat 聚合清零, 必须显式存)
+    potions_hp: state.player.potions.hp ?? 0,  // v13 药水瓶
+    potions_mp: state.player.potions.mp ?? 0,
   };
 }
 
@@ -95,6 +98,58 @@ export function restorePassivesApp(state: GameState, d: { passives?: Array<[stri
     if (PASSIVE_IDS.includes(id as PassiveId)) state.player.passives[id as PassiveId] = n;
   }
   recomputePassives(state);
+}
+
+/** 读档还原角色完整进度 (continueLastSave / enterTargetCharacter 共用, 2026-08-15)
+ * 覆盖: 职业/位置/HP/MP/朝向/分数/金币/等级/技能点/经验/背包/穿戴/符文/主题/难度/模式/城镇/材料/被动/技能等级/药水/属性点 */
+export function restoreCharacter(state: GameState, d: SaveData): void {
+  bindClass(state, (d.class as ClassId) ?? 'barbarian');
+  state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
+  state.player.pos.x = d.player_x; state.player.pos.y = d.player_y;
+  state.player.hp = d.player_hp; state.player.mp = d.player_mp;
+  state.player.facing.x = d.facing_x; state.player.facing.y = d.facing_y;
+  state.combat.score = d.score; state.player.gold = d.gold ?? 0;
+  state.player.level = d.level ?? 1;
+  state.player.skillPoints = d.skill_points ?? 0;
+  state.player.exp = d.exp ?? 0;
+  state.player.potions = { hp: d.potions_hp ?? 3, mp: d.potions_mp ?? 3 };  // v13 药水瓶
+  const owned = getOwned(state);
+  owned.length = 0;
+  for (const it of d.owned) {
+    owned.push({
+      id: allocEquipmentId(), name: it.name, rarity: it.rarity, type: it.eq_type,
+      pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
+      affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+      pickedUp: true, setName: it.setName,
+    });
+  }
+  state.player.equipped = {};
+  for (const eq of d.equipped ?? []) {
+    state.player.equipped[eq.slot] = {
+      id: allocEquipmentId(), name: eq.item.name, rarity: eq.item.rarity, type: eq.slot,
+      pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
+      affixes: eq.item.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
+      pickedUp: true, setName: eq.item.setName,
+    };
+  }
+  recomputeCombat(state);
+  state.player.combat.attr = d.attr ?? 0;  // v13 属性点: recomputeCombat 会清零, 必须在聚合后回写
+  for (const rr of d.runes ?? []) {
+    const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
+    if (sk) sk.rune = rr.rune;
+  }
+  if (d.theme) state.theme = d.theme;
+  if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
+  state.run.mode = validMapMode(d.mode ?? 'linear');  // A-W2 v10 模式还原
+  if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
+  restoreMaterialsApp(state, d);  // M5 W4 C-401
+  restorePassivesApp(state, d);  // v9 被动技能树
+  for (const sl of d.skill_levels ?? []) {
+    const sk = getSkill(sl.slot);
+    if (sk) sk.level = sl.level;
+  }
+  state.equip.sel = -1;
+  state.equip.selEquipped = null;  // 读档重置装备面板选中 (防跨角色残留)
 }
 
 /** 异步保存 (OPT-002/029): 角色档 + 账号层双写; 失败 toast 提示, 不阻塞 */
@@ -137,11 +192,7 @@ export function continueLastSave(state: GameState): void {
     return loadGame(last);
   }).then(d => {
     loadedD = d;
-    bindClass(state, (d.class as ClassId) ?? 'barbarian');
-    state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
-    if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterialsApp(state, d);  // M5 W4 C-401
-    restorePassivesApp(state, d);  // v9 被动技能树
+    restoreCharacter(state, d);  // 完整还原角色 (职业/背包/穿戴/技能/等级/属性/药水等)
     return loadAccount();
   }).then(a => {
     state.cleared = a.cleared ?? [];
@@ -191,49 +242,7 @@ export function enterTargetCharacter(state: GameState, target: CharacterSummary,
   // 切换角色: 先存当前, 再读目标
   state.currentChar = target.id;
   loadGame(target.id).then(d => {
-    bindClass(state, (d.class as ClassId) ?? 'barbarian');
-    state.player.playTime = d.play_time ?? 0;  // v12 游玩时长还原
-    state.player.pos.x = d.player_x; state.player.pos.y = d.player_y;
-    state.player.hp = d.player_hp; state.player.mp = d.player_mp;
-    state.player.facing.x = d.facing_x; state.player.facing.y = d.facing_y;
-    state.combat.score = d.score; state.player.gold = d.gold ?? 0;
-    state.player.level = d.level ?? 1;
-    state.player.skillPoints = d.skill_points ?? 0;
-    state.player.exp = d.exp ?? 0;
-    const owned = getOwned(state);
-    owned.length = 0;
-    for (const it of d.owned) {
-      owned.push({
-        id: allocEquipmentId(), name: it.name, rarity: it.rarity, type: it.eq_type,
-        pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
-        affixes: it.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-        pickedUp: true, setName: it.setName,
-      });
-    }
-    state.player.equipped = {};
-    for (const eq of d.equipped ?? []) {
-      state.player.equipped[eq.slot] = {
-        id: allocEquipmentId(), name: eq.item.name, rarity: eq.item.rarity, type: eq.slot,
-        pos: { x: 0, y: 0 }, size: { w: 24, h: 24 },
-        affixes: eq.item.affixes.map(a => ({ stat: a.stat, value: a.value, element: a.element })),
-        pickedUp: true, setName: eq.item.setName,
-      };
-    }
-    recomputeCombat(state);
-    for (const rr of d.runes ?? []) {
-      const sk = SKILL_SLOTS.includes(rr.slot) ? getSkill(rr.slot) : null;
-      if (sk) sk.rune = rr.rune;
-    }
-    if (d.theme) state.theme = d.theme;
-    if (DIFFICULTIES.includes(d.difficulty)) state.difficulty = d.difficulty;
-    state.run.mode = validMapMode(d.mode ?? 'linear');  // A-W2 v10 模式还原
-    if (d.town && TOWN_DEFS[d.town as TownId]) state.townId = d.town as TownId;  // M5 W3 C-302
-    restoreMaterialsApp(state, d);  // M5 W4 C-401
-    restorePassivesApp(state, d);  // v9 被动技能树
-    for (const sl of d.skill_levels ?? []) {
-      const sk = getSkill(sl.slot);
-      if (sk) sk.level = sl.level;
-    }
+    restoreCharacter(state, d);  // 完整还原角色 (含 v13 属性点/药水瓶)
     resumeFromSave(state, d);
     state.ui.titleMsg = '';
     void persistNowApp(state);  // 更新 last_char

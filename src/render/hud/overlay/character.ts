@@ -8,6 +8,7 @@ import { getSkill, SKILL_SLOTS, slotDisplay } from '../../../game/skill';
 import { PASSIVE_IDS, PASSIVE_DEFS, passiveLevel } from '../../../game/passive';
 import { RUNE_DEFS } from '../../../game/rune';
 import { DAMAGE_TYPES } from '../../../game/combat';
+import { ELEM_NAMES } from '../../../game/equipment';
 import { CHAR_LAYOUT, charRightX, charSkillRects, charPassiveRects, inRect } from '../../../game/uigrid';
 import { getMouseX, getMouseY } from '../types';
 
@@ -124,5 +125,16 @@ export function drawCharacterPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   }
   ctx2d.fillStyle = '#888';
   ctx2d.font = '12px monospace';
-  ctx2d.fillText(`抗性: ${DAMAGE_TYPES.map(t => `${t}:${c.res[t]}`).join(', ')}`, CHAR_LAYOUT.attrX, ry + 8);
+  // 抗性: 每类型一行, 类型名汉化 (与装备面板一致, 2026-08-15)
+  ctx2d.font = '13px monospace';
+  ctx2d.fillStyle = '#aaa';
+  ctx2d.fillText('抗性', CHAR_LAYOUT.attrX, ry);
+  ry += 20;
+  for (const t of DAMAGE_TYPES) {
+    ctx2d.fillStyle = '#999';
+    ctx2d.fillText(ELEM_NAMES[t], CHAR_LAYOUT.attrX + 16, ry);
+    ctx2d.fillStyle = '#eee';
+    ctx2d.fillText(`${c.res[t]}%`, CHAR_LAYOUT.attrX + 90, ry);
+    ry += 20;
+  }
 }

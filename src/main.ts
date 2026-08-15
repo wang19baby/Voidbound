@@ -16,11 +16,11 @@ import { createEmptyUiState } from './game/state/ui';
 import { createEmptyFxState } from './game/state/fx';
 import { createEmptyEquipState } from './game/state/equip';
 import { portalActive, nearPortal, leaveThroughPortal } from './game/portal';
-import { getActiveWalls, getActiveDecor, resetWorldForMode, EXTRACT_SPAWN, type Wall } from './game/world';
+import { getActiveWalls, getActiveDecor, getActiveLayout, resetWorldForMode, EXTRACT_SPAWN, isOnRoomFloor, nearestRoomFloorPoint, type Wall } from './game/world';
 import { drawSprite, setViewportUniform, setBlendTracked } from './render/draw';
 import { buildRenderResources, resolveSprite, spriteUv } from './render/resources';
 import { drawHud, drawHudOverlay, drawIcon, setMouseReticle, hudDungeonHit, setHudHover } from './render/hud';
-import { drawEquipmentPanel, drawCharacterPanel } from './render/hud/overlay';
+import { drawEquipmentPanel, drawCharacterPanel, drawRuneChoice } from './render/hud/overlay';
 import { makeCooldown } from './game/cooldown';
 import { tryCastSlot, getSwings, assignSkillPoint, chooseRune, rejectRune, skillRune, skillLevel, getSkill, SKILL_SLOTS, SKILL_SPECS, slotDisplay, pickRuneOptions, type SkillSlot } from './game/skill';
 import { RUNE_DEFS, type RuneId } from './game/rune';
@@ -76,7 +76,7 @@ import { pushToast, getToasts, updateToasts } from './game/toast';
 import { deathSummary, deathGoldPenalty, type DeathSummary } from './game/deathSettle';
 import { moveSelection, ngResolve, ngDefault, themeUnlocked, type NewgameSel } from './game/newgame';
 import { bindClass, CLASS_DEFS, CLASS_IDS, CLASS_SPRITES, type ClassId } from './game/class';
-import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, normKey, type Keybinds } from './game/keybind';
+import { loadKeybinds, saveKeybinds, resetKeybinds, keyMatch, skillSlotByKey, normKey, keyLabel, type Keybinds } from './game/keybind';
 // TS-008: 版本号来自 package.json (esbuild JSON loader 内联, 树摇后仅留 version)
 import { version as GAME_VERSION } from '../package.json';
 import { DAMAGE_TYPE_COLORS } from './game/combat';
@@ -307,7 +307,7 @@ const frameCtx: FrameCtx = {
   setHudHover, hudDungeonHit, isCloseConfirmOpen,
   confirmCloseSave, confirmCloseCancel,
   handleHudClick, tryCastSlot, notifyCastFail,
-  handleUiClick: (ctx) => handleUiClickDispatch(buildUiCtx(ctx.state, ctx.mx, ctx.my, uiCallbacks)),
+  handleUiClick: (ctx) => handleUiClickDispatch(buildUiCtx(ctx.state, ctx.mx, ctx.my, uiCallbacks, ctx.btn ?? 'LMB')),
   setMouseReticle, drawHud, drawHudOverlay, drawSettingsPanel,
   mouseAimDirection, formatTime, DIFFICULTY_MODS,
 };
@@ -467,10 +467,16 @@ if (keyMatch(e, kb.dodge, { repeat: false })) {
   }
   return;
 }
-// 统一交互键 (A 收敛): 地牢门旁按交互键 → 面板 [回城/继续] (原 V 键退役)
+// 统一交互键 (A 收敛): 地牢门旁按交互键 → 已通关直达结算 (跳过二次确认); 未通关 → 面板 [回城/继续]
 if (keyMatch(e, kb.interact) && state.screen === 'dungeon' && portalActive(state) && nearPortal(state)) {
-  setScreen(state, 'portal');
-  inf('ui', 'portal 交互 → [回城/继续]');
+  if (state.run.bossKilled) {
+    leaveThroughPortal(state);
+    setScreen(state, 'victory');
+    inf('ui', 'portal 交互 → 已通关, 直达结算 (victory)');
+  } else {
+    setScreen(state, 'portal');
+    inf('ui', 'portal 交互 → [回城/继续]');
+  }
   return;
 }
 // 技能键 (键位可改, 默认 Q=火球 F=多重火球(原W槽) E=回血 R=大招)
@@ -820,11 +826,15 @@ function loopImpl(now: number) {
   // v12: 累计游玩时长 (loopImpl 只在游戏屏运行 → 只计实际游玩时间)
   state.player.playTime += dt;
 
-  // v4 首局引导: 本次运行首次进入 dungeon 激活 3 气泡; 计时自动推进
+  // v4 首局引导: 本次运行首次进入 dungeon 激活 3 气泡; 已持久化完成过 → 不再弹 (localStorage)
   if (state.screen === 'dungeon' && !state.tutorShown) {
     state.tutorShown = true;
-    state.tutorStep = 0;
-    state.tutorT = 0;
+    let tutored = false;
+    try { tutored = localStorage.getItem('vb_tutor_done_v1') !== null; } catch { /* localStorage 不可用 */ }
+    if (!tutored) {
+      state.tutorStep = 0;
+      state.tutorT = 0;
+    }
   }
   if (state.screen === 'dungeon' && state.tutorStep >= 0 && state.tutorStep < 3) {
     state.tutorT += dt;
@@ -832,6 +842,10 @@ function loopImpl(now: number) {
       state.tutorStep++;
       state.tutorT = 0;
     }
+  }
+  // 引导完成 (自动/点击/按键跳过后) → 持久化, 后续进入不再显示
+  if (state.tutorStep >= 3) {
+    try { localStorage.setItem('vb_tutor_done_v1', '1'); } catch { /* localStorage 不可用 */ }
   }
 
   // 设置滑条拖动逻辑已搬到 loop 函数开头 (v3 鼠标化, 跨屏通用)
@@ -846,7 +860,9 @@ function loopImpl(now: number) {
 
   // 暂停/装备面板/结算屏: 跳过游戏逻辑, 只渲染 (遮罩/面板画在 drawFrameToScreen)
   if (state.screen === 'pause' || state.screen === 'death' || state.screen === 'victory'
-    || ((state.screen === 'equipment' || state.screen === 'character') && state.mode !== 'town')) {
+    || ((state.screen === 'equipment' || state.screen === 'character') && state.mode !== 'town')
+    // 符文三选一模态 (战斗内 Ctrl+1..6 加点触发, screen 仍为 dungeon): 冻结游戏逻辑, 只渲染 overlay
+    || (state.equip.runeChoice && state.mode !== 'town')) {
     drawFrame(frameCtx);
     mouse.reset();
     return; // 包装器统一 rAF
@@ -855,8 +871,9 @@ function loopImpl(now: number) {
   // 城镇场景: 只移动+绘制 (战斗全部冻结)
   if (state.mode === 'town') {
     // 修复: 城镇屏鼠标点击分发 (line 723 mouse.sync 已生效; closeConfirm 拦截统一在 main.ts loop 顶部 early return 处理)
-    if (mouse.wasClicked('LMB')) {
-      handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks));
+    if (mouse.wasClicked('LMB') || mouse.wasClicked('RMB')) {
+      const btn = mouse.wasClicked('LMB') ? 'LMB' : 'RMB';
+      handleUiClickDispatch(buildUiCtx(state, mouse.state().pos.x, mouse.state().pos.y, uiCallbacks, btn));
     }
     // 城镇内装备/角色信息面板: 冻结移动, 绘制城镇底 + overlay 面板
     if (state.screen === 'equipment' || state.screen === 'character') {
@@ -864,6 +881,8 @@ function loopImpl(now: number) {
       drawTownFrame(townCtx);
       if (state.screen === 'equipment') drawEquipmentPanel(hudCtx, state, hudCanvas.width);
       else drawCharacterPanel(hudCtx, state, hudCanvas.width);
+      // 城镇内符文三选一 (角色面板加点或锻造触发): overlay 置顶绘制
+      if (state.equip.runeChoice) drawRuneChoice(hudCtx, state, hudCanvas.width, hudCanvas.height);
       mouse.reset();
       return;
     }
@@ -913,6 +932,8 @@ function loopImpl(now: number) {
     state.player.pos.x = Math.max(0, Math.min(state.viewport.w - state.player.size.w, state.player.pos.x));
     state.player.pos.y = Math.max(0, Math.min(state.viewport.h - state.player.size.h, state.player.pos.y));
     drawTownFrame(townCtx);
+    // 城镇锻造符文三选一 (townPanel 已关闭, screen='town'): overlay 置顶绘制
+    if (state.equip.runeChoice) drawRuneChoice(hudCtx, state, hudCanvas.width, hudCanvas.height);
     mouse.reset();
     return; // 包装器统一 rAF
   }
@@ -936,13 +957,16 @@ function loopImpl(now: number) {
   else state.player.flipDir = 'N';
   updatePlayer(state, dir, dt);
   state.player.idleT += dt;
-  // C (P2-8): 探索度 — 标记玩家所在 3x3 的 64px 块
+  // C (P2-8): 探索度 — 标记当前可见视野 (相机视口) 内的 64px 块, 迷雾与所见区域一致
+  // (房间制刷新后房间达 1280px, 原 3×3 环仅 192px 导致房间内怪物几乎总在探索环外不显示)
   {
     const BX = 64;
-    const px = Math.floor((state.player.pos.x + state.player.size.w / 2) / BX);
-    const py = Math.floor((state.player.pos.y + state.player.size.h / 2) / BX);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) state.ui.explored.add(`${px + dx},${py + dy}`);
+    const cx0 = Math.max(0, Math.floor(state.camera.x / BX));
+    const cy0 = Math.max(0, Math.floor(state.camera.y / BX));
+    const cx1 = Math.min(Math.ceil(state.world.w / BX), Math.floor((state.camera.x + state.viewport.w) / BX));
+    const cy1 = Math.min(Math.ceil(state.world.h / BX), Math.floor((state.camera.y + state.viewport.h) / BX));
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) state.ui.explored.add(`${cx},${cy}`);
     }
   }
   updateCamera(state);
@@ -1083,6 +1107,20 @@ function loopImpl(now: number) {
           ? { x: state.player.pos.x + state.player.size.w / 2, y: state.player.pos.y + state.player.size.h / 2 }
           : { x: WORLD_W / 2, y: WORLD_H / 2 };
         const boss = spawnMonster(state, bossType, anchor);
+        // A-W6 房内防御: Boss 落点非地板(虚空/墙) → 拉回最近地板点
+        if (state.run.mode === 'linear' || state.run.mode === 'rogue') {
+          const layout = getActiveLayout();
+          if (layout) {
+            const bcx = boss.pos.x + boss.size.w / 2;
+            const bcy = boss.pos.y + boss.size.h / 2;
+            if (!isOnRoomFloor(layout, bcx, bcy)) {
+              const fp = nearestRoomFloorPoint(layout, bcx, bcy);
+              boss.pos.x = fp.x - boss.size.w / 2;
+              boss.pos.y = fp.y - boss.size.h / 2;
+              inf('world', 'Boss 落点非地板, 拉回最近地板点');
+            }
+          }
+        }
         state.fx.monsters.push(boss);
         state.run.bossAlive = true;
         const bossName = MONSTER_DEFS[bossType].type;
@@ -1108,7 +1146,7 @@ function loopImpl(now: number) {
           pushToast(state, `传承: ${slotDisplay(slot)} → ${RUNE_DEFS[r].name}`, '#c9aaff');
         }
       }
-      pushToast(state, 'Boss 已击败 — 传送门已开启 (V 回城结算)', '#ffd64a');
+      pushToast(state, `Boss 已击败 — 传送门已开启 (${keyLabel(loadKeybinds().interact)} 回城结算)`, '#ffd64a');
       inf('ui', `VICTORY(待结算): ${state.run.timeSec.toFixed(1)}s (${state.difficulty}) — 等待门交互`);
     }
   }

@@ -417,14 +417,15 @@ function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
     return true;
   }
   const total = getOwned(state).length;
-  if (k === 'arrowup') { state.equip.sel = moveGridSel(state.equip.sel, 'up', total); return true; }
-  if (k === 'arrowdown') { state.equip.sel = moveGridSel(state.equip.sel, 'down', total); return true; }
-  if (k === 'arrowleft') { state.equip.sel = moveGridSel(state.equip.sel, 'left', total); return true; }
-  if (k === 'arrowright') { state.equip.sel = moveGridSel(state.equip.sel, 'right', total); return true; }
-  if (k === 'pageup') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), -1, total), total); return true; }
-  if (k === 'pagedown') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), 1, total), total); return true; }
+  if (k === 'arrowup') { state.equip.sel = moveGridSel(state.equip.sel, 'up', total); state.equip.selEquipped = null; return true; }
+  if (k === 'arrowdown') { state.equip.sel = moveGridSel(state.equip.sel, 'down', total); state.equip.selEquipped = null; return true; }
+  if (k === 'arrowleft') { state.equip.sel = moveGridSel(state.equip.sel, 'left', total); state.equip.selEquipped = null; return true; }
+  if (k === 'arrowright') { state.equip.sel = moveGridSel(state.equip.sel, 'right', total); state.equip.selEquipped = null; return true; }
+  if (k === 'pageup') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), -1, total), total); state.equip.selEquipped = null; return true; }
+  if (k === 'pagedown') { state.equip.sel = pageStart(flipPage(pageOf(state.equip.sel), 1, total), total); state.equip.selEquipped = null; return true; }
   const selEq = getOwned(state)[state.equip.sel];
   if (k === 'a' || k === 'enter') {
+    if (state.equip.selEquipped !== null) return true;  // 已穿戴槽不响应装备键
     if (selEq && equipItem(state, selEq)) {
       const col = RARITY_COLORS[selEq.rarity].map(c => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
       pushToast(state, `已穿戴 ${selEq.name}`, `#${col}`);
@@ -435,8 +436,11 @@ function handleEquipmentKey(state: GameState, e: KeyboardEvent): boolean {
     return true;
   }
   if (k === 'u') {
-    const slot = selEq ? selEq.type : undefined;
-    if (slot && unequipSlot(state, slot)) pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
+    const slot = state.equip.selEquipped ?? (selEq ? selEq.type : undefined);
+    if (slot && unequipSlot(state, slot)) {
+      pushToast(state, `已卸下: ${EQUIP_NAMES[slot]}`, '#9cf');
+      state.equip.selEquipped = null;
+    }
     return true;
   }
   return true;
