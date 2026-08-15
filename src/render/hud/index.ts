@@ -87,8 +87,8 @@ export function drawHudOverlay(
 
   // === 右上: 金币/积分/击杀/难度 + 跑局进度 ===
   drawTopRightStats(ctx2d, state, vw);
-  // 小地图 (OPT-024): 战斗场景右上, 现有 walls/monsters 降采样
-  drawMinimap(ctx2d, state, vw);
+  // 小地图 (OPT-024): 右下角, 现有 walls/monsters 降采样
+  drawMinimap(ctx2d, state, vw, vh);
   // 低血量红晕 (OPT-026): HP < 25% 时边缘渐红
   drawLowHpVignette(ctx2d, state, vw, vh);
   // 精英名牌 (内容扩充)

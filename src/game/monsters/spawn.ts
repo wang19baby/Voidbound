@@ -8,7 +8,7 @@
 import type { GameState } from '../state';
 import type { Monster, MonsterType } from './types';
 import { THEME_MONSTER_POOL, RUN_POOL_SIZE, AURA_TYPES } from './defs';
-import { getActiveWalls, linearBranchRooms, linearBranchRoomsAll, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN } from '../world';
+import { getActiveWalls, buildLinearLayout, linearBranchRooms, linearBranchRoomsAll, chunkDist, mulberry32, WORLD_W, WORLD_H, CHUNK_SIZE, EXTRACT_SPAWN, BLOCK } from '../world';
 import { randomElement } from '../element';
 import { inf } from '../../util/log';
 import { spawnMonster } from '../monster';
@@ -88,36 +88,77 @@ function scatterAnchor(state: GameState, mode: MapMode, rand: () => number): { x
   return { x: WORLD_W - 1024, y: WORLD_H / 2 };
 }
 
-/** 按当前主题池刷满一局地牢 (OPT-012): 清场 → RUN_POOL_SIZE 只小怪, 重置跑局计数
- *  A-W2/A-W5 地图规则: 营地按地标放置 + 密度带散怪补满; 全流程种子化 (state.run.seed) */
+/** 按当前主题池刷满一局地牢 (OPT-012): 清场 → 召主题 Boss, 重置跑局计数
+ *  A-W2/A-W5 地图规则: 营地按地标放置 + 密度带散怪补满; 全流程种子化 (state.run.seed)
+ *  A-W6 房间化 (普通/肉鸽): 蛇形大房间链, 每房 1 营地 + 出口守卫 + 游荡者 →
+ *    1-2 屏必遇敌; 数量由房间生成 (≈76), 清场后 Boss 在玩家附近降临 (main.ts) */
 export function spawnRunPool(state: GameState): void {
   state.fx.monsters.length = 0;
-  // Review (地图审查 P2): 营地/补散怪出生避墙需要当前局墙 — resetWorldForMode 刚清缓存, 先按出生点生成
-  state.world.walls = getActiveWalls(state, 2);
   const pool = THEME_MONSTER_POOL[state.theme];
   const mode = state.run.mode ?? 'linear';
   const rand = mulberry32(state.run.seed ?? 1);
   const pick = () => pool[Math.floor(rand() * pool.length)];
 
-  // 地标营地 (按地图规则, 非玩家锚点)
-  for (const a of campAnchors(state, mode, rand)) {
-    if (a.type === 'treasure') {
-      // 宝藏密室: 2 件掉落 (dropLoot 概率掉落, 多调几次保证 ≥1)
-      for (let k = 0; k < 3; k++) dropLoot(state, a.x, a.y);
-    } else {
-      const members = spawnCamp(state, { x: a.x, y: a.y, type: a.type }, pick);
-      for (const m of members) state.fx.monsters.push(m);
+  if (mode === 'linear' || mode === 'rogue') {
+    // A-W6: 房间化池 — 布局种子化, 玩家出生首房中心
+    const layout = buildLinearLayout(state.run.seed ?? 1);
+    // 2026-08-15: 地图收缩 — 世界尺寸 = 房间布局外廓, 消除房间外的无用空区 (小地图即房间区)
+    state.world.w = Math.max(...layout.rooms.map(r => r.x + r.w));
+    state.world.h = Math.max(...layout.rooms.map(r => r.y + r.h));
+    const r0 = layout.rooms[0];
+    state.player.pos = {
+      x: r0.x + r0.w / 2 - state.player.size.w / 2,
+      y: r0.y + r0.h / 2 - state.player.size.h / 2,
+    };
+    // Review (地图审查 P2): 营地/补散怪出生避墙需要当前局墙 — 先按出生点生成
+    state.world.walls = getActiveWalls(state, 2);
+    const last = layout.rooms.length - 1;
+    for (let i = 0; i < layout.rooms.length; i++) {
+      const room = layout.rooms[i];
+      const cx = room.x + room.w / 2;
+      const cy = room.y + room.h / 2;
+      const isLast = i === last;
+      // 宝藏室 (每 3 房一间; 末房 = 决战/藏宝室): 无营地, 守卫 + 掉落
+      if ((i % 3 === 2 && !isLast) || isLast) {
+        for (let k = 0; k < 3; k++) dropLoot(state, cx, cy);
+        if (!isLast) {
+          const ex = layout.doors[i];
+          for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnMonster(state, pick(), { x: ex.ax, y: ex.ay }));
+        }
+      } else {
+        // 营地 (聚簇 6 只) + 出口守卫 (门口内侧 3 只) — 进房 1-2 屏必遇敌
+        const members = spawnCamp(state, { x: cx, y: cy, type: CAMP_TYPES[i % CAMP_TYPES.length] }, pick);
+        for (const m of members) state.fx.monsters.push(m);
+        const ex = layout.doors[i];
+        for (let g = 0; g < 3; g++) state.fx.monsters.push(spawnMonster(state, pick(), { x: ex.ax, y: ex.ay }));
+      }
+      // 游荡者 (随机房内一点)
+      state.fx.monsters.push(spawnMonster(state, pick(), {
+        x: room.x + 4 * BLOCK + rand() * (room.w - 8 * BLOCK),
+        y: room.y + 4 * BLOCK + rand() * (room.h - 8 * BLOCK),
+      }));
+    }
+  } else {
+    // gauntlet / extract: 地标营地 + 密度带散怪补足 RUN_POOL_SIZE
+    state.world.walls = getActiveWalls(state, 2);
+    for (const a of campAnchors(state, mode, rand)) {
+      if (a.type === 'treasure') {
+        // 宝藏密室: 2 件掉落 (dropLoot 概率掉落, 多调几次保证 ≥1)
+        for (let k = 0; k < 3; k++) dropLoot(state, a.x, a.y);
+      } else {
+        const members = spawnCamp(state, { x: a.x, y: a.y, type: a.type }, pick);
+        for (const m of members) state.fx.monsters.push(m);
+      }
+    }
+    // 密度带散怪补足 RUN_POOL_SIZE (全图抽样, 非玩家周围)
+    while (state.fx.monsters.length < RUN_POOL_SIZE) {
+      const at = scatterAnchor(state, mode, rand);
+      state.fx.monsters.push(spawnMonster(state, pick(), at));
     }
   }
 
-  // 密度带散怪补足 RUN_POOL_SIZE (全图抽样, 非玩家周围)
-  while (state.fx.monsters.length < RUN_POOL_SIZE) {
-    const at = scatterAnchor(state, mode, rand);
-    state.fx.monsters.push(spawnMonster(state, pick(), at));
-  }
-
-  state.run.total = RUN_POOL_SIZE;
-  state.run.alive = RUN_POOL_SIZE;
+  state.run.total = state.fx.monsters.length;
+  state.run.alive = state.fx.monsters.length;
   state.run.bossAlive = false;
   state.run.bossKilled = false;
   state.run.victoryShown = false;
@@ -130,9 +171,9 @@ export function spawnRunPool(state: GameState): void {
   // M3 元素地图: 50% 概率本局整体元素染色 (地板/墙/装饰 + Boss 变体)
   state.run.element = rand() < 0.5 ? randomElement() : undefined;
   state.run.t0 = performance.now();
-  inf('world', `run pool spawned: ${RUN_POOL_SIZE} (theme=${state.theme}, mode=${mode}, seed=${state.run.seed ?? 'default'})`);
+  inf('world', `run pool spawned: ${state.fx.monsters.length} (theme=${state.theme}, mode=${mode}, seed=${state.run.seed ?? 'default'})`);
   void import('../../util/jslog').then(({ jsLog }) =>
-    jsLog(`[map] run spawn theme=${state.theme} mode=${mode} pool=${RUN_POOL_SIZE} seed=${state.run.seed ?? 'default'} element=${state.run.element ?? 'none'} walls=${state.world.walls.length}`),
+    jsLog(`[map] run spawn theme=${state.theme} mode=${mode} pool=${state.fx.monsters.length} seed=${state.run.seed ?? 'default'} element=${state.run.element ?? 'none'} walls=${state.world.walls.length}`),
   );
 }
 

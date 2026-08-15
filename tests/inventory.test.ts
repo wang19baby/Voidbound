@@ -116,7 +116,7 @@ function makeItem(affixes: Affix[], type: EquipType = 'weapon'): Equipment {
 
 // === 6. BACKPACK_CAP 常量 ===
 {
-  eq('BACKPACK_CAP=20', BACKPACK_CAP, 20);
+  eq('BACKPACK_CAP=100', BACKPACK_CAP, 100);
 }
 
 // === 7. 兼容层: 验证 barrel re-export 完整性 ===

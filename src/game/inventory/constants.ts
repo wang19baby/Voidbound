@@ -52,8 +52,8 @@ export const EQUIP_NAMES: Record<EquipType, string> = {
   weapon: '武器', armor: '护甲', charm: '护符', ring: '戒指',
 };
 
-/** 背包容量 (OPT-014): 满则地上装备不拾取 */
-export const BACKPACK_CAP = 20;
+/** 背包容量 (OPT-014): 满则地上装备不拾取 — 10×10 网格 (2026-08-15 由 20 扩至 100) */
+export const BACKPACK_CAP = 100;
 
 /** 装备类型掉落权重 (总数求和) */
 export const EQUIP_TYPE_WEIGHTS: Array<[EquipType, number]> = [

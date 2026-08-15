@@ -12,7 +12,7 @@
 import type { GameState } from '../state';
 import type { Monster, MonsterType } from './types';
 import type { AuraType } from './defs';
-import { AURA_RADIUS, MONSTER_DEFS, levelMonsterScale, rollElite, LORD_SIZE_SCALE, LORD_HP_MULT, ELITE_HP_MULT, ENHANCED_HP_MULT, LORD_DMG_MULT, ELITE_DMG_MULT, ENHANCED_DMG_MULT, LORD_CHANCE, ENHANCED_CHANCE } from './defs';
+import { AURA_RADIUS, MONSTER_DEFS, levelMonsterScale, rollElite, LORD_SIZE_SCALE, MONSTER_SIZE_SCALE, LORD_HP_MULT, ELITE_HP_MULT, ENHANCED_HP_MULT, LORD_DMG_MULT, ELITE_DMG_MULT, ENHANCED_DMG_MULT, LORD_CHANCE, ENHANCED_CHANCE } from './defs';
 import { ELEMENT_DEFS, randomElement, type ElementId } from '../element';
 import { rollMech, SHIELD_UP_T, SHIELD_DOWN_T, EXPLODE_HP_THRESHOLD, EXPLODE_DMG_MULT, CURSE_DURATION, FREEZE_DURATION, SPIRAL_BULLETS, SPIRAL_TURNS, SPIRAL_CD, LASER_WINDUP, LASER_CD, LASER_DMG_MULT, LASER_WIDTH, NOVA_BULLETS, NOVA_CD, SUMMON_ELITES_CD, SUMMON_ELITES_COUNT, ENRAGE_SPEED_MULT, DEATH_EXPLODE_RADIUS, DEATH_EXPLODE_DMG_MULT, DEATH_SPLIT_COUNT, DEATH_POOL_RADIUS, DEATH_POOL_DPS, DEATH_POOL_T, rollBossSkill3 } from '../mech';
 import { rollMoveAI, MOVE_AIS, LEAP_CD, LEAP_WINDUP, LEAP_SPEED, LEAP_DMG_MULT, LEAP_RANGE, BURROW_CD, BURROW_TIME, BURROW_SPEED_MULT, BURROW_EXIT_DMG_MULT, FLEE_HP_THRESHOLD, FLEE_SPEED_MULT, STRAFE_RADIUS, STRAFE_SPEED_MULT } from '../moveai';
@@ -69,13 +69,14 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
   const skill3: import('../mech').BossSkill3 | undefined = def.boss ? rollBossSkill3() : undefined;
   const element: ElementId | undefined = def.element ?? (isLord || def.boss ? randomElement() : undefined);
   const hue = element ? ELEMENT_DEFS[element].hue : 0;
-  const sizeScale = isLord ? LORD_SIZE_SCALE : 1;
+  const sizeScale = (isLord ? LORD_SIZE_SCALE : 1) * MONSTER_SIZE_SCALE;
   const baseHp = Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * lvScale);
   const hp = Math.round(
     baseHp * (elite && !isLord ? ELITE_HP_MULT : 1) * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1),
   );
   const center = at ?? { x: state.player.pos.x, y: state.player.pos.y };
-  const ringR = at ? 80 : 600;
+  // 2026-08-15: 锚点环 80→150px — 玩家/怪物体型加倍后, 80px 环会与 128px 玩家出生/锚点重叠
+  const ringR = at ? 150 : 600;
   // 校验墙列表: 玩家附近墙 + at 锚点周围 3×3 chunk 墙 (锚点可能远离玩家, 远处落点须验周围墙)
   const checkWalls = [...state.world.walls];
   if (at) {
@@ -88,7 +89,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
       }
     }
   }
-  // 半径 600-1200 px (或营地聚簇 80px), 超出 aggroRange, 不立刻追杀
+  // 半径 600-1200 px (或营地聚簇 150px, 超出 aggroRange, 不立刻追杀)
   for (let i = 0; i < 30; i++) {
     const a = Math.random() * Math.PI * 2;
     const r = ringR + Math.random() * (at ? 120 : 600);
@@ -161,7 +162,7 @@ export function spawnMonster(state: GameState, type: MonsterType, at?: { x: numb
     maxHp: Math.round(def.hp * DIFFICULTY_MODS[state.difficulty].hpMult * (isLord ? ELITE_HP_MULT * LORD_HP_MULT : elite ? ELITE_HP_MULT : 1) * (enhanced ? ENHANCED_HP_MULT : 1)),
     phase: 1,
     burnT: 0, burnDps: 0, burnAccum: 0,
-    size: { w: def.size.w * (isLord ? LORD_SIZE_SCALE : 1), h: def.size.h * (isLord ? LORD_SIZE_SCALE : 1) },
+    size: { w: def.size.w * sizeScale, h: def.size.h * sizeScale },
     wanderTarget: { x: center.x, y: center.y - 1000 },
     wanderTimer: 3,
     attackCd: 0,

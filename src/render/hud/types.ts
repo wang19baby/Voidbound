@@ -9,6 +9,8 @@ export const HUD_PAD = 16;
 export const SLOT_SIZE = 44;
 export const SLOT_GAP = 10;
 export const LOG_LINES = 6;
+/** 右下角小地图面板纵向占用 (HUD_PAD + 标题20 + 地图84 + 探索标签24 + 间距6) — 日志面板上移避让 */
+export const HUD_MINIMAP_RESERVE_H = 150;
 
 // === 战斗 HUD 可点击按钮布局 (hud 绘制与 main 命中共用) ===
 export interface HudBtn { key: string; x: number; y: number; w: number; h: number; }

@@ -180,8 +180,8 @@ inf('input', 'mouse attached (LMB/RMB/MMB + position)');
 const fireballCd = makeCooldown();
 const state = {
   player: {
-    pos: { x: WORLD_W / 2 - 32, y: WORLD_H / 2 - 32 },
-    size: { w: 64, h: 64 },
+    pos: { x: WORLD_W / 2 - 43, y: WORLD_H / 2 - 43 },
+    size: { w: 85, h: 85 }, // 2026-08-15: 128 → 2/3 (缩小1/3 ≈ 85); 开局前临时值, spawnRunPool/town 重定位
     speed: 200,
     hp: 100,
     mp: 100,
@@ -430,6 +430,9 @@ listCharacters().then(list => {
 
 
 window.addEventListener('keydown', (e) => {
+// 修复: Tab 默认焦点遍历会让 webview 窗口失焦 → autoPauseOnBlur 把刚打开的装备面板顶成
+// 暂停菜单 (城镇因 mode==='town' 不自动暂停, 故地牢里才复现). 阻止默认行为, Tab 仅作游戏内"打开背包"键
+if (e.key === 'Tab') e.preventDefault();
 // US-026 屏路由集中器: 9 段 if-else + 4 个 modal 拦截 → 单点 dispatch
 // 返回 true 表示 action 已消费, 调用方应 return; false 表示透传到 game actions
 if (handleScreenKey(state, e, screenKeyCtx)) return;
@@ -1075,8 +1078,9 @@ function loopImpl(now: number) {
         inf('world', `extract: FINAL boss ${bossName} (${state.run.theme})`);
       } else if (!isExtract) {
         const bossType = THEME_BOSS[state.run.theme];
+        // A-W6: 普通/肉鸽清场后 Boss 在玩家附近降临 (不再 16 屏外右端)
         const anchor = (state.run.mode === 'linear' || state.run.mode === 'rogue')
-          ? { x: WORLD_W - 320, y: WORLD_H / 2 }
+          ? { x: state.player.pos.x + state.player.size.w / 2, y: state.player.pos.y + state.player.size.h / 2 }
           : { x: WORLD_W / 2, y: WORLD_H / 2 };
         const boss = spawnMonster(state, bossType, anchor);
         state.fx.monsters.push(boss);

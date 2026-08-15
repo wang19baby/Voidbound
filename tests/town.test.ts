@@ -2,7 +2,7 @@
 // 运行: npm test
 
 import { buyPotion, genMerchantStock, genMysteryStock, POTION_PRICES, warehouseStore, warehouseTake, WAREHOUSE_CAP, unlockedTown, unlockedTowns, townNpcs, TOWN_DEFS, rerollOwned, runeForgePay, type PotionBuySrc, type WarehouseSrc } from '../src/game/town';
-import { emptyMaterials, addMaterial, type Equipment, type EquipType } from '../src/game/equipment';
+import { emptyMaterials, addMaterial, BACKPACK_CAP, type Equipment, type EquipType } from '../src/game/equipment';
 
 let failures = 0;
 function check(name: string, cond: boolean): void {
@@ -101,7 +101,7 @@ eq('MP 药水 30 金', POTION_PRICES.mp, 30);
 }
 {
   // 背包满: 拒绝取回
-  const full = Array.from({ length: 20 }, (_, i) => mkEq(`b${i}`));
+  const full = Array.from({ length: BACKPACK_CAP }, (_, i) => mkEq(`b${i}`));
   const s = mkWh(full, [mkEq('仓件')]);
   check('背包满拒取', !warehouseTake(s, 0));
   eq('仓库仍 1', s.warehouse.length, 1);

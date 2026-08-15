@@ -1,9 +1,9 @@
 // UI 网格纯函数 (C-502/C-501 基建): 分页/选格/面板布局常量
 // 纯数字模块, 供 draw(hud) 与 hit-test(main) 共用, 防几何漂移
 
-export const GRID_COLS = 4;
-export const GRID_ROWS = 5;
-export const GRID_PAGE_SIZE = GRID_COLS * GRID_ROWS; // 20
+export const GRID_COLS = 10;
+export const GRID_ROWS = 10;
+export const GRID_PAGE_SIZE = GRID_COLS * GRID_ROWS; // 100 (10×10)
 
 /** 总数 → 页数 (空时 1 页) */
 export function pageCount(total: number): number {
@@ -61,38 +61,42 @@ export function inRect(mx: number, my: number, x: number, y: number, w: number, 
 export const EQ_LAYOUT = {
   titleY: 40,
   titleX: 130, // 避开左上关闭按钮 (btnClose 20..116)
-  // 左: 4 槽位
+  // 左: 穿戴 4 槽 (2×2 网格, 2026-08-15 重设计)
   slotX: 40,
   slotY: 84,
-  slotSize: 54,
-  slotGap: 14,
-  // 中: 背包网格
+  slotSize: 60,
+  slotGap: 18,
+  // 选中装备信息面板 (穿戴区下方, 不碰中列背包网格)
+  tipX: 40,
+  tipY: 268,
+  tipW: 260,
+  // 中: 背包网格 (10×10, 500×500, 右下 ≈ (800, 584), 不碰右列统计)
   gridX: 300,
   gridY: 84,
-  cellSize: 46,
-  cellGap: 8,
+  cellSize: 44,
+  cellGap: 6,
   // 底部按钮
   btnY: 620,
   btnEquip: { x: 300, y: 620, w: 110, h: 32 },
   btnUnequip: { x: 430, y: 620, w: 110, h: 32 },
-  // 右上关闭 + 网格右侧翻页 (鼠标路径)
+  btnPrev: { x: 570, y: 620, w: 96, h: 32 },
+  btnNext: { x: 700, y: 620, w: 96, h: 32 },
+  // 右上关闭 (鼠标路径)
   btnClose: { x: 20, y: 20, w: 96, h: 34 },
-  btnPrev: { x: 520, y: 84, w: 96, h: 28 },
-  btnNext: { x: 520, y: 118, w: 96, h: 28 },
-  // tooltip 区
-  tipY: 660,
 };
 
-/** 槽位绘制几何: 返回 4 个 {x,y} */
+/** 槽位绘制/命中几何: 返回 4 个 {x,y} (2×2: 武左上/甲右上/符左下/戒右下, 与 EQUIP_SLOTS 顺序一致) */
 export function slotRects(): Array<{ x: number; y: number }> {
-  const out: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < 4; i++) {
-    out.push({ x: EQ_LAYOUT.slotX, y: EQ_LAYOUT.slotY + i * (EQ_LAYOUT.slotSize + EQ_LAYOUT.slotGap) });
-  }
-  return out;
+  const g = EQ_LAYOUT.slotSize + EQ_LAYOUT.slotGap;
+  return [
+    { x: EQ_LAYOUT.slotX, y: EQ_LAYOUT.slotY },
+    { x: EQ_LAYOUT.slotX + g, y: EQ_LAYOUT.slotY },
+    { x: EQ_LAYOUT.slotX, y: EQ_LAYOUT.slotY + g },
+    { x: EQ_LAYOUT.slotX + g, y: EQ_LAYOUT.slotY + g },
+  ];
 }
 
-/** 背包格绘制/命中几何: 返回 { x, y, col, row }[] (4×5) */
+/** 背包格绘制/命中几何: 返回 { x, y, col, row }[] (10×10) */
 export function cellRects(): Array<{ x: number; y: number; col: number; row: number }> {
   const out: Array<{ x: number; y: number; col: number; row: number }> = [];
   for (let row = 0; row < GRID_ROWS; row++) {

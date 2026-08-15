@@ -20,6 +20,9 @@ export const FIREBALL_DAMAGE = 25;   // 火
 export const MELEE_DAMAGE = 50;      // 物理
 export const ULTIMATE_DAMAGE = 70;   // 暗影
 
+/** 怪物全局体型倍率 (2026-08-15: 2× 增大一倍, 与小房间+大角色配套) */
+export const MONSTER_SIZE_SCALE = 2;
+
 export const MONSTER_DEFS: Record<MonsterType, MonsterDef> = {
   bat:      { type: 'bat',      sprite: 'bat',      size: { w: 32, h: 32 }, hp: 30,  speed: 80,  aggroRange: 200, attackRange: 28, contactDmg: 5,  score: 10, res: { fire: -20 } },
   slime:    { type: 'slime',    sprite: 'slime',    size: { w: 32, h: 32 }, hp: 60,  speed: 40,  aggroRange: 160, attackRange: 30, contactDmg: 8,  score: 15, res: { physical: 10 } },

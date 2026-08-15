@@ -1,8 +1,9 @@
 // presentation/worldDraw/floor.ts — 地板 / 墙 / 装饰 (P1.2)
 
 import type { DrawCtx } from './types';
-import { WORLD_W, WORLD_H, worldToScreen } from '../../game/state';
+import { worldToScreen } from '../../game/state';
 import { ELEMENT_DEFS } from '../../game/element';
+import { getActiveLayout, BLOCK } from '../../game/world';
 import { drawSprite } from '../../render/draw';
 
 /** 地板 + 墙 + 装饰 静态背景层 */
@@ -19,12 +20,28 @@ export function drawFloor(ctx: DrawCtx): void {
   const FLOOR_FULL = 384;
   const t0x = Math.max(0, Math.floor(state.camera.x / FLOOR_TILE));
   const t0y = Math.max(0, Math.floor(state.camera.y / FLOOR_TILE));
-  const t1x = Math.min(Math.floor(WORLD_W / FLOOR_TILE), Math.ceil((state.camera.x + vw) / FLOOR_TILE));
-  const t1y = Math.min(Math.floor(WORLD_H / FLOOR_TILE), Math.ceil((state.camera.y + vh) / FLOOR_TILE));
+  const t1x = Math.min(Math.floor(state.world.w / FLOOR_TILE), Math.ceil((state.camera.x + vw) / FLOOR_TILE));
+  const t1y = Math.min(Math.floor(state.world.h / FLOOR_TILE), Math.ceil((state.camera.y + vh) / FLOOR_TILE));
   const uvCells = FLOOR_FULL / FLOOR_TILE;
   const uvStep = 1 / uvCells;
+  // A-W6 房间化: 普通/肉鸽只画房间内地面 + 门洞 (房间外为虚空)
+  const layout = (state.run.mode === 'linear' || state.run.mode === 'rogue') ? getActiveLayout() : null;
+  const floorOK = (tx: number, ty: number): boolean => {
+    if (!layout) return true;
+    const x = tx * FLOOR_TILE + FLOOR_TILE / 2;
+    const y = ty * FLOOR_TILE + FLOOR_TILE / 2;
+    for (const r of layout.rooms) {
+      if (x >= r.x + BLOCK && x < r.x + r.w - BLOCK && y >= r.y + BLOCK && y < r.y + r.h - BLOCK) return true;
+    }
+    for (const d of layout.doors) {
+      const g = d.gap;
+      if (x >= g.x && x < g.x + g.w && y >= g.y && y < g.y + g.h) return true;
+    }
+    return false;
+  };
   for (let ty = t0y; ty < t1y; ty++) {
     for (let tx = t0x; tx < t1x; tx++) {
+      if (!floorOK(tx, ty)) continue;
       const h = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
       const r = (h % 1000) / 1000;
       const u = (tx % uvCells) / uvCells;

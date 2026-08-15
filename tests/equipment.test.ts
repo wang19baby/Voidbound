@@ -132,7 +132,7 @@ const r1 = makeItem([{ stat: 'critBonus', value: 20 }], 'ring');
   const equippedRing = makeItem([], 'ring');
   st.player.equipped = { ring: equippedRing };
   recomputeCombat(st);
-  check('背包满(20)时卸下被拒', !unequipItem(st, equippedRing));
+  check('背包满(100)时卸下被拒', !unequipItem(st, equippedRing));
   const swing = makeItem([], 'weapon');
   st.fx!.owned!.push(swing);
   check('超限件仍可读 (cap 由 pickup/buy 门控)', st.fx!.owned!.length === BACKPACK_CAP + 1);

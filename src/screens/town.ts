@@ -23,7 +23,7 @@ import {
 } from '../game/town';
 import {
   RARITY_COLORS, describeAffix, getItemSellPrice, getOwned,
-  clearGroundLoot, addMaterial, materialCount, IRON_SHARD_PRICE, RUNE_FORGE_COST,
+  clearGroundLoot, addMaterial, materialCount, IRON_SHARD_PRICE, RUNE_FORGE_COST, BACKPACK_CAP,
 } from '../game/equipment';
 import { DIFFICULTIES, DIFFICULTY_MODS, cycleDifficultyGated, type Difficulty } from '../game/difficulty';
 import { MAP_MODES } from '../game/mapmode';
@@ -489,7 +489,7 @@ export function drawTownPanel(ctx: TownCtx): void {
     hudCtx.fillText(
       taking
         ? `仓库 (${state.warehouse.length}/${WAREHOUSE_CAP})  [1-9] 取回  [S] 存入  [Esc] 离开`
-        : `存入 (背包 ${getOwned(state).length}/20)  [1-9] 选择  [B] 返回仓库`,
+        : `存入 (背包 ${getOwned(state).length}/${BACKPACK_CAP})  [1-9] 选择  [B] 返回仓库`,
       40, y);
     // C-503 动画: 存取成功后边框闪光
     if (state.whFlash > 0) {

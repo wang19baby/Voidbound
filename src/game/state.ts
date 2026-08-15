@@ -320,8 +320,8 @@ export function updateCamera(state: GameState): void {
   const vw = state.viewport.w;
   const vh = state.viewport.h;
   // 钳制到世界边界: 不 clamp 会在出生点(左缘 320)露出无贴图黑带 (camera.x = 288-640 = -352)
-  state.camera.x = Math.max(0, Math.min(WORLD_W - vw, state.player.pos.x - vw / 2));
-  state.camera.y = Math.max(0, Math.min(WORLD_H - vh, state.player.pos.y - vh / 2));
+  state.camera.x = Math.max(0, Math.min(state.world.w - vw, state.player.pos.x - vw / 2));
+  state.camera.y = Math.max(0, Math.min(state.world.h - vh, state.player.pos.y - vh / 2));
 }
 
 export function worldToScreen(state: GameState, worldPos: { x: number; y: number }): { x: number; y: number } {

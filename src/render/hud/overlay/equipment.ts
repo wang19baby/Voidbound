@@ -21,7 +21,7 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
   ctx2d.textAlign = 'left';
   ctx2d.fillText(`装备 — 背包 ${owned.length}/${BACKPACK_CAP}  [Tab/Esc] 关闭`, EQ_LAYOUT.titleX, EQ_LAYOUT.titleY);
 
-  // 左: 穿戴 4 槽
+  // 左: 穿戴 4 槽 (2×2, 2026-08-15 重设计 — 信息面板移到下方)
   ctx2d.font = 'bold 14px monospace';
   ctx2d.fillStyle = '#ffd';
   ctx2d.fillText('穿戴', EQ_LAYOUT.slotX, EQ_LAYOUT.slotY - 12);
@@ -42,15 +42,50 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.font = 'bold 24px monospace';
     ctx2d.textAlign = 'center';
     ctx2d.textBaseline = 'middle';
-    ctx2d.fillText(EQUIP_NAMES[t][0], s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize / 2 + 1);
+    ctx2d.fillText(eq ? eq.name.slice(0, 1) : EQUIP_NAMES[t][0], s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize / 2 + 1);
+  }
+  ctx2d.textAlign = 'left';
+  ctx2d.textBaseline = 'top';
+
+  // 选中装备详情 (穿戴区下方, 2026-08-15: 原底部 tooltip 移此, 词条逐行)
+  const selEq = owned[state.equip.sel];
+  const tipX = EQ_LAYOUT.tipX, tipY = EQ_LAYOUT.tipY, tipW = EQ_LAYOUT.tipW;
+  const tipH = selEq ? 34 + selEq.affixes.length * 16 + 20 : 30;
+  ctx2d.fillStyle = '#10141c';
+  ctx2d.fillRect(tipX, tipY, tipW, tipH);
+  ctx2d.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx2d.lineWidth = 1;
+  ctx2d.strokeRect(tipX, tipY, tipW, tipH);
+  if (selEq) {
+    const col = `rgb(${RARITY_COLORS[selEq.rarity].map(v => Math.round(v * 255)).join(',')})`;
+    ctx2d.fillStyle = col;
+    ctx2d.font = 'bold 13px monospace';
+    ctx2d.fillText(selEq.name, tipX + 8, tipY + 16);
+    const old = state.player.equipped[selEq.type];
+    const delta = old ? itemPowerDelta(selEq, old) : 0;
+    ctx2d.fillStyle = old ? (delta > 0 ? '#4f4' : delta < 0 ? '#f66' : '#aaa') : '#89a';
+    ctx2d.font = '12px monospace';
+    ctx2d.fillText(
+      old ? `战力+${itemPower(selEq)} vs ${old.name} ${delta > 0 ? '+' : ''}${delta}` : `战力+${itemPower(selEq)}`,
+      tipX + 8, tipY + 32,
+    );
+    ctx2d.fillStyle = '#bbb';
+    ctx2d.font = '12px monospace';
+    let ay = tipY + 50;
+    for (const af of selEq.affixes) {
+      ctx2d.fillText(describeAffix(af), tipX + 8, ay);
+      ay += 16;
+    }
+    ctx2d.fillStyle = '#678';
     ctx2d.font = '11px monospace';
-    ctx2d.fillStyle = col ? `rgb(${col.map(v => Math.round(v * 255)).join(',')})` : '#556';
-    ctx2d.fillText(eq ? `战力+${itemPower(eq)}` : '(空)', s.x + EQ_LAYOUT.slotSize / 2, s.y + EQ_LAYOUT.slotSize + 14);
-    ctx2d.textAlign = 'left';
-    ctx2d.textBaseline = 'top';
+    ctx2d.fillText('[A] 装备  [U] 卸下', tipX + 8, tipY + tipH - 12);
+  } else {
+    ctx2d.fillStyle = '#556';
+    ctx2d.font = '12px monospace';
+    ctx2d.fillText('选择背包物品查看详情', tipX + 8, tipY + 20);
   }
 
-  // 中: 背包 4×5 网格 + 分页
+  // 中: 背包 10×10 网格 + 分页
   ctx2d.font = 'bold 14px monospace';
   ctx2d.fillStyle = '#ffd';
   ctx2d.fillText('背包', EQ_LAYOUT.gridX, EQ_LAYOUT.gridY - 12);
@@ -97,27 +132,6 @@ export function drawEquipmentPanel(ctx2d: CanvasRenderingContext2D, state: GameS
     ctx2d.fillText(b.label, b.r.x + b.r.w / 2, b.r.y + b.r.h / 2 + 1);
     ctx2d.textAlign = 'left';
     ctx2d.textBaseline = 'top';
-  }
-  // tooltip: 选中物品详情
-  const selEq = owned[state.equip.sel];
-  if (selEq) {
-    ctx2d.fillStyle = '#10141c';
-    ctx2d.fillRect(EQ_LAYOUT.gridX, EQ_LAYOUT.tipY, 460, 46);
-    ctx2d.fillStyle = `rgb(${RARITY_COLORS[selEq.rarity].map(v => Math.round(v * 255)).join(',')})`;
-    ctx2d.font = 'bold 13px monospace';
-    ctx2d.fillText(selEq.name, EQ_LAYOUT.gridX + 8, EQ_LAYOUT.tipY + 16);
-    ctx2d.fillStyle = '#bbb';
-    ctx2d.font = '12px monospace';
-    ctx2d.fillText(selEq.affixes.map(describeAffix).join('  ').slice(0, 64), EQ_LAYOUT.gridX + 8, EQ_LAYOUT.tipY + 32);
-    const old = state.player.equipped[selEq.type];
-    if (old) {
-      const delta = itemPowerDelta(selEq, old);
-      ctx2d.fillStyle = delta > 0 ? '#4f4' : delta < 0 ? '#f66' : '#aaa';
-      ctx2d.fillText(`战力+${itemPower(selEq)} vs ${old.name} ${delta > 0 ? '+' : ''}${delta}`, EQ_LAYOUT.gridX + 300, EQ_LAYOUT.tipY + 16);
-    } else {
-      ctx2d.fillStyle = '#89a';
-      ctx2d.fillText(`战力+${itemPower(selEq)}`, EQ_LAYOUT.gridX + 300, EQ_LAYOUT.tipY + 16);
-    }
   }
   // 聚合战斗属性 (右列, 与左/中列标题对齐)
   const c = state.player.combat;

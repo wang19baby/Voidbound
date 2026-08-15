@@ -1,14 +1,14 @@
-// HUD 日志面板 (Canvas2D overlay, 右下)
+// HUD 日志面板 (Canvas2D overlay, 右下 → 小地图上方避让)
 
 import { getLogs, formatLine } from '../../util/log';
-import { LOG_LINES } from './types';
+import { LOG_LINES, HUD_MINIMAP_RESERVE_H } from './types';
 
 export function drawLogPanel(ctx2d: CanvasRenderingContext2D, vw: number, vh: number): void {
   // 玩家侧只显示 WRN/ERR (OPT-009): 调试 INF/DBG 不进玩家面板 (L 键切 console 级别保留)
   const logs = getLogs().filter(e => e.level === 'WRN' || e.level === 'ERR');
   const lines = logs.slice(-LOG_LINES);
   const x = vw - 380;
-  const y = vh - LOG_LINES * 15 - 14;
+  const y = vh - HUD_MINIMAP_RESERVE_H - LOG_LINES * 15 - 8;
   const w = 364;
   const h = LOG_LINES * 15 + 8;
   if (lines.length > 0) {

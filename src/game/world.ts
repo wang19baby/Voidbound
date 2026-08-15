@@ -1,5 +1,6 @@
 // 程序化世界: chunk-based 分块生成, 让玩家感觉地图"无边界"
 // 每个 1024x1024 chunk 用独立种子生成 8x8 block 布局, 中间 2x2 走廊确保连通
+// A-W6: 普通/肉鸽改为蛇形小房间链 (buildLinearLayout), 墙只在房间边界, 相邻房共享单墙, 门洞连通
 
 import type { GameState, Theme } from './state';
 
@@ -88,6 +89,177 @@ export function chunkDist(mode: MapMode, cx: number, cy: number): number {
   );
 }
 
+// === A-W6 房间化地图 (普通/肉鸽): 多个大房间蛇形相连 ===
+// 设计: 长方形开放场 → 大房间链。墙只在房间边界 (1 格厚), 门洞连通相邻房间;
+// 地面与障碍物只在房间内生成; 每房必有一团怪物 (1-2 屏必遇敌)。
+// 布局按局种子确定 (buildLinearLayout), 房间墙从布局推导 → chunk 缓存按局失效。
+
+export interface RoomRect { x: number; y: number; w: number; h: number; }
+
+/** 房间间门洞: x/y = 门洞中心 (墙上); ax/ay = 房 A 内侧守卫锚点, bx/by = 房 B 内侧; gap = 门洞矩形 (地板补画) */
+export interface RoomDoor {
+  x: number; y: number;
+  ax: number; ay: number;
+  bx: number; by: number;
+  gap: { x: number; y: number; w: number; h: number };
+}
+
+export interface RoomLayout {
+  rooms: RoomRect[];
+  doors: RoomDoor[];
+  doorBlocks: Set<string>;
+  obstacleBlocks: Array<{ x: number; y: number }>;
+}
+
+/** 房间规格: 1280×1280 = 1×1 视口 (小房间, 2026-08-15 压缩 1/2; 相邻房共享 1 格单墙) */
+export const ROOM_W = 1280;
+export const ROOM_H = 1280;
+const LAYOUT_MARGIN = 128;
+const LAYOUT_COLS = 4; // 4 房一行 × 2 行 = 8 房蛇形链 (2026-08-15: 5→4, 地图收缩)
+const LAYOUT_ROWS = 2;
+
+let activeLayout: RoomLayout | null = null;
+
+export function getActiveLayout(): RoomLayout | null { return activeLayout; }
+
+/** 蛇形房间链: 首行左→右, 换行右→左; 相邻房共享 1 格单墙 (128px), 墙上凿门洞连通。
+ *  2026-08-15: 去规整 — 每房宽度随机 (1280..1664 块对齐), 高度固定 → 共享墙/门洞机制不变;
+ *  摆放: 行0 x 累加左→右, 弯折房 (第 COLS-1→COLS 房) 共享列, 行1 从弯折房向左递减。
+ *  返回并缓存为全局 activeLayout (resetWorldForMode 清空, 每局重建) */
+export function buildLinearLayout(seed: number): RoomLayout {
+  const rand = mulberry32(seed ^ 0x9e3779b9);
+  const rooms: RoomRect[] = [];
+  const total = LAYOUT_COLS * LAYOUT_ROWS;
+  // 每房宽度随机 (10-13 格, 1280..1664px), 高度固定 ROOM_H
+  const wOf: number[] = [];
+  for (let i = 0; i < total; i++) wOf.push(BLOCK * (10 + Math.floor(rand() * 4)));
+  // 相邻房共享 1 格单墙: 下一房左缘 = 上一房右缘 - BLOCK (重叠 1 块)
+  const xr: number[] = [LAYOUT_MARGIN];
+  for (let i = 1; i < LAYOUT_COLS; i++) xr.push(xr[i - 1] + wOf[i - 1] - BLOCK); // 行0 左→右
+  xr.push(xr[LAYOUT_COLS - 1]); // 弯折房共享列 (行1 最右)
+  for (let i = LAYOUT_COLS + 1; i < total; i++) xr.push(xr[i - 1] - wOf[i] + BLOCK); // 行1 右→左
+  const y0 = LAYOUT_MARGIN;
+  const y1 = LAYOUT_MARGIN + (ROOM_H - BLOCK); // 共享横墙行
+  for (let i = 0; i < total; i++) {
+    rooms.push({ x: xr[i], y: i < LAYOUT_COLS ? y0 : y1, w: wOf[i], h: ROOM_H });
+  }
+
+  const doorBlocks = new Set<string>();
+  const doors: RoomDoor[] = [];
+  const DOOR_HALF = BLOCK; // 门洞半宽 1 格 → 门高 ~3 格 (384px, 玩家/怪物通行)
+  for (let i = 0; i < rooms.length - 1; i++) {
+    const a = rooms[i], b = rooms[i + 1];
+    const sameRow = a.y === b.y;
+    const gapBlocks: Array<[number, number]> = [];
+    let door: RoomDoor;
+    if (sameRow) {
+      // 共享单竖墙: 房A右边界列 = 房B左边界列 (同一列), 只凿这 1 列成门洞
+      const aLeft = a.x < b.x;
+      const ex = aLeft ? a.x + a.w : b.x + b.w;
+      const yc = a.y + 2 * BLOCK + rand() * (a.h - 4 * BLOCK);
+      const bx = Math.floor((ex - BLOCK) / BLOCK);
+      const rBy0 = Math.floor(a.y / BLOCK), rBh = Math.floor(a.h / BLOCK);
+      const by0 = Math.max(rBy0 + 1, Math.floor((yc - DOOR_HALF) / BLOCK));
+      const by1 = Math.min(by0 + 2, rBy0 + rBh - 2); // 门洞不出本房内部 (不凿共享横墙)
+      for (let by = by0; by <= by1; by++) gapBlocks.push([bx, by]);
+      door = {
+        x: ex, y: yc,
+        ax: aLeft ? ex - 2 * BLOCK : ex + 2 * BLOCK, ay: yc,
+        bx: aLeft ? ex + 2 * BLOCK : ex - 2 * BLOCK, by: yc,
+        gap: { x: bx * BLOCK, y: by0 * BLOCK, w: BLOCK, h: (by1 - by0 + 1) * BLOCK },
+      };
+    } else {
+      // 共享单横墙: 上房底边界行 = 下房顶边界行 (同一行), 只凿这 1 行成门洞
+      const aTop = a.y < b.y;
+      const ey = aTop ? a.y + a.h : b.y + b.h;
+      // 弯折房宽可不同 → 门洞钳制到两房 x 交集, 确保两房内都通
+      const shareW = Math.min(a.w, b.w);
+      const xc = a.x + 2 * BLOCK + rand() * (shareW - 4 * BLOCK);
+      const by = Math.floor((ey - BLOCK) / BLOCK);
+      const rBx0 = Math.floor(a.x / BLOCK), rBw = Math.floor(shareW / BLOCK);
+      const bx0 = Math.max(rBx0 + 1, Math.floor((xc - DOOR_HALF) / BLOCK));
+      const bx1 = Math.min(bx0 + 2, rBx0 + rBw - 2); // 门洞不出本房内部 (不凿共享竖墙)
+      for (let bx = bx0; bx <= bx1; bx++) gapBlocks.push([bx, by]);
+      door = {
+        x: xc, y: ey,
+        ax: xc, ay: aTop ? ey - 2 * BLOCK : ey + 2 * BLOCK,
+        bx: xc, by: aTop ? ey + 2 * BLOCK : ey - 2 * BLOCK,
+        gap: { x: bx0 * BLOCK, y: by * BLOCK, w: (bx1 - bx0 + 1) * BLOCK, h: BLOCK },
+      };
+    }
+    for (const [bx, by] of gapBlocks) doorBlocks.add(`${bx},${by}`);
+    // 门锚点格也入 doorBlocks → 障碍物避开门内/门外落点, 保证怪物守门位与玩家过门路径不被堵
+    doorBlocks.add(`${Math.floor(door.ax / BLOCK)},${Math.floor(door.ay / BLOCK)}`);
+    doorBlocks.add(`${Math.floor(door.bx / BLOCK)},${Math.floor(door.by / BLOCK)}`);
+    doors.push(door);
+  }
+
+  // 房间内障碍 (战斗掩体): 每房 2-4 块, 避开门洞块与房心 (营地/出生区)
+  const obstacleBlocks: Array<{ x: number; y: number }> = [];
+  for (const r of rooms) {
+    const bx0 = Math.floor(r.x / BLOCK), by0 = Math.floor(r.y / BLOCK);
+    const bw = Math.floor(r.w / BLOCK), bh = Math.floor(r.h / BLOCK);
+    const cpx = r.x + r.w / 2, cpy = r.y + r.h / 2;
+    const n = 2 + Math.floor(rand() * 3);
+    const placed: Array<[number, number]> = [];
+    for (let k = 0; k < n; k++) {
+      for (let t = 0; t < 10; t++) {
+        const bx = bx0 + 2 + Math.floor(rand() * (bw - 4));
+        const by = by0 + 2 + Math.floor(rand() * (bh - 4));
+        if (doorBlocks.has(`${bx},${by}`)) continue;
+        if (Math.abs(bx * BLOCK + 64 - cpx) < 2 * BLOCK && Math.abs(by * BLOCK + 64 - cpy) < 2 * BLOCK) continue;
+        if (placed.some(p => Math.abs(p[0] - bx) <= 1 && Math.abs(p[1] - by) <= 1)) continue;
+        placed.push([bx, by]);
+        obstacleBlocks.push({ x: bx, y: by });
+        break;
+      }
+    }
+  }
+
+  activeLayout = { rooms, doors, doorBlocks, obstacleBlocks };
+  return activeLayout;
+}
+
+/** 从房间布局提取 chunk 内墙块 (房间边界 + 障碍 − 门洞), 128px 块 */
+function wallsForRoomChunk(cx: number, cy: number, layout: RoomLayout): Wall[] {
+  const c0x = cx * CHUNK_SIZE;
+  const c0y = cy * CHUNK_SIZE;
+  const seen = new Set<string>();
+  const blocks: Array<[number, number]> = [];
+  const add = (bx: number, by: number): void => {
+    if (bx < 0 || by < 0) return;
+    const k = `${bx},${by}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    blocks.push([bx, by]);
+  };
+  for (const r of layout.rooms) {
+    const bx0 = Math.floor(r.x / BLOCK), by0 = Math.floor(r.y / BLOCK);
+    const bw = Math.floor(r.w / BLOCK), bh = Math.floor(r.h / BLOCK);
+    for (let bx = bx0; bx < bx0 + bw; bx++) { add(bx, by0); add(bx, by0 + bh - 1); }
+    for (let by = by0 + 1; by < by0 + bh - 1; by++) { add(bx0, by); add(bx0 + bw - 1, by); }
+  }
+  const out: Wall[] = [];
+  for (const [bx, by] of blocks) {
+    if (layout.doorBlocks.has(`${bx},${by}`)) continue;
+    const x = bx * BLOCK, y = by * BLOCK;
+    if (x >= c0x && x < c0x + CHUNK_SIZE && y >= c0y && y < c0y + CHUNK_SIZE) {
+      out.push({ pos: { x, y }, size: { w: BLOCK, h: BLOCK } });
+    }
+  }
+  // 两种墙 (2026-08-15): 房间边界墙 128×128 不变; 房间内随机障碍墙缩小到 1/3 格 (~43px),
+  // 中心对齐块内 → 只当小掩体, 不占整格
+  const OBS_SIZE = BLOCK / 3;
+  for (const ob of layout.obstacleBlocks) {
+    if (layout.doorBlocks.has(`${ob.x},${ob.y}`)) continue;
+    const x = ob.x * BLOCK, y = ob.y * BLOCK;
+    if (x + BLOCK <= c0x || x >= c0x + CHUNK_SIZE || y + BLOCK <= c0y || y >= c0y + CHUNK_SIZE) continue;
+    const pad = (BLOCK - OBS_SIZE) / 2;
+    out.push({ pos: { x: x + pad, y: y + pad }, size: { w: OBS_SIZE, h: OBS_SIZE } });
+  }
+  return out;
+}
+
 /** 把世界坐标 (x, y) 转 chunk 索引 */
 export function worldToChunk(x: number, y: number): { cx: number; cy: number } {
   return {
@@ -106,6 +278,11 @@ export function worldToChunk(x: number, y: number): { cx: number; cy: number } {
  *   - 墙簇互不相邻 (8 邻域留空) → 无长墙、无死角, 怪物可绕行不卡墙
  */
 export function generateChunkWalls(cx: number, cy: number, density: number = 0.18, mode: MapMode = 'linear'): Wall[] {
+  // A-W6 房间化: 普通/肉鸽有活动布局 → 墙来自房间布局 (房间边界 + 障碍 − 门洞)
+  if (mode === 'linear' || mode === 'rogue') {
+    const layout = activeLayout;
+    if (layout) return wallsForRoomChunk(cx, cy, layout);
+  }
   const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xcafef00d);
   const G = CHUNK_BLOCKS; // 8
   const isWall: boolean[][] = [];
@@ -296,10 +473,11 @@ export function getChunkWalls(cx: number, cy: number, density: number = 0.18, mo
   return w;
 }
 
-/** 按模式刷墙 (A-W2): 每局重置缓存 + 密度; 由 startRun 调用 */
+/** 按模式刷墙 (A-W2): 每局重置缓存 + 密度 + 房间布局; 由 startRun 调用 */
 export function resetWorldForMode(mode: MapMode): void {
   const prevW = chunkCache.size;
   const prevD = decorCache.size;
+  activeLayout = null; // A-W6: 房间布局随局重建
   chunkCache.clear();
   decorCache.clear();
   void import('../util/jslog').then(({ jsLog }) =>
@@ -369,7 +547,8 @@ export const THEME_DECOR: Record<Theme, { sprite: string; count: number; tint?: 
 const decorCache = new Map<string, Decor[]>();
 function decorKey(cx: number, cy: number, theme: Theme): string { return `${cx},${cy}:${theme}`; }
 
-/** 生成单个 chunk 的装饰 (种子化, 与墙布局共享 RNG 种子系, 避开墙块) */
+/** 生成单个 chunk 的装饰 (种子化, 与墙布局共享 RNG 种子系, 避开墙块)
+ *  A-W6 房间化: 普通/肉鸽 → 只在与 chunk 相交的房间内部撒布, 房间外 (虚空) 无装饰 */
 export function generateChunkDecor(cx: number, cy: number, theme: Theme, density: number = 0.18, mode: MapMode = 'linear'): Decor[] {
   const rand = mulberry32(cx * 73856093 ^ cy * 19349663 ^ 0xdec0de5);
   const cfg = THEME_DECOR[theme];
@@ -379,7 +558,28 @@ export function generateChunkDecor(cx: number, cy: number, theme: Theme, density
   const oy = cy * CHUNK_SIZE;
   // 装饰显示尺寸 (HD: 128px 1:1, 与墙块同规格; 旧 64px 是 Kenney 小图时代)
   const size = 128;
+  const layout = (mode === 'linear' || mode === 'rogue') ? activeLayout : null;
   let guard = 0;
+  if (layout) {
+    const cx0 = ox, cy0 = oy, cx1 = ox + CHUNK_SIZE, cy1 = oy + CHUNK_SIZE;
+    const rooms = layout.rooms.filter(r => r.x < cx1 && r.x + r.w > cx0 && r.y < cy1 && r.y + r.h > cy0);
+    if (rooms.length === 0) return out;
+    while (out.length < cfg.count && guard++ < 96) {
+      const rr = rooms[Math.floor(rand() * rooms.length)];
+      const x = rr.x + size / 2 + rand() * (rr.w - size);
+      const y = rr.y + size / 2 + rand() * (rr.h - size);
+      // 仅房间内部 (边界 1 格留给墙)
+      if (x < rr.x + size || x > rr.x + rr.w - size || y < rr.y + size || y > rr.y + rr.h - size) continue;
+      let blocked = false;
+      for (const w of walls) {
+        if (aabbOverlap(x, y, size, size, w.pos.x, w.pos.y, w.size.w, w.size.h)) { blocked = true; break; }
+      }
+      if (blocked) continue;
+      if (out.some(d => aabbOverlap(x, y, size, size, d.pos.x, d.pos.y, size, size))) continue;
+      out.push({ pos: { x, y }, sprite: cfg.sprite, tint: cfg.tint });
+    }
+    return out;
+  }
   while (out.length < cfg.count && guard++ < 64) {
     const x = ox + size / 2 + rand() * (CHUNK_SIZE - size);
     const y = oy + size / 2 + rand() * (CHUNK_SIZE - size);

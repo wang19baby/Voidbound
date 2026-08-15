@@ -16,10 +16,10 @@ export const MAP_MODE_NAMES: Record<MapMode, string> = {
   survival: '生存 (无限波次)',
 };
 export const MAP_MODE_DESC: Record<MapMode, string> = {
-  linear: '主走廊 + 分支密室, 1 门 (右端 Boss)',
+  linear: '蛇形大房间链, 每房一营地, 清场 Boss 就近降临',
   gauntlet: '外→内递进, 四角领主, 1 门 (中央 Boss)',
   extract: '中央出生向外, 4 元素 Boss, 5 门 (可随时撤退)',
-  rogue: '局内从 Lv1 临时练级, 战利品带回, 1 门 (右端 Boss)',
+  rogue: '局内从 Lv1 临时练级, 战利品带回, 清场 Boss 就近降临',
   survival: '无限波次, 难度递增, 每 5 波 Boss 来袭',
 };
 
