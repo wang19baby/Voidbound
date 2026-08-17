@@ -161,4 +161,6 @@ Voidbound/
 
 ## License
 
-本项目为个人作品集项目。
+本项目以 [MIT License](LICENSE) 开源。欢迎 fork、二开、提交 PR。
+
+第三方素材归属见 [`docs/ASSETS.md`](docs/ASSETS.md) (CC0 / Kenney 系列等)。

@@ -158,7 +158,7 @@ cargo clean
 
 ```bash
 # 1. 在项目根初始化 Tauri
-cd D:/work_space/personal_workspace/Voidbound
+cd <repo-root>
 cargo tauri init --ci --app-name "Voidbound" --window-title "Voidbound"
 
 # 2. 创建目录结构(参考 GAME_FLOW §1)
