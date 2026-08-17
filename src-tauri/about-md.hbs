@@ -1,0 +1,57 @@
+Voidbound Third-Party Notices
+=============================
+
+This file lists the third-party software used by the Voidbound game
+binary, along with their respective licenses. It is generated
+automatically by `cargo-about` from `src-tauri/Cargo.lock` and is
+required for compliance with the licenses of those third-party
+projects (MIT, Apache-2.0, BSD, Zlib, etc.).
+
+If you fork this project and modify dependencies, regenerate this
+file by running:
+
+    cd src-tauri
+    cargo install cargo-about --features cli   # one-time
+    cargo about generate about-md.hbs -o ../THIRD_PARTY_NOTICES.md
+
+Last generated: see git log for `THIRD_PARTY_NOTICES.md`
+
+----------------------------------------------------------------------
+Overview of licenses:
+----------------------------------------------------------------------
+
+{{#each overview}}
+- **{{name}}** — used by {{count}} crate{{#unless (eq count 1)}}s{{/unless}}
+{{/each}}
+
+----------------------------------------------------------------------
+Full license texts:
+----------------------------------------------------------------------
+
+{{#each licenses}}
+### {{name}}
+
+Used by:
+
+{{#each used_by}}
+- [{{crate.name}} {{crate.version}}]({{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}})
+{{/each}}
+
+<details>
+<summary>License text</summary>
+
+```
+{{text}}
+```
+
+</details>
+
+{{/each}}
+
+----------------------------------------------------------------------
+
+Voidbound Contributors, 2026
+
+SPDX-License-Identifier: CC-BY-4.0 (this notice file is documentation;
+the underlying crate licenses above remain binding on their respective
+code).

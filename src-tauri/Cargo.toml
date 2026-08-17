@@ -3,6 +3,7 @@ name = "voidbound"
 version = "0.1.0"
 description = "Voidbound - 2D Top-down ARPG Roguelite"
 authors = ["wang19"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.77"
 

@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": null,
     "beforeDevCommand": "npm run build",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build && npm run notices"
   },
   "app": {
     "windows": [
@@ -33,6 +33,20 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../LICENSE": "LICENSE",
+      "../LICENSE-ASSETS": "LICENSE-ASSETS",
+      "../LICENSE-DOCS": "LICENSE-DOCS",
+      "../EULA.md": "EULA.md",
+      "../NOTICE": "NOTICE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../PRIVACY.md": "PRIVACY.md"
+    },
+    "publisher": "Voidbound Contributors",
+    "shortDescription": "2D top-down ARPG roguelite inspired by Diablo II + Hades",
+    "longDescription": "Voidbound is a 30-60 minute run-based ARPG. Fight through randomly generated dungeons, find loot with 5-tier affixes, mutate your skills with Void Runes, and climb 5 difficulty tiers. All art was hand-reviewed from Google Gemini-generated sprites under CC-BY-NC-ND 4.0; code is MIT; see EULA.md and PRIVACY.md for full terms.",
+    "category": "RolePlaying",
+    "copyright": "Copyright (c) 2026 Voidbound Contributors"
   }
 }
