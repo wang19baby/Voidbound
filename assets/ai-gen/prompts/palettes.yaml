@@ -1,4 +1,6 @@
 # Voidbound 4 主题调色板(16 色 / 主题)
+# SPDX-License-Identifier: CC-BY-NC-ND-4.0
+# 版权 © 2026 Voidbound Contributors — 详见仓库根目录 LICENSE-ASSETS
 # 用于 AI 生成 prompt 提示 + post_process.py 量化
 
 version: 1

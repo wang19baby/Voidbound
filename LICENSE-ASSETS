@@ -1,0 +1,64 @@
+Voidbound AI-Generated Assets License
+=====================================
+
+Copyright (c) 2026 Voidbound Contributors
+
+This file applies to the following content:
+
+  - assets/atlas/                          (generated sprite atlases)
+  - assets/ai-gen/output/                  (raw Gemini outputs, post-processed)
+  - assets/ai-gen/prompts/*.yaml           (structured prompts used to generate art)
+  - assets/ai-gen/PROMPTS_*.md             (human-authored prompt packages)
+  - assets/ai-gen/import/                  (imported / cropped frames)
+
+These assets are licensed under the Creative Commons
+Attribution-NonCommercial-NoDerivatives 4.0 International License
+(CC BY-NC-ND 4.0).
+
+Full legal text: https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode
+
+You are free to:
+  - Share — copy and redistribute the material in any medium or format
+
+Under the following terms:
+  - Attribution — You must give appropriate credit to "Voidbound
+    Contributors", provide a link to the license, and indicate if
+    changes were made (which you may not do under NoDerivatives).
+  - NonCommercial — You may NOT use the material for commercial purposes.
+    "Commercial purposes" includes selling, reselling, or bundling into
+    paid products, paid asset packs, NFT collections, or any monetized
+    distribution channel.
+  - NoDerivatives — You may NOT remix, transform, recolor, animate, or
+    build upon the material. If you need a modified version, you must
+    generate your own from scratch using your own AI prompts / pipeline.
+
+With explicit no-resale clause (additionally binding):
+
+  1. The prompts (PROMPTS_*.md / *.yaml) are the result of significant
+     design and iteration work. They are NOT in the public domain.
+     Reselling, repackaging, or redistributing the prompts as a
+     commercial "AI prompt pack" is expressly prohibited.
+
+  2. Generated sprites may NOT be reuploaded to commercial asset stores
+     (Unity Asset Store, Unreal Marketplace, itch.io paid listings,
+     ArtStation Marketplace, TurboSquid, etc.) under any terms.
+
+  3. Generated sprites may NOT be used in monetized derivative games
+     (paid games, Patreon / SubscribeStar exclusive builds, paid mods).
+
+  4. Generated sprites may be used, free of charge, in:
+       - open-source / free-to-play games (with attribution)
+       - personal / educational / non-commercial projects
+       - news articles, reviews, academic papers (with attribution)
+
+  5. AI generation disclosure: the prompts and resulting assets were
+     created with assistance from Google Gemini (gemini-2.5-flash-image
+     and similar image models). Generated content complies with Google's
+     Generative AI Prohibited Use Policy:
+     https://policies.google.com/terms/generative-ai/
+
+For commercial licensing inquiries (paid games, asset packs, etc.),
+contact the project owner — separate paid license terms apply and
+override this file.
+
+SPDX-License-Identifier: CC-BY-NC-ND-4.0

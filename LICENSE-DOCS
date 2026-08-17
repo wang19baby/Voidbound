@@ -1,0 +1,29 @@
+Voidbound Documentation License
+==============================
+
+Copyright (c) 2026 Voidbound Contributors
+
+This file applies to:
+
+  - README.md, CHANGELOG.md, progress.txt, prd.json
+  - docs/                        (all design / architecture / roadmap docs)
+  - assets/ai-gen/README.md
+  - assets/ai-gen/UPGRADE_RESEARCH.md
+  - assets/ai-gen/SPRITE_ASSEMBLY_SOP.md
+  - steam/README.md
+
+These written materials are licensed under the Creative Commons
+Attribution 4.0 International License (CC BY 4.0).
+
+Full legal text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+You are free to:
+  - Share — copy and redistribute in any medium or format
+  - Adapt — remix, transform, and build upon for any purpose, even
+    commercially
+
+Under the following terms:
+  - Attribution — You must credit "Voidbound Contributors" and link
+    back to https://github.com/wang19baby/Voidbound
+
+SPDX-License-Identifier: CC-BY-4.0

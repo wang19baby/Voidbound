@@ -433,41 +433,49 @@ Step 4: 导出 → PNG, 透明背景
 
 ---
 
-## 17. AI 生成素材(Stable Diffusion)
+## 17. AI 生成素材(Google Gemini)
 
-### 17.1 主流 LoRA / Checkpoint
+> **2026-08+ 现状**:项目从早期规划的 Stable Diffusion 切换到 **Google Gemini 图像模型**(`gemini-2.5-flash-image` / `gemini-2.0-flash`)。  
+> 所有 sprite atlas 下的 PNG 都是 Gemini 生成 + 人工调整的产物。  
+> 许可证:**CC-BY-NC-ND 4.0**(详见仓库根 `LICENSE-ASSETS`),禁止转售、禁止衍生。
 
-> ⚠️ AI 生成素材**可能不符合 CC0**,许可证因模型/作者而异。**商用前务必查证**。
+### 17.1 使用的 Gemini 模型
 
-| 模型 | 来源 | 用途 |
-|------|------|------|
-| **PixelArtXL** | CivitAI | SDXL 像素风生成 |
-| **Pixel Art Diffusion**(onnly) | CivitAI | SD 1.5 像素风 |
-| **PixArt-α** | HuggingFace | 开源 Transformer 像素 |
-| **Retro Diffusion** | retro-diffusion.github.io | 专门做游戏像素艺术 |
+| 模型 | 用途 |
+|------|------|
+| **gemini-2.5-flash-image** (Nano Banana) | 主用,出 64×64~128×128 sprite sheet,支持多帧 + 透明底 |
+| **gemini-2.0-flash** | 备用,生成更抽象 / 概念图 |
 
 ### 17.2 推荐工作流
 
 ```
-工作流(Stable Diffusion XL + Pixel LoRA):
+工作流(Google Gemini Nano Banana + Python 后处理):
 
-1. 安装:A1111 / ComfyUI / Forge(任选一)
-2. 加载:SDXL base + PixelArtXL LoRA
-3. 提示词模板:
-   positive: "pixel art, 32x32 sprite, fantasy warrior, 
+1. 准备:在 https://aistudio.google.com/apikey 拿 API Key
+2. 提示词模板(每条提示词独立 YAML 项,见 assets/ai-gen/prompts/):
+   positive: "pixel art, 64x64 sprite sheet, fantasy warrior, 
               dark forest background, top-down view, 
-              clean lines, low color count"
-   negative: "smooth gradient, photorealistic, 3d render"
-4. 参数:
-   - Steps: 20-30
-   - CFG: 7-9
-   - Size: 512x512 (低分辨率强制像素风)
-   - LoRA weight: 0.7-0.9
-5. 后处理:
-   - 用 Aseprite 量化颜色到主题调色板
-   - 手绘调整轮廓
-   - 输出 32x32 PNG
+              clean lines, 4-frame walking animation,
+              magenta-keyed transparent background"
+3. 调用:
+   - 直接 REST:`POST https://generativelanguage.googleapis.com/...`
+   - 或 Python SDK:`google-generativeai`
+   - 单张约 5-15 秒
+4. 后处理:
+   - 检测品红底色 → 透明化(import_art --key-color)
+   - 按主题调色板强制量化(import_art --quantize palette.yaml)
+   - 中心方裁(防非正方形变形)
+   - 人工 review → 通过才入 sprite sheet
+5. 集成:
+   - 烘焙到 assets/atlas/characters.bin 等二进制图集
+   - Rust 端 voidbound_atlas_parser 加载
 ```
+
+### 17.2.1 早期规划(已废弃,留档)
+
+项目最初规划使用 Stable Diffusion (SDXL + PixelArtXL LoRA) + 本地 A1111 WebUI,
+但实际从未跑通(本地无 GPU + SD 模型下载未完成)。
+2026-08 切换到 Gemini 云端 API 后,管线全打通,详见 `assets/ai-gen/UPGRADE_RESEARCH.md`。
 
 ### 17.3 4 主题批量提示词模板
 
@@ -505,18 +513,19 @@ top-down rpg game, low color count, glitch effects,
 
 ### 17.4 AI 素材合规备忘
 
-| 模型 | 许可证 | 商用 |
+| 模型 / 服务 | 许可证 | 商用 |
 |------|--------|------|
-| SDXL base | OpenRAIL(允许商用) | ✅ |
-| SD 1.5 | OpenRAIL | ✅ |
-| PixelArtXL | 通常 OpenRAIL | ✅ |
-| CivitAI 个别 LoRA | 看作者标注 | ⚠️ 必须查 |
-| Retro Diffusion | Apache 2.0 | ✅ |
+| Google Gemini (图像生成) | Google Generative AI ToS(允许商用 + 必须披露) | ✅(需披露) |
+| SDXL base(早期规划,未使用) | OpenRAIL | ✅ |
+| PixelArtXL(早期规划,未使用) | 通常 OpenRAIL | ✅ |
 
-**v1.1 决策**:
-- ✅ **允许**使用 SDXL + CC0 / OpenRAIL LoRA 生成的素材
-- ⚠️ AI 生成结果需手工调整后才能用,不能直接进游戏
-- ❌ **不允许**用未授权 LoRA / 模型生成的素材直接商用
+**v1.1 → v1.2 决策(2026-08 更新)**:
+- ✅ **当前实际使用**:Google Gemini 图像模型(详见 §17.1)
+- ✅ **允许商用**,但**必须**遵守 `LICENSE-ASSETS` (CC-BY-NC-ND 4.0) + `EULA.md`
+- ⚠️ Gemini 生成结果需手工调整 + 逐张审核才能进游戏
+- ❌ **不允许**把 Gemini 生成的 sprite 上传到付费素材站转售
+- ❌ **不允许**把提示词 YAML/MD 包装成付费 "AI 提示词包" 转售
+- 📢 **必须**在游戏的 About / Credits 中披露 AI 生成来源
 
 ---
 

@@ -1,0 +1,94 @@
+Voidbound NOTICE — Third-Party Acknowledgments
+==============================================
+
+This project uses third-party services, libraries, and assets. The
+following acknowledgments are required by their respective licenses
+and terms of service.
+
+----------------------------------------------------------------------
+1. Google Gemini (image generation)
+----------------------------------------------------------------------
+
+Some or all of the in-game art assets (character sprites, monster
+sprites, boss sprites, environment tiles, decor, particles) were
+generated using Google's Gemini family of image models, accessed via
+the Gemini API under a personal developer account.
+
+  - Service: Google AI Studio / Gemini API
+  - Models used (typical): gemini-2.5-flash-image, gemini-2.0-flash
+  - URL: https://aistudio.google.com/
+  - Terms of Service: https://ai.google.dev/terms
+  - Generative AI Prohibited Use Policy:
+    https://policies.google.com/terms/generative-ai/
+
+Compliance:
+
+  (a) All generated content was produced under personal creative
+      direction of the project owner using original prompts authored
+      for this project (see assets/ai-gen/prompts/ and PROMPTS_*.md).
+  (b) No realistic likenesses of identifiable real persons were
+      generated or used.
+  (c) Generated content was reviewed by the project owner for
+      compliance with Google's Prohibited Use Policy before
+      integration into the game.
+  (d) The project owner retains responsibility for all generated
+      content per Google's terms.
+  (e) The project does not redistribute Gemini model weights, only
+      output pixels.
+
+We thank the Google Gemini team for providing this capability, which
+made it possible to produce a diverse, themed art set as a solo
+developer without commercial art-pipeline budgets.
+
+----------------------------------------------------------------------
+2. Tauri (desktop shell)
+----------------------------------------------------------------------
+
+  - Project: https://tauri.app/
+  - License: MIT / Apache-2.0
+  - Used for: cross-platform desktop packaging of the game
+
+----------------------------------------------------------------------
+3. esbuild (TypeScript bundler)
+----------------------------------------------------------------------
+
+  - Project: https://esbuild.github.io/
+  - License: MIT
+  - Used for: bundling the TypeScript game runtime
+
+----------------------------------------------------------------------
+4. Kenney game asset packs (placeholder / legacy)
+----------------------------------------------------------------------
+
+  - Project: https://kenney.nl/
+  - License: CC0 1.0 (public domain dedication)
+  - Used for: initial placeholder sprites and UI elements before the
+    AI-generated art set reached feature parity.
+  - Notable packs: Tiny Battle, Tiny Town, UI Pack, RPG Icons,
+    Particle Pack, Game Icons.
+
+----------------------------------------------------------------------
+5. OpenGameArt.org (audio, if used)
+----------------------------------------------------------------------
+
+  - Project: https://opengameart.org/
+  - License: varies per asset — see CC0 / CC-BY markings on each
+    individual asset page. All used assets have been verified CC0 or
+    CC-BY (with attribution).
+
+----------------------------------------------------------------------
+6. Google Fonts (Press Start 2P and similar, optional)
+----------------------------------------------------------------------
+
+  - Project: https://fonts.google.com/
+  - License: SIL Open Font License 1.1
+  - Used for: pixel-style HUD typography (M4+ work).
+
+----------------------------------------------------------------------
+
+If you believe any content in this repository infringes your
+copyright or violates any license, please open an issue at
+https://github.com/wang19baby/Voidbound/issues with subject prefix
+"[DMCA]" and we will address it promptly.
+
+Voidbound Contributors, 2026

@@ -61,6 +61,20 @@ cd steam
 
 后台 → Pricing → **Free to Play** → 区域全部留空(默认全球免费)
 
+## 必须填的合规项
+
+- [ ] **AI 生成内容披露**(Steam 要求):在 Store Presence → About 的开头写明:
+      > "Some or all in-game art assets were generated using Google Gemini image models under the personal creative direction of the developer. Each asset has been hand-reviewed and integrated into the game."
+- [ ] **EULA**:在 Steamworks → Application → **License Agreement** → 粘贴 [`../EULA.md`](../EULA.md) 的内容(去掉 Markdown 标题符号,纯文本)
+- [ ] **Age Rating**:IARC 问卷勾选 "No" for real-world violence against identifiable persons(AI 生成的怪都不像真人)
+- [ ] **Copyright/Trademark**:声明 Voidbound Contributors 为版权所有人
+- [ ] **No DRM / No microtransactions**:本游戏纯单机,无内购
+
+> ⚠️ 美术素材的"禁止转卖"由 `LICENSE-ASSETS` + `EULA.md` 双重保护:  
+> - LICENSE-ASSETS (CC-BY-NC-ND):阻止有人下载源码后从素材中提取并转卖  
+> - EULA.md (Steam):阻止有人在 G2A/CDKeys 等灰产市场转售游戏安装包本身  
+> 两者缺一不可。
+
 ## 文件清单
 
 | 文件 | 作用 |

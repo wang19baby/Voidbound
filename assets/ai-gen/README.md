@@ -1,7 +1,13 @@
 # Voidbound AI 素材生成模块
 
-> 用途：使用 Stable Diffusion (SDXL + PixelArt LoRA) 批量生成角色 / 怪物 sprite  
+> 用途：使用 **Google Gemini** 图像模型批量生成角色 / 怪物 / 瓦片 sprite  
 > 配套文档：[`../../docs/ASSETS.md` §17](../../docs/ASSETS.md)
+
+> ⚠️ **许可证:[CC-BY-NC-ND 4.0](../../LICENSE-ASSETS)**  
+> 本目录下的**提示词 YAML、PROMPTS_*.md、生成的素材**均禁止转售、禁止衍生。  
+> 禁止把提示词当 "AI 提示词包" 卖钱;禁止把生成的 sprite 上传到 Unity Asset Store / Unreal Marketplace / itch.io 付费区。  
+> 个人/教育/同人/直播/评测免费可用,**必须**署名 "Voidbound Contributors"。  
+> 商用需联系作者另行签约。
 
 ---
 

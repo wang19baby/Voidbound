@@ -159,8 +159,41 @@ Voidbound/
 
 ---
 
-## License
+## License & 鸣谢
 
-本项目以 [MIT License](LICENSE) 开源。欢迎 fork、二开、提交 PR。
+本项目采用**拆分许可证**——不同部分不同许可,清晰无歧义。
 
-第三方素材归属见 [`docs/ASSETS.md`](docs/ASSETS.md) (CC0 / Kenney 系列等)。
+| 内容类型 | 许可证 | 适用文件 |
+|---|---|---|
+| **源代码** | [MIT](LICENSE) | `src/`、`src-tauri/src/`、`tests/`、构建脚本、Steam 工具脚本 |
+| **AI 生成美术素材** | [CC-BY-NC-ND 4.0](LICENSE-ASSETS) | `assets/atlas/`、`assets/ai-gen/output/`、`assets/ai-gen/prompts/*.yaml`、`PROMPTS_*.md` |
+| **文档** | [CC-BY 4.0](LICENSE-DOCS) | `docs/`、`README.md`、`CHANGELOG.md`、`steam/README.md` |
+| **游戏二进制 (Steam)** | [EULA](EULA.md) | 发布在 Steam 上的安装包 |
+| **第三方鸣谢** | [NOTICE](NOTICE) | Google Gemini / Tauri / esbuild / Kenney 等 |
+
+### 为什么素材用 CC-BY-NC-ND 而代码用 MIT
+
+- **代码 MIT**:鼓励 fork、二开、学习、商用——这是开源的意义。
+- **素材 NC-ND(禁止转卖 / 禁止衍生)**:
+  - 防有人把我们的提示词或生成图打包成"AI 提示词包 / 像素素材包"卖钱
+  - 防有人把生成图直接上传到 Unity Asset Store / Unreal Marketplace / itch.io 付费区转售
+  - 防有人把美术改改色就拿去商用
+- **游戏二进制 EULA**:Steam 上跑的安装包禁止转卖(G2A / CDKeys 等)、禁止拆包提取美术。
+- 个人/教育/同人/直播/评测**免费可用,需署名**。
+
+### AI 生成内容声明
+
+本游戏的多数美术素材由 **Google Gemini** 图像模型生成(Nano Banana / 2.5-flash-image 等),在项目作者本人创意指导下完成,经过逐张人工审核与调整后才进入游戏。详见 [NOTICE](NOTICE) 与 [`assets/ai-gen/README.md`](assets/ai-gen/README.md)。
+
+🙏 **特别鸣谢 Google Gemini 团队**——没有这个工具,独立开发者不可能在零美术预算下产出 4 主题 × 17 怪 × 6 职业的美术。
+
+如需商用授权(付费游戏 / 资产包等),请联系项目作者,另行签订付费授权。
+
+### 第三方资源
+
+- 早期占位素材:Kenney 系列(CC0)
+- 桌面外壳:Tauri(MIT / Apache-2.0)
+- 打包:esbuild(MIT)
+- 字体:Press Start 2P(SIL OFL)
+
+详见 [`docs/ASSETS.md`](docs/ASSETS.md)。

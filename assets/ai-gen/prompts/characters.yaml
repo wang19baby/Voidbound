@@ -1,6 +1,9 @@
 # Voidbound 6 职业 AI 生成提示词
+# SPDX-License-Identifier: CC-BY-NC-ND-4.0
+# 版权 © 2026 Voidbound Contributors — 详见仓库根目录 LICENSE-ASSETS
+# 禁止将本提示词作为商业 AI 提示词包转售。
 # 用法:被 batch_generate.py 读取
-# 提示词模板基于 SDXL + PixelArtXL LoRA
+# 提示词模板基于 SDXL + PixelArtXL LoRA(早期) / Google Gemini Nano Banana(2026-08+)
 
 version: 1
 description: 6 职业 sprite AI 生成模板
