@@ -1,0 +1,23 @@
+"AppBuild"
+{
+  // 替换为你的 Steam AppID(Steamworks 后台 → 你的应用 → AppID)
+  "AppID"           "REPLACE_WITH_APP_ID"
+
+  // 描述本次构建(在 Steamworks 后台可见)
+  "Desc"            "Voidbound v0.1.0 - Windows x64 NSIS installer"
+
+  // 构建根路径(相对此 VDF 文件)
+  "BuildPath"       "..\"
+
+  // 输出到 steam/output/,SteamPipe 上传完毕后保留中间产物
+  "LocalOutputPath" "..\steam\output\"
+
+  // 关联 depot → VDF 文件
+  "Depots"
+  {
+    "REPLACE_WITH_DEPOT_ID"   "depot_build.vdf"
+  }
+
+  // 上传后自动设置 default 分支
+  "SetLiveOnDeploy"   "default"
+}

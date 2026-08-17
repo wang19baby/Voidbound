@@ -1,0 +1,19 @@
+"DepotBuildConfig"
+{
+  // 替换为你在 Steamworks 后台 → SteamPipe → Depots 创建的 DepotID
+  "DepotID"        "REPLACE_WITH_DEPOT_ID"
+
+  // 必填,任意字符串(Steam 用作内部路径,但本游戏不分支,留空字符串)
+  "FileRoot"       ""
+
+  // Windows 安装包
+  "FileMapping"
+  {
+    "LocalPath"    "src-tauri\target\release\bundle\nsis\*"
+    "DepotPath"    "."
+    "Recursive"    "1"
+  }
+
+  // 不签名(本游戏未接 Steamworks SDK,不需要 .sig 文件)
+  "SetReleaseStateOnUpload" "1"
+}

@@ -79,3 +79,7 @@ target/
 # 临时产物 (测试 bundle / CDP 脚本 / 启动日志)
 tmp/
 .tmp/
+
+# Steam 上传中间产物
+steam/output/
+steam/.cache/
