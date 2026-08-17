@@ -1,0 +1,44 @@
+# Voidbound — custom gitleaks rules
+# Add project-specific patterns here that the default rules don't catch.
+
+[[rules]]
+id = "voidbound-gemini-api-key"
+description = "Google Gemini API key (AIza... prefix)"
+# Gemini API keys are exactly 39 chars: "AIza" + 35 alphanumeric + "_" / "-"
+regex = '''AIza[A-Za-z0-9_-]{35}'''
+tags = ["api-key", "gemini", "google"]
+keywords = ["AIza"]
+# Examples:
+#   AIzaSyDJCZajTx_kNC8e7gE0UM4gShVlRFt0O64
+
+[rules.allowlist]
+# The .env.example file is allowed to contain placeholders
+description = "Allow placeholders in .env.example"
+regexTarget = "match"
+regexes = [
+  '''AIza[A-Za-z0-9_-]{0,5}your-gemini-api-key-here''',
+  '''AIza[A-Za-z0-9_-]{0,5}<REPLACE''',
+  '''AIza[A-Za-z0-9_-]{0,5}placeholder''',
+]
+paths = [
+  '''(?i)\.env\.example$''',
+  '''(?i)\.env\.template$''',
+]
+
+[[rules]]
+id = "voidbound-steam-workshop-key"
+description = "Steamworks publisher key (32-char hex) accidentally committed"
+# Steamworks publisher keys look like: 32 lowercase hex chars used in
+# steamcmd +login environment. If we ever commit one, it would let anyone
+# upload builds to our Steam account.
+regex = '''steam[_-]?(?:key|webapi[_-]?key)\s*[:=]\s*[\x22\x27]?[a-f0-9]{32}[\x22\x27]?'''
+tags = ["secret", "steam"]
+keywords = ["steam_key", "steam_webapi_key"]
+
+[[rules]]
+id = "voidbound-private-rsa-key"
+description = "Private SSH / TLS key accidentally committed"
+# PEM private key header
+regex = '''-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'''
+tags = ["key", "private-key"]
+keywords = ["PRIVATE KEY"]

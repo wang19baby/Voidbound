@@ -159,6 +159,17 @@ Voidbound/
 
 ---
 
+## 安全 / Secrets
+
+本项目使用 [Gitleaks](https://github.com/gitleaks/gitleaks) 在每次
+push / PR 时自动扫描密钥泄露。规则配置在 [`.gitleaks/custom.toml`](.gitleaks/custom.toml)。
+
+如意外提交了真实 API Key:
+
+1. **立刻撤销**:`https://aistudio.google.com/apikey` 删除该 Key
+2. 重新生成新 Key
+3. 通知仓库 owner 从 git history 中清除(用 `git filter-repo` 或 BFG)
+
 ## License & 鸣谢
 
 本项目采用**拆分许可证**——不同部分不同许可,清晰无歧义。
